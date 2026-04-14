@@ -892,7 +892,7 @@ function generateSchedule() {
     <td class="num mono" style="font-weight:700;font-size:18px;">${r.fullBatches}</td>
     <td class="num mono" style="color:var(--gold);">${r.remainder>0.05?r.remainder.toFixed(2):'—'}</td>
     <td class="num mono">${r.estOutput.toFixed(2)}</td>
-    <td class="num mono" style="color:${r.surplus>0?'var(--green2)':(r.surplus<-0.1?'#c0392b':'var(--ink3)'});font-weight:600;">${r.surplus>0?'+'+r.surplus.toFixed(2):r.surplus.toFixed(2)}</td>
+    <td class="num mono" style="font-weight:600;color:${r.surplus>0?'#2a8042':r.surplus<-0.1?'#c0392b':'#888'}">${r.surplus>0?'+'+r.surplus.toFixed(2):r.surplus.toFixed(2)}</td>
   </tr>`).join('');
 
   const totBatches=rows.reduce((s,r)=>s+r.fullBatches+(r.remainder>0.05?1:0),0);
