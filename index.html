@@ -332,7 +332,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <div class="card-title">Batch Requirements</div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Coffee</th><th>SKU</th><th style="text-align:right;">Roasted Need (lb)</th><th style="text-align:right;">Water Loss</th><th style="text-align:right;">Green Needed (lb)</th><th style="text-align:right;">Full Batches ×10lb</th><th style="text-align:right;">Remainder (lb)</th><th style="text-align:right;">Est. Output (lb)</th><th style="text-align:right;">Surplus (lb)</th></tr></thead>
+        <thead><tr><th>Roast / SKUs Bagged</th><th>Base SKU</th><th style="text-align:right;">Total Roasted Need (lb)</th><th style="text-align:right;">Water Loss</th><th style="text-align:right;">Green to Pull (lb)</th><th style="text-align:right;">Batches ×10lb</th><th style="text-align:right;">Remainder (lb)</th><th style="text-align:right;">Output (lb)</th><th style="text-align:right;">Surplus (lb)</th></tr></thead>
         <tbody id="roast-tbody"><tr><td colspan="8" class="empty">Add orders, then calculate.</td></tr></tbody>
       </table>
     </div>
@@ -379,12 +379,12 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
         <thead>
           <tr>
             <th style="width:28px;">#</th><th>Coffee</th><th>SKU</th>
-            <th style="text-align:right;">Roasted Need</th>
-            <th style="text-align:right;">Green (lb)</th>
-            <th style="text-align:right;">Batches ×10lb</th>
-            <th style="text-align:right;">Remainder</th>
-            <th style="text-align:right;">Est. Output</th>
-            <th style="min-width:80px;">Roaster Notes</th>
+            <th style="text-align:right;">Roasted Need (lb)</th>
+            <th style="text-align:right;">Green Needed (lb)</th>
+            <th style="text-align:right;">Batches</th>
+            <th style="text-align:right;">Remainder (lb)</th>
+            <th style="text-align:right;">Max Output (lb)</th>
+            <th style="min-width:80px;">Notes</th>
           </tr>
         </thead>
         <tbody id="roast-print-tbody"><tr><td colspan="9" class="empty">Calculate schedule first.</td></tr></tbody>
@@ -863,18 +863,19 @@ function generateSchedule() {
     const coffee=getCoffee(sku);
     const wl=coffee.water_loss||0.15;
     const greenNeeded=lbs/(1-wl);
+    // Per-SKU batches — always full 10lb batches
     const fullBatches=Math.ceil(greenNeeded/10);
+    const actualGreen=fullBatches*10; // always pull full batches
     const remainder=parseFloat((greenNeeded%10).toFixed(3));
-    // Output = full batches × 10lb green × (1 - water loss)
-    const estOutput=parseFloat((fullBatches*10*(1-wl)).toFixed(3));
-    const surplus=parseFloat((estOutput-lbs).toFixed(3));
+    const estOutput=parseFloat((actualGreen*(1-wl)).toFixed(2));
+    const surplus=parseFloat((estOutput-lbs).toFixed(2));
     const recipe=coffee.blend_recipe||{};
     Object.entries(recipe).forEach(([origin,pct])=>{
       if(!originTotals[origin]) originTotals[origin]={total:0,usedIn:[]};
-      originTotals[origin].total+=greenNeeded*pct;
+      originTotals[origin].total+=actualGreen*pct;
       if(!originTotals[origin].usedIn.includes(coffee.name)) originTotals[origin].usedIn.push(coffee.name);
     });
-    rows.push({sku,name:coffee.name,lbs,wl,greenNeeded,fullBatches,remainder,estOutput,surplus});
+    rows.push({sku,name:coffee.name,lbs,wl,greenNeeded,actualGreen,fullBatches,remainder,estOutput,surplus});
   });
 
   roastSchedule=rows;
@@ -888,15 +889,15 @@ function generateSchedule() {
     <td><span class="sku">${r.sku}</span></td>
     <td class="num mono">${r.lbs.toFixed(2)}</td>
     <td class="num" style="color:var(--ink3);">${(r.wl*100).toFixed(1)}%</td>
-    <td class="num mono" style="font-weight:600;color:var(--rust);">${r.greenNeeded.toFixed(2)}</td>
-    <td class="num mono" style="font-weight:700;font-size:18px;">${r.fullBatches}</td>
+    <td class="num mono" style="font-weight:600;color:var(--rust);">${r.actualGreen.toFixed(0)} <span style="font-size:11px;color:var(--ink3);">(${r.greenNeeded.toFixed(2)} min)</span></td>
+    <td class="num mono" style="font-weight:700;font-size:17px;">${r.fullBatches}</td>
     <td class="num mono" style="color:var(--gold);">${r.remainder>0.05?r.remainder.toFixed(2):'—'}</td>
     <td class="num mono">${r.estOutput.toFixed(2)}</td>
-    <td class="num mono" style="font-weight:600;color:${r.surplus>0?'#2a8042':r.surplus<-0.1?'#c0392b':'#888'}">${r.surplus>0?'+'+r.surplus.toFixed(2):r.surplus.toFixed(2)}</td>
+    <td class="num mono" style="font-weight:600;color:${r.surplus>0?'#2a8042':'#888'}">${r.surplus>0?'+'+r.surplus.toFixed(2):'—'}</td>
   </tr>`).join('');
 
-  const totBatches=rows.reduce((s,r)=>s+r.fullBatches+(r.remainder>0.05?1:0),0);
-  const totGreen=rows.reduce((s,r)=>s+r.greenNeeded,0);
+  const totGreen=rows.reduce((s,r)=>s+r.actualGreen,0);
+  const totBatches=rows.reduce((s,r)=>s+r.fullBatches,0);
   const totOutput=rows.reduce((s,r)=>s+r.estOutput,0);
   document.getElementById('rs-batches').textContent=totBatches;
   document.getElementById('rs-green').textContent=totGreen.toFixed(1);
@@ -916,7 +917,7 @@ function buildPrintSheets(rows,originTotals) {
   const cycle=cycles.find(c=>c.id===currentCycleId);
   const cycleName=cycle?.name||'Current Cycle';
   const dateStr=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-  const totBatches=rows.reduce((s,r)=>s+r.fullBatches+(r.remainder>0.05?1:0),0);
+  const totBatches=rows.reduce((s,r)=>s+r.fullBatches,0);
 
   document.getElementById('roast-sheet-meta').textContent=`${cycleName} · Generated ${dateStr}`;
   document.getElementById('roast-sheet-batches').textContent=totBatches;
@@ -928,7 +929,7 @@ function buildPrintSheets(rows,originTotals) {
       <td><span class="sku">${r.sku}</span></td>
       <td class="num mono">${r.lbs.toFixed(2)}</td>
       <td class="num mono" style="font-weight:700;color:var(--rust);">${r.greenNeeded.toFixed(2)}</td>
-      <td class="num mono" style="font-size:18px;font-weight:700;">${r.fullBatches}</td>
+      <td class="num mono" style="font-weight:700;font-size:16px;">${r.fullBatches}</td>
       <td class="num mono" style="color:var(--gold);">${r.remainder>0.05?r.remainder.toFixed(2):'—'}</td>
       <td class="num mono">${r.estOutput.toFixed(2)}</td>
       <td style="border-bottom:1px solid var(--rule);min-width:80px;"></td>
@@ -1225,6 +1226,110 @@ sb.auth.onAuthStateChange(async(event,session)=>{
 });
 </script>
 </body>
-</html>
- 
- 
+</html>// ── ROAST SCHEDULE ─────────────────────────────────────────
+// Roast groups: some SKUs share a base roast and are just labeled differently
+// The base roast drives the batch math; child SKUs add their weight to the parent
+const ROAST_GROUPS = {
+  // base_sku: [child skus that pull from this roast]
+  '9to5': ['1895','QUST','DSIG'],   // Nove alle Cinque base: Aldrich's, Cottage, Dord Sig
+  'SHIP': ['COTU'],                  // Ship Canal base: Center of Universe
+  'SEBD': ['BSKT'],                  // Seasonal Blend base: Baskette Fall
+};
+
+// Build reverse lookup: child -> parent
+const CHILD_OF = {};
+Object.entries(ROAST_GROUPS).forEach(([parent, children]) => {
+  children.forEach(child => { CHILD_OF[child] = parent; });
+});
+
+function generateSchedule() {
+  // Sum roasted lbs needed per SKU from orders
+  const neededBySku = {};
+  orders.forEach(o => {
+    neededBySku[o.coffee_sku] = (neededBySku[o.coffee_sku]||0) + (BAG_W[o.size]||0)*o.qty;
+  });
+
+  // Roll child SKU weights into their parent roast
+  const roastNeeded = {}; // parent_sku -> total roasted lbs needed
+  const childBreakdown = {}; // parent_sku -> {child_sku: lbs}
+
+  Object.entries(neededBySku).forEach(([sku, lbs]) => {
+    const parent = CHILD_OF[sku] || sku;
+    roastNeeded[parent] = (roastNeeded[parent]||0) + lbs;
+    if (!childBreakdown[parent]) childBreakdown[parent] = {};
+    childBreakdown[parent][sku] = (childBreakdown[parent][sku]||0) + lbs;
+  });
+
+  const rows = [];
+  const originTotals = {};
+
+  Object.entries(roastNeeded).forEach(([sku, totalLbs]) => {
+    const coffee = getCoffee(sku);
+    const wl = coffee.water_loss || 0.15;
+    const greenNeeded = totalLbs / (1 - wl);
+    const fullBatches = Math.ceil(greenNeeded / 10);
+    const actualGreen = fullBatches * 10;
+    const remainder = parseFloat((greenNeeded % 10).toFixed(3));
+    const estOutput = parseFloat((actualGreen * (1 - wl)).toFixed(2));
+    const surplus = parseFloat((estOutput - totalLbs).toFixed(2));
+
+    // Build child SKU breakdown string
+    const children = childBreakdown[sku] || {};
+    const breakdown = Object.entries(children).map(([csku, clbs]) => {
+      const cname = getCoffee(csku).name;
+      return csku === sku ? `${cname} ${clbs.toFixed(2)}lb` : `<span style="color:var(--ink3)">${cname} (${csku}) ${clbs.toFixed(2)}lb</span>`;
+    }).join(' + ');
+
+    // Accumulate origin totals using actualGreen
+    const recipe = coffee.blend_recipe || {};
+    Object.entries(recipe).forEach(([origin, pct]) => {
+      if (!originTotals[origin]) originTotals[origin] = {total:0, usedIn:[]};
+      originTotals[origin].total += actualGreen * pct;
+      if (!originTotals[origin].usedIn.includes(coffee.name))
+        originTotals[origin].usedIn.push(coffee.name);
+    });
+
+    const childSkus = Object.keys(children).filter(s => s !== sku);
+    rows.push({sku, name:coffee.name, totalLbs, wl, greenNeeded, actualGreen, fullBatches, remainder, estOutput, surplus, breakdown, childSkus});
+  });
+
+  roastSchedule = rows;
+
+  // Render roast tab table
+  const tbody = document.getElementById('roast-tbody');
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="8" class="empty">No orders in this cycle.</td></tr>'; return; }
+
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td>
+      <div style="font-weight:700;">${r.name}</div>
+      ${r.childSkus.length ? `<div style="font-size:11px;color:var(--ink3);margin-top:2px;">also bags: ${r.childSkus.map(s=>getCoffee(s).name+' <span class=\'sku\'>'+s+'</span>').join(', ')}</div>` : ''}
+    </td>
+    <td><span class="sku">${r.sku}</span></td>
+    <td class="num mono">${r.totalLbs.toFixed(2)}</td>
+    <td class="num" style="color:var(--ink3);">${(r.wl*100).toFixed(1)}%</td>
+    <td class="num mono" style="font-weight:600;color:var(--rust);">${r.actualGreen.toFixed(0)}</td>
+    <td class="num mono" style="font-weight:700;font-size:17px;">${r.fullBatches}</td>
+    <td class="num mono" style="color:var(--gold);">${r.remainder>0.05?r.remainder.toFixed(2):'—'}</td>
+    <td class="num mono">${r.estOutput.toFixed(2)}</td>
+    <td class="num mono" style="font-weight:600;color:${r.surplus>0?'#2a8042':'#888'}">${r.surplus>0?'+'+r.surplus.toFixed(2):'—'}</td>
+  </tr>`).join('');
+
+  const totBatches = rows.reduce((s,r) => s+r.fullBatches, 0);
+  const totGreen = rows.reduce((s,r) => s+r.actualGreen, 0);
+  const totOutput = rows.reduce((s,r) => s+r.estOutput, 0);
+  document.getElementById('rs-batches').textContent = totBatches;
+  document.getElementById('rs-green').textContent = totGreen.toFixed(0);
+  document.getElementById('rs-output').textContent = totOutput.toFixed(1);
+  document.getElementById('rs-skus').textContent = rows.length;
+  document.getElementById('roast-stats').style.display = 'grid';
+
+  // Green origins
+  const gtbody = document.getElementById('green-tbody');
+  gtbody.innerHTML = Object.entries(originTotals).sort((a,b)=>b[1].total-a[1].total).map(([o,d]) => `
+    <tr><td style="font-weight:600;">${o}</td><td class="num mono" style="font-weight:700;color:var(--rust);">${d.total.toFixed(2)}</td><td style="color:var(--ink3);font-size:12px;">${d.usedIn.join(', ')}</td></tr>`).join('');
+  document.getElementById('green-card').style.display = 'block';
+
+  buildPrintSheets(rows, originTotals);
+}
+
+
