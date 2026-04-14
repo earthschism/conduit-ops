@@ -4,51 +4,62 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Conduit Coffee — Roasting Operations</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0f0d0b;
-  --bg2: #161310;
-  --bg3: #1e1a16;
-  --bg4: #252018;
-  --bg5: #2d2820;
-  --border: rgba(255,200,120,0.12);
-  --border2: rgba(255,200,120,0.22);
-  --amber: #e8a040;
-  --amber2: #f0b85a;
-  --amber3: #fdd68a;
-  --cream: #f5ead8;
-  --muted: #8a7d6a;
-  --muted2: #b09880;
-  --red: #e05555;
-  --green: #5ba870;
-  --blue: #5b90c8;
-  --text: #ede0cc;
-  --radius: 8px;
+  --bg: #0f0d0b; --bg2: #161310; --bg3: #1e1a16; --bg4: #252018; --bg5: #2d2820;
+  --border: rgba(255,200,120,0.12); --border2: rgba(255,200,120,0.22);
+  --amber: #e8a040; --amber2: #f0b85a; --amber3: #fdd68a; --cream: #f5ead8;
+  --muted: #8a7d6a; --muted2: #b09880; --red: #e05555; --green: #5ba870;
+  --blue: #5b90c8; --text: #ede0cc; --radius: 8px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; min-height: 100vh; }
 h1,h2,h3 { font-family: 'Playfair Display', serif; }
-code, .mono { font-family: 'JetBrains Mono', monospace; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* AUTH SCREEN */
+#auth-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 30% 50%, rgba(232,160,64,0.06) 0%, transparent 60%),
+              radial-gradient(ellipse at 70% 20%, rgba(232,160,64,0.04) 0%, transparent 50%), var(--bg);
+}
+.auth-card {
+  background: var(--bg3); border: 1px solid var(--border2); border-radius: 16px;
+  padding: 40px; width: 100%; max-width: 400px;
+}
+.auth-logo { font-family: 'Playfair Display', serif; font-size: 26px; color: var(--amber2); font-weight: 700; margin-bottom: 4px; }
+.auth-sub { font-size: 13px; color: var(--muted); margin-bottom: 32px; }
+.auth-tabs { display: flex; gap: 0; margin-bottom: 24px; background: var(--bg4); border-radius: 8px; padding: 3px; }
+.auth-tab { flex: 1; padding: 8px; text-align: center; font-size: 13px; cursor: pointer; border-radius: 6px; color: var(--muted); transition: all 0.15s; }
+.auth-tab.active { background: var(--bg3); color: var(--text); }
+.auth-role-info { background: var(--bg4); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: var(--muted2); line-height: 1.6; display: none; }
+.auth-role-info.show { display: block; }
 
 /* HEADER */
-.header { 
-  background: var(--bg2); 
-  border-bottom: 1px solid var(--border); 
-  padding: 0 24px;
-  display: flex; align-items: center; justify-content: space-between;
+.header {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 0 24px; display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 100;
 }
 .header-left { display: flex; align-items: center; gap: 16px; padding: 14px 0; }
-.logo { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--amber2); font-weight: 700; letter-spacing: -0.5px; }
+.logo { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--amber2); font-weight: 700; }
 .logo span { color: var(--muted2); font-weight: 400; font-size: 13px; margin-left: 8px; font-family: 'DM Sans', sans-serif; }
 .cycle-badge { background: var(--bg4); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--amber3); font-family: 'JetBrains Mono', monospace; }
+.user-pill { display: flex; align-items: center; gap: 8px; background: var(--bg4); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; }
+.role-dot { width: 6px; height: 6px; border-radius: 50%; }
+.role-owner { background: var(--amber); }
+.role-staff { background: var(--green); }
+.role-wholesale { background: var(--blue); }
+.role-subscriber { background: var(--muted2); }
 
 /* TABS */
 .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--bg2); padding: 0 24px; overflow-x: auto; }
-.tab { padding: 12px 18px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.15s; letter-spacing: 0.02em; }
+.tab { padding: 12px 18px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.15s; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--amber2); border-bottom-color: var(--amber); }
+.tab.hidden { display: none; }
 
 /* LAYOUT */
 .content { padding: 24px; max-width: 1400px; margin: 0 auto; }
@@ -79,10 +90,10 @@ tr:hover td { background: rgba(255,200,120,0.03); }
 .badge-gray { background: var(--bg4); color: var(--muted2); border: 1px solid var(--border); }
 
 /* FORMS */
-input, select, textarea { 
-  background: var(--bg4); border: 1px solid var(--border); border-radius: 6px; 
+input, select, textarea {
+  background: var(--bg4); border: 1px solid var(--border); border-radius: 6px;
   color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
-  padding: 8px 10px; outline: none; transition: border-color 0.15s;
+  padding: 8px 10px; outline: none; transition: border-color 0.15s; width: 100%;
 }
 input:focus, select:focus, textarea:focus { border-color: var(--amber); }
 select option { background: var(--bg4); }
@@ -92,7 +103,6 @@ label { font-size: 12px; color: var(--muted2); display: block; margin-bottom: 4p
 .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
 .form-row.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
 .form-group { display: flex; flex-direction: column; }
-input[type="number"] { font-family: 'JetBrains Mono', monospace; }
 
 /* BUTTONS */
 .btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
@@ -101,34 +111,29 @@ input[type="number"] { font-family: 'JetBrains Mono', monospace; }
 .btn-ghost { background: transparent; color: var(--muted2); border: 1px solid var(--border); }
 .btn-ghost:hover { border-color: var(--border2); color: var(--text); }
 .btn-danger { background: rgba(224,85,85,0.15); color: #f07070; border: 1px solid rgba(224,85,85,0.25); }
-.btn-danger:hover { background: rgba(224,85,85,0.25); }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-full { width: 100%; padding: 11px; font-size: 14px; }
 
-/* GRID STATS */
+/* STATS */
 .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
 .stat { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
 .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; font-family: 'JetBrains Mono', monospace; }
 .stat-value { font-size: 26px; font-weight: 600; color: var(--amber3); font-family: 'JetBrains Mono', monospace; line-height: 1; }
 .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
 
-/* UPLOAD ZONE */
-.upload-zone { 
-  border: 2px dashed var(--border2); border-radius: var(--radius); 
-  padding: 32px; text-align: center; cursor: pointer;
-  transition: all 0.2s; background: var(--bg4);
+/* UPLOAD */
+.upload-zone {
+  border: 2px dashed var(--border2); border-radius: var(--radius);
+  padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg4);
 }
 .upload-zone:hover, .upload-zone.drag { border-color: var(--amber); background: rgba(232,160,64,0.05); }
-.upload-icon { font-size: 32px; margin-bottom: 8px; }
-.upload-title { font-size: 15px; color: var(--text); margin-bottom: 4px; }
-.upload-sub { font-size: 12px; color: var(--muted); }
 
-/* ROAST DAY BLOCKS */
+/* DAY GRID */
 .day-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
 .day-block { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
 .day-name { font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.08em; margin-bottom: 10px; }
 .day-batch { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,200,120,0.06); font-size: 12px; }
 .day-batch:last-child { border-bottom: none; }
-.day-batch .sku-sm { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--amber); }
 .day-total { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--amber3); }
 
 /* SECTION HEADERS */
@@ -136,124 +141,187 @@ input[type="number"] { font-family: 'JetBrains Mono', monospace; }
 .section-title { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--cream); }
 .section-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
-/* ALERTS */
-.alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; display: flex; align-items: flex-start; gap: 8px; }
-.alert-warn { background: rgba(232,160,64,0.1); border: 1px solid rgba(232,160,64,0.25); color: var(--amber3); }
-.alert-info { background: rgba(91,144,200,0.1); border: 1px solid rgba(91,144,200,0.25); color: #80b0e0; }
-.alert-success { background: rgba(91,168,112,0.1); border: 1px solid rgba(91,168,112,0.25); color: #7dd494; }
+/* CYCLE SELECTOR */
+.cycle-selector { display: flex; align-items: center; gap: 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 20px; }
+.cycle-selector select { background: transparent; border: none; color: var(--amber2); font-family: 'JetBrains Mono', monospace; font-size: 13px; width: auto; }
 
-/* DIVIDER */
-.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
-
-/* SCROLLBAR */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg2); }
-::-webkit-scrollbar-thumb { background: var(--bg5); border-radius: 3px; }
-
-/* PROGRESS BAR */
-.progress-bar { height: 4px; background: var(--bg5); border-radius: 2px; overflow: hidden; }
-.progress-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+/* INLINE EDIT */
+.inline-num { font-family: 'JetBrains Mono', monospace; background: transparent; border: none; color: var(--text); width: 70px; text-align: right; padding: 2px 4px; border-radius: 4px; }
+.inline-num:focus { background: var(--bg4); border: 1px solid var(--amber); outline: none; }
 
 /* TOAST */
 .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
 .toast { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 12px 16px; font-size: 13px; color: var(--text); max-width: 320px; animation: slideIn 0.2s ease; }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-/* INLINE EDIT */
-.inline-num { font-family: 'JetBrains Mono', monospace; background: transparent; border: none; color: var(--text); width: 60px; text-align: right; padding: 2px 4px; border-radius: 4px; }
-.inline-num:focus { background: var(--bg4); border: 1px solid var(--amber); outline: none; }
+/* LOADING */
+.loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--muted); gap: 10px; }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--amber); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* NOTES */
-.notes-area { font-size: 12px; color: var(--muted2); font-style: italic; margin-top: 4px; }
+/* CUSTOMER PORTAL */
+.portal-welcome { text-align: center; padding: 40px 20px; }
+.portal-welcome h2 { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--amber3); margin-bottom: 8px; }
+.order-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
 
-/* PRINT */
-@media print {
-  .header, .tabs, .btn, .upload-zone { display: none !important; }
-  body { background: white; color: black; }
-  .card { border: 1px solid #ccc; }
-}
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--bg5); border-radius: 3px; }
+
+/* EMPTY STATE */
+.empty { text-align: center; color: var(--muted); padding: 32px; font-size: 13px; }
+
+/* ALERT */
+.alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+.alert-warn { background: rgba(232,160,64,0.1); border: 1px solid rgba(232,160,64,0.25); color: var(--amber3); }
+.alert-error { background: rgba(224,85,85,0.1); border: 1px solid rgba(224,85,85,0.25); color: #f07070; }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="header-left">
-    <div class="logo">Conduit Coffee <span>Roasting Operations</span></div>
-    <div class="cycle-badge" id="cycle-date">Loading...</div>
-  </div>
-  <div style="display:flex;gap:8px;">
-    <button class="btn btn-ghost btn-sm" onclick="exportAll()">↓ Export Excel</button>
-    <button class="btn btn-ghost btn-sm" onclick="window.print()">Print</button>
-    <button class="btn btn-ghost btn-sm" onclick="resetCycle()">New Cycle</button>
+<!-- ═══════════════════════════════════════════ AUTH SCREEN ══ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">Conduit Coffee</div>
+    <div class="auth-sub">Roasting Operations Platform</div>
+
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchAuthTab('login')">Sign In</div>
+      <div class="auth-tab" onclick="switchAuthTab('signup')">Create Account</div>
+    </div>
+
+    <div id="auth-error" class="alert alert-error" style="display:none;"></div>
+
+    <!-- LOGIN -->
+    <div id="login-form">
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group" style="margin-bottom:20px;">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <!-- SIGNUP -->
+    <div id="signup-form" style="display:none;">
+      <div class="auth-role-info show" id="signup-role-info">
+        <strong style="color:var(--amber2);">First account = Owner.</strong> The first person to sign up becomes the owner with full access. Share this page with staff or customers after — they'll sign up as their role.
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Full Name</label>
+        <input type="text" id="signup-name" placeholder="Your name">
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Email</label>
+        <input type="email" id="signup-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Password</label>
+        <input type="password" id="signup-password" placeholder="At least 6 characters">
+      </div>
+      <div class="form-group" style="margin-bottom:20px;">
+        <label>I am a...</label>
+        <select id="signup-role">
+          <option value="owner">Owner / Roaster</option>
+          <option value="staff">Staff</option>
+          <option value="wholesale">Wholesale Account</option>
+          <option value="subscriber">Subscriber / Retail Customer</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-full" onclick="doSignup()">Create Account</button>
+    </div>
   </div>
 </div>
 
-<div class="tabs">
-  <div class="tab active" onclick="showTab('orders')">① Orders</div>
-  <div class="tab" onclick="showTab('roast')">② Roast Schedule</div>
-  <div class="tab" onclick="showTab('bags')">③ Bags & Grinding</div>
-  <div class="tab" onclick="showTab('green')">④ Green Beans</div>
-  <div class="tab" onclick="showTab('inventory')">⑤ Inventory</div>
+<!-- ═══════════════════════════════════════════ MAIN APP ══ -->
+<div id="main-app" style="display:none;">
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">Conduit Coffee <span>Roasting Operations</span></div>
+    <div class="cycle-badge" id="cycle-badge">Loading...</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <div class="user-pill">
+      <div class="role-dot" id="role-dot"></div>
+      <span id="user-name-display">—</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="exportCSV()">↓ Export</button>
+    <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign Out</button>
+  </div>
+</div>
+
+<div class="tabs" id="main-tabs">
+  <div class="tab active" data-tab="orders" onclick="showTab('orders',this)">① Orders</div>
+  <div class="tab" data-tab="roast" onclick="showTab('roast',this)">② Roast Schedule</div>
+  <div class="tab" data-tab="bags" onclick="showTab('bags',this)">③ Bags & Grinding</div>
+  <div class="tab" data-tab="green" onclick="showTab('green',this)">④ Green Beans</div>
+  <div class="tab" data-tab="inventory" onclick="showTab('inventory',this)">⑤ Inventory</div>
+  <div class="tab hidden" data-tab="portal" onclick="showTab('portal',this)">My Orders</div>
+  <div class="tab hidden" data-tab="admin" onclick="showTab('admin',this)">⚙ Admin</div>
 </div>
 
 <div class="content">
 
-<!-- ═══════════════════════════════════════════════════════ ORDERS ══ -->
+<!-- ══════════════════════════════════════════════ ORDERS ══ -->
 <div class="panel active" id="panel-orders">
-
   <div class="section-header">
     <div>
       <div class="section-title">Order Entry</div>
-      <div class="section-sub">Manual entry, Shopify CSV upload, or subscription management</div>
+      <div class="section-sub">Current cycle orders — shared across your team in real time</div>
     </div>
     <div style="display:flex;gap:8px;">
-      <button class="btn btn-ghost btn-sm" onclick="showAddOrder()">+ Add Order</button>
-      <button class="btn btn-primary btn-sm" onclick="recalcAll()">↻ Recalculate</button>
+      <button class="btn btn-ghost btn-sm" id="btn-add-order" onclick="toggleAddOrder()">+ Add Order</button>
+      <button class="btn btn-primary btn-sm" onclick="loadOrders()">↻ Refresh</button>
     </div>
   </div>
 
-  <!-- STATS -->
-  <div class="stats-row" id="order-stats">
+  <!-- CYCLE SELECTOR -->
+  <div class="cycle-selector">
+    <span style="font-size:12px;color:var(--muted);">Cycle:</span>
+    <select id="cycle-select" onchange="onCycleChange()"></select>
+    <button class="btn btn-ghost btn-sm" id="btn-new-cycle" onclick="createNewCycle()" style="display:none;">+ New Cycle</button>
+  </div>
+
+  <div class="stats-row">
     <div class="stat"><div class="stat-label">Total Orders</div><div class="stat-value" id="stat-orders">0</div></div>
     <div class="stat"><div class="stat-label">Total Bags</div><div class="stat-value" id="stat-bags">0</div></div>
     <div class="stat"><div class="stat-label">Lbs to Roast</div><div class="stat-value" id="stat-lbs">0</div></div>
     <div class="stat"><div class="stat-label">Ship / Pickup</div><div class="stat-value" id="stat-ship">0/0</div></div>
   </div>
 
-  <!-- UPLOAD ZONE -->
-  <div class="card">
+  <!-- CSV UPLOAD (staff/owner only) -->
+  <div class="card" id="csv-card">
     <div class="card-title"><span class="dot"></span>Shopify CSV Import</div>
-    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-input').click()" 
-         ondragover="event.preventDefault();this.classList.add('drag')" 
+    <div class="upload-zone" onclick="document.getElementById('csv-input').click()"
+         ondragover="event.preventDefault();this.classList.add('drag')"
          ondragleave="this.classList.remove('drag')"
          ondrop="handleDrop(event)">
       <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSV(this.files[0])">
-      <div class="upload-icon">☁</div>
-      <div class="upload-title">Drop Shopify CSV here or click to browse</div>
-      <div class="upload-sub">Exported from Shopify Orders → Export. Parses coffee name, weight, grind, and shipping automatically.</div>
+      <div style="font-size:28px;margin-bottom:8px;">☁</div>
+      <div style="font-size:14px;margin-bottom:4px;">Drop Shopify CSV here or click to browse</div>
+      <div style="font-size:12px;color:var(--muted);">Parses coffee name, weight, grind, and shipping automatically</div>
     </div>
-    <div id="csv-preview" style="margin-top:12px;display:none;"></div>
   </div>
 
   <!-- ADD ORDER FORM -->
   <div class="card" id="add-order-form" style="display:none;">
     <div class="card-title"><span class="dot"></span>Manual Order Entry</div>
     <div class="form-row cols-3">
-      <div class="form-group">
-        <label>Customer / Account</label>
-        <input type="text" id="f-customer" placeholder="Name or account">
-      </div>
-      <div class="form-group">
-        <label>Order Type</label>
+      <div class="form-group"><label>Customer / Account</label><input type="text" id="f-customer" placeholder="Name or account"></div>
+      <div class="form-group"><label>Order Type</label>
         <select id="f-type">
           <option value="subscription">Subscription</option>
           <option value="wholesale">Wholesale</option>
-          <option value="online">Online / Shopify</option>
+          <option value="manual">Manual / Phone</option>
           <option value="walkin">Walk-in / Café</option>
         </select>
       </div>
-      <div class="form-group">
-        <label>Region</label>
+      <div class="form-group"><label>Region</label>
         <select id="f-region">
           <option value="seattle">Seattle</option>
           <option value="pt">Port Townsend</option>
@@ -262,52 +330,29 @@ input[type="number"] { font-family: 'JetBrains Mono', monospace; }
         </select>
       </div>
     </div>
-    <div id="line-items-container">
-      <div class="form-row cols-4" id="line-item-0">
-        <div class="form-group">
-          <label>Coffee</label>
-          <select id="f-coffee-0" style="width:100%"></select>
-        </div>
-        <div class="form-group">
-          <label>Qty</label>
-          <input type="number" id="f-qty-0" value="1" min="1" style="width:100%">
-        </div>
-        <div class="form-group">
-          <label>Size</label>
-          <select id="f-size-0" style="width:100%">
-            <option value="5lb">5 lb</option>
-            <option value="2lb" selected>2 lb</option>
-            <option value="1lb">1 lb</option>
-            <option value="12oz">12 oz</option>
-            <option value="6oz">6 oz</option>
-            <option value="4oz">4 oz</option>
-            <option value="20lb">20 lb bulk</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Grind</label>
-          <select id="f-grind-0" style="width:100%">
-            <option value="wb">Whole Bean</option>
-            <option value="drip">Drip</option>
-            <option value="espresso">Espresso</option>
-            <option value="french">French Press</option>
-            <option value="pour">Pour Over</option>
-          </select>
-        </div>
+    <div class="form-row cols-4">
+      <div class="form-group"><label>Coffee</label><select id="f-coffee"></select></div>
+      <div class="form-group"><label>Qty</label><input type="number" id="f-qty" value="1" min="1"></div>
+      <div class="form-group"><label>Size</label>
+        <select id="f-size">
+          <option value="5lb">5 lb</option><option value="2lb" selected>2 lb</option>
+          <option value="1lb">1 lb</option><option value="12oz">12 oz</option>
+          <option value="6oz">6 oz</option><option value="4oz">4 oz</option>
+          <option value="20lb">20 lb bulk</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Grind</label>
+        <select id="f-grind">
+          <option value="wb">Whole Bean</option><option value="drip">Drip</option>
+          <option value="espresso">Espresso</option><option value="french">French Press</option>
+          <option value="pour">Pour Over</option>
+        </select>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:4px;">
-      <button class="btn btn-ghost btn-sm" onclick="addLineItem()">+ Line Item</button>
-    </div>
-    <div class="form-row" style="margin-top:12px;">
-      <div class="form-group">
-        <label>Notes</label>
-        <input type="text" id="f-notes" placeholder="Pickup, grind specs, special instructions...">
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:8px;">
+    <div class="form-group" style="margin-bottom:12px;"><label>Notes</label><input type="text" id="f-notes" placeholder="Pickup, grind specs, special instructions..."></div>
+    <div style="display:flex;gap:8px;">
       <button class="btn btn-primary" onclick="saveOrder()">Save Order</button>
-      <button class="btn btn-ghost" onclick="document.getElementById('add-order-form').style.display='none'">Cancel</button>
+      <button class="btn btn-ghost" onclick="toggleAddOrder()">Cancel</button>
     </div>
   </div>
 
@@ -315,1043 +360,897 @@ input[type="number"] { font-family: 'JetBrains Mono', monospace; }
   <div class="card">
     <div class="card-title"><span class="dot"></span>Current Cycle Orders</div>
     <div class="tbl-wrap">
-      <table id="orders-table">
+      <table>
         <thead>
-          <tr>
-            <th>#</th>
-            <th>Customer</th>
-            <th>Type</th>
-            <th>Coffee</th>
-            <th>SKU</th>
-            <th>Size</th>
-            <th>Qty</th>
-            <th>Grind</th>
-            <th>Ship/Pickup</th>
-            <th>Notes</th>
-            <th></th>
-          </tr>
+          <tr><th>#</th><th>Customer</th><th>Type</th><th>Coffee</th><th>SKU</th><th>Size</th><th>Qty</th><th>Grind</th><th>Region</th><th>Notes</th><th></th></tr>
         </thead>
-        <tbody id="orders-tbody">
-          <tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px;">No orders yet. Upload a Shopify CSV or add manually.</td></tr>
-        </tbody>
+        <tbody id="orders-tbody"><tr><td colspan="11" class="empty">Loading orders...</td></tr></tbody>
       </table>
     </div>
   </div>
-
 </div>
 
-<!-- ══════════════════════════════════════════════════ ROAST SCHEDULE ══ -->
+<!-- ════════════════════════════════════ ROAST SCHEDULE ══ -->
 <div class="panel" id="panel-roast">
-
   <div class="section-header">
-    <div>
-      <div class="section-title">Roast Schedule</div>
-      <div class="section-sub">Batches calculated from orders · max 10 lb green per batch · partial batches for top-offs</div>
-    </div>
-    <button class="btn btn-primary btn-sm" onclick="generateRoastSchedule()">↻ Generate Schedule</button>
+    <div><div class="section-title">Roast Schedule</div>
+    <div class="section-sub">Auto-calculated · max 10 lb green per batch · partial batches for top-offs</div></div>
+    <button class="btn btn-primary btn-sm" onclick="generateRoastSchedule()">↻ Generate</button>
   </div>
-
-  <div id="roast-alerts"></div>
-
-  <!-- DAY SUMMARY -->
-  <div class="day-grid" id="day-grid">
+  <div class="day-grid">
     <div class="day-block"><div class="day-name">Monday</div><div id="day-mon" style="color:var(--muted);font-size:12px;">—</div></div>
     <div class="day-block"><div class="day-name">Tuesday</div><div id="day-tue" style="color:var(--muted);font-size:12px;">—</div></div>
     <div class="day-block"><div class="day-name">Wednesday</div><div id="day-wed" style="color:var(--muted);font-size:12px;">—</div></div>
     <div class="day-block"><div class="day-name">Weekend</div><div id="day-wknd" style="color:var(--muted);font-size:12px;">—</div></div>
   </div>
-
-  <!-- ROAST TABLE -->
   <div class="card">
     <div class="card-title"><span class="dot"></span>Per-Coffee Roast Detail</div>
     <div class="tbl-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Coffee</th>
-            <th>SKU</th>
-            <th>On Hand (lb)</th>
-            <th>Total Need (lb)</th>
-            <th>Net to Roast (lb)</th>
-            <th>Water Loss</th>
-            <th>Green Needed (lb)</th>
-            <th># Batches</th>
-            <th>Batch Type</th>
-            <th>Day</th>
-            <th>Output (lb)</th>
-            <th>Surplus</th>
-          </tr>
-        </thead>
-        <tbody id="roast-tbody">
-          <tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px;">Add orders first, then generate schedule.</td></tr>
-        </tbody>
+        <thead><tr><th>Coffee</th><th>SKU</th><th>On Hand</th><th>Need</th><th>Net Roast</th><th>Water Loss</th><th>Green Needed</th><th>Batches</th><th>Type</th><th>Day</th><th>Output</th><th>Surplus</th></tr></thead>
+        <tbody id="roast-tbody"><tr><td colspan="12" class="empty">Add orders first, then generate.</td></tr></tbody>
       </table>
     </div>
   </div>
-
-  <!-- TOTAL ROW -->
   <div class="card" id="roast-totals" style="display:none;">
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
       <div><div class="stat-label">Total Batches</div><div class="stat-value" id="tot-batches" style="font-size:20px;">—</div></div>
-      <div><div class="stat-label">Total Green Needed</div><div class="stat-value" id="tot-green" style="font-size:20px;">—</div></div>
+      <div><div class="stat-label">Green Needed</div><div class="stat-value" id="tot-green" style="font-size:20px;">—</div></div>
       <div><div class="stat-label">Roasted Output</div><div class="stat-value" id="tot-output" style="font-size:20px;">—</div></div>
-      <div><div class="stat-label">Roast Days Used</div><div class="stat-value" id="tot-days" style="font-size:20px;">—</div></div>
+      <div><div class="stat-label">Days Used</div><div class="stat-value" id="tot-days" style="font-size:20px;">—</div></div>
     </div>
   </div>
-
 </div>
 
-<!-- ════════════════════════════════════════════════ BAGS & GRINDING ══ -->
+<!-- ══════════════════════════════════ BAGS & GRINDING ══ -->
 <div class="panel" id="panel-bags">
-
   <div class="section-header">
-    <div>
-      <div class="section-title">Bags & Grinding</div>
-      <div class="section-sub">Thursday–Saturday bagging task list · includes grind specs</div>
-    </div>
-    <button class="btn btn-ghost btn-sm" onclick="window.print()">Print Bag Sheet</button>
+    <div><div class="section-title">Bags & Grinding</div>
+    <div class="section-sub">Thursday–Saturday bagging task list</div></div>
+    <button class="btn btn-ghost btn-sm" onclick="window.print()">Print</button>
   </div>
-
   <div class="stats-row">
-    <div class="stat"><div class="stat-label">Total 5 lb</div><div class="stat-value" id="bag-5lb">0</div></div>
-    <div class="stat"><div class="stat-label">Total 2 lb</div><div class="stat-value" id="bag-2lb">0</div></div>
-    <div class="stat"><div class="stat-label">Total 1 lb / 12oz</div><div class="stat-value" id="bag-1lb">0</div></div>
-    <div class="stat"><div class="stat-label">Samples / 6oz</div><div class="stat-value" id="bag-sample">0</div></div>
+    <div class="stat"><div class="stat-label">5 lb bags</div><div class="stat-value" id="bag-5lb">0</div></div>
+    <div class="stat"><div class="stat-label">2 lb bags</div><div class="stat-value" id="bag-2lb">0</div></div>
+    <div class="stat"><div class="stat-label">1 lb / 12oz</div><div class="stat-value" id="bag-1lb">0</div></div>
+    <div class="stat"><div class="stat-label">Samples</div><div class="stat-value" id="bag-sample">0</div></div>
     <div class="stat"><div class="stat-label">Grind Orders</div><div class="stat-value" id="bag-grind">0</div></div>
   </div>
-
   <div class="card">
     <div class="card-title"><span class="dot"></span>Bagging Task List</div>
     <div class="tbl-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Coffee</th>
-            <th>SKU</th>
-            <th>5 lb</th>
-            <th>2 lb</th>
-            <th>1 lb / 12oz</th>
-            <th>6oz</th>
-            <th>4oz</th>
-            <th>Retail Total</th>
-            <th>Whole Bean</th>
-            <th>Drip</th>
-            <th>Espresso</th>
-            <th>French Press</th>
-            <th>Notes</th>
-          </tr>
-        </thead>
-        <tbody id="bags-tbody">
-          <tr><td colspan="13" style="text-align:center;color:var(--muted);padding:24px;">Generate roast schedule first.</td></tr>
-        </tbody>
+        <thead><tr><th>Coffee</th><th>SKU</th><th>5 lb</th><th>2 lb</th><th>1lb/12oz</th><th>6oz</th><th>4oz</th><th>Retail Total</th><th>Whole Bean</th><th>Drip</th><th>Espresso</th><th>French</th><th>Notes</th></tr></thead>
+        <tbody id="bags-tbody"><tr><td colspan="13" class="empty">Load orders first.</td></tr></tbody>
       </table>
     </div>
   </div>
-
-  <!-- SHIPPING BOX CALCULATOR -->
   <div class="card">
     <div class="card-title"><span class="dot"></span>Shipping Boxes</div>
     <div class="tbl-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Box Type</th>
-            <th>Ship Weight Limit</th>
-            <th>Rate</th>
-            <th>Count</th>
-            <th>Subtotal</th>
-          </tr>
-        </thead>
-        <tbody id="ship-tbody">
-          <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">Calculated from orders.</td></tr>
-        </tbody>
+        <thead><tr><th>Box Type</th><th>Rate</th><th>Count</th><th>Subtotal</th></tr></thead>
+        <tbody id="ship-tbody"></tbody>
       </table>
     </div>
-    <div style="display:flex;justify-content:flex-end;gap:24px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+    <div style="display:flex;justify-content:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
       <div style="text-align:right;"><div class="stat-label">Total Postage</div><div class="mono" id="ship-total" style="font-size:18px;color:var(--amber3);">$0.00</div></div>
     </div>
   </div>
-
 </div>
 
-<!-- ═══════════════════════════════════════════════════ GREEN BEANS ══ -->
+<!-- ══════════════════════════════════════ GREEN BEANS ══ -->
 <div class="panel" id="panel-green">
-
   <div class="section-header">
-    <div>
-      <div class="section-title">Green Bean Needs</div>
-      <div class="section-sub">Blend recipes × roasted needs → origin-level purchase requirements</div>
-    </div>
+    <div><div class="section-title">Green Bean Needs</div>
+    <div class="section-sub">Blend recipes × roasted needs → origin purchase requirements</div></div>
   </div>
-
   <div class="card">
-    <div class="card-title"><span class="dot"></span>Green Required by Coffee</div>
+    <div class="card-title"><span class="dot"></span>Required by Coffee</div>
     <div class="tbl-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Coffee</th>
-            <th>Roasted Need (lb)</th>
-            <th>Water Loss</th>
-            <th>Green Total (lb)</th>
-            <th>Brazil FdI</th>
-            <th>Honduras Capucas</th>
-            <th>Guatemala Monja</th>
-            <th>Sumatra</th>
-            <th>Ethiopia</th>
-            <th>Peru Ely</th>
-            <th>Decaf Colombia</th>
-            <th>Other</th>
-          </tr>
-        </thead>
-        <tbody id="green-tbody">
-          <tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px;">Generate roast schedule first.</td></tr>
-        </tbody>
+        <thead><tr><th>Coffee</th><th>Roasted Need</th><th>Water Loss</th><th>Green Total</th><th>Brazil FdI</th><th>Honduras</th><th>Guatemala</th><th>Sumatra</th><th>Ethiopia</th><th>Peru Ely</th><th>Decaf Col.</th><th>Other</th></tr></thead>
+        <tbody id="green-tbody"><tr><td colspan="12" class="empty">Generate roast schedule first.</td></tr></tbody>
       </table>
     </div>
   </div>
-
   <div class="card">
-    <div class="card-title"><span class="dot"></span>Total Green by Origin</div>
+    <div class="card-title"><span class="dot"></span>Total by Origin</div>
     <div id="green-totals-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
-      <div style="color:var(--muted);font-size:13px;">Generate schedule to see totals.</div>
+      <div class="empty">Generate schedule to see totals.</div>
     </div>
   </div>
-
-  <!-- BLEND RECIPE EDITOR -->
-  <div class="card">
-    <div class="card-title"><span class="dot"></span>Blend Recipes <span style="font-size:12px;color:var(--muted);font-family:'DM Sans';font-weight:400;">(edit to adjust)</span></div>
-    <div id="blend-editor"></div>
-  </div>
-
 </div>
 
-<!-- ═════════════════════════════════════════════════════ INVENTORY ══ -->
+<!-- ════════════════════════════════════════ INVENTORY ══ -->
 <div class="panel" id="panel-inventory">
-
   <div class="section-header">
-    <div>
-      <div class="section-title">Inventory</div>
-      <div class="section-sub">On-hand roasted coffee + green bean stock</div>
-    </div>
-    <button class="btn btn-ghost btn-sm" onclick="saveInventory()">Save Inventory</button>
+    <div><div class="section-title">Inventory</div>
+    <div class="section-sub">On-hand roasted coffee + green bean stock</div></div>
+    <button class="btn btn-primary btn-sm" onclick="saveInventory()">Save Inventory</button>
   </div>
-
   <div class="card">
     <div class="card-title"><span class="dot"></span>Roasted Coffee On Hand (lbs)</div>
     <div class="tbl-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Coffee</th>
-            <th>SKU</th>
-            <th>On Hand (lb)</th>
-            <th>Par Level (lb)</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="inv-tbody"></tbody>
+        <thead><tr><th>Coffee</th><th>SKU</th><th>On Hand (lb)</th><th>Status</th></tr></thead>
+        <tbody id="inv-tbody"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
       </table>
     </div>
   </div>
-
   <div class="card">
     <div class="card-title"><span class="dot"></span>Green Bean Stock (lbs)</div>
     <div class="tbl-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Origin</th>
-            <th>Cost/lb</th>
-            <th>Bag Size (lb)</th>
-            <th>On Hand (lb)</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="green-inv-tbody"></tbody>
+        <thead><tr><th>Origin</th><th>Cost/lb</th><th>Bag Size</th><th>On Hand (lb)</th><th>Status</th></tr></thead>
+        <tbody id="green-inv-tbody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
       </table>
     </div>
   </div>
+</div>
 
+<!-- ══════════════════════════════════ CUSTOMER PORTAL ══ -->
+<div class="panel" id="panel-portal">
+  <div class="portal-welcome">
+    <h2>Welcome back, <span id="portal-name">—</span></h2>
+    <p style="color:var(--muted);font-size:13px;margin-top:6px;">Place an order or view your order history below.</p>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="dot"></span>Place an Order</div>
+    <div class="form-row cols-4">
+      <div class="form-group"><label>Coffee</label><select id="p-coffee"></select></div>
+      <div class="form-group"><label>Size</label>
+        <select id="p-size">
+          <option value="2lb" selected>2 lb</option><option value="1lb">1 lb</option>
+          <option value="5lb">5 lb</option><option value="12oz">12 oz</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Grind</label>
+        <select id="p-grind">
+          <option value="wb">Whole Bean</option><option value="drip">Drip</option>
+          <option value="espresso">Espresso</option><option value="french">French Press</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Qty</label><input type="number" id="p-qty" value="1" min="1"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;"><label>Notes</label><input type="text" id="p-notes" placeholder="Any special requests..."></div>
+    <button class="btn btn-primary" onclick="placeCustomerOrder()">Place Order</button>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="dot"></span>Your Orders</div>
+    <div id="portal-orders"><div class="empty">No orders yet.</div></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ ADMIN ══ -->
+<div class="panel" id="panel-admin">
+  <div class="section-header">
+    <div><div class="section-title">Admin</div>
+    <div class="section-sub">User management and system settings</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="dot"></span>All Users</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th>Change Role</th></tr></thead>
+        <tbody id="admin-users-tbody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 </div><!-- end .content -->
+</div><!-- end #main-app -->
 
 <div class="toast-container" id="toasts"></div>
 
 <script>
-// ═══════════════════════════════════════════════════════════════════════
-// DATA MODEL
-// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// CONFIG — replace these with your actual values locally
+// ═══════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://dbbefcbsgltamzwidgyu.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_gFsUq1n1LOwyx32PdB3_Vg_e1rGsjz4';
 
-const COFFEES = [
-  { sku:'LOCO', name:'Locofocos',             waterLoss:0.145, special:false },
-  { sku:'LAKE', name:'Lakeside',              waterLoss:0.15,  special:false },
-  { sku:'SHIP', name:'Ship Canal',            waterLoss:0.18,  special:false },
-  { sku:'SOD',  name:'Decaf Lighter',         waterLoss:0.13,  special:false },
-  { sku:'SEBD', name:'Seasonal Blend',        waterLoss:0.15,  special:false },
-  { sku:'9to5', name:'Nove alle Cinque',      waterLoss:0.15,  special:false },
-  { sku:'CRHS', name:'Costa Rica Sonora',     waterLoss:0.13,  special:false },
-  { sku:'GMBA', name:'Guatemala Monja Blanca',waterLoss:0.15,  special:false },
-  { sku:'PECL', name:'Peru Ely Cruz Lopez',   waterLoss:0.14,  special:false },
-  { sku:'KHBD', name:'Krampus Holiday Blend', waterLoss:0.18,  special:false },
-  { sku:'ETTK', name:'Ethiopia TikTok',       waterLoss:0.132, special:false },
-  { sku:'CRSC', name:'Cross Current Decaf',   waterLoss:0.13,  special:false },
-  { sku:'1895', name:"Aldrich's 1895",        waterLoss:0.15,  special:true  },
-  { sku:'COTU', name:'ALD Center of Universe',waterLoss:0.18,  special:true, baseRoast:'SHIP' },
-  { sku:'QUST', name:'Cottage Bothell/Quest', waterLoss:0.16,  special:true  },
-  { sku:'BSKT', name:'Baskette Fall',         waterLoss:0.15,  special:true  },
-  { sku:'BONT', name:'Baskette Fraismont',    waterLoss:0.15,  special:true  },
-  { sku:'DOSD', name:'Dord Special Dark',     waterLoss:0.15,  special:true  },
-  { sku:'DSIG', name:'Dord Signature',        waterLoss:0.15,  special:true  },
-  { sku:'OTIS', name:'Dord Otis Good Boy',    waterLoss:0.15,  special:true  },
-];
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const BAG_WEIGHTS = { '4oz':0.25, '6oz':0.375, '12oz':0.756, '1lb':1.0, '2lb':2.0, '5lb':5.0, '20lb':20.0 };
-
-// Blend recipes: fraction of each green origin per coffee
-const BLEND_RECIPES = {
-  'LOCO': { 'Brazil FdI':0.5, 'Honduras Capucas':0.5 },
-  'LAKE': { 'Brazil FdI':0.5, 'Honduras Capucas':0.5 },
-  'SHIP': { 'Brazil FdI':0.4, 'Guatemala Monja':0.3, 'Sumatra':0.3 },
-  '9to5': { 'Brazil FdI':0.3, 'Honduras Capucas':0.4, 'Guatemala Monja':0.3 },
-  'SEBD': { 'Guatemala Monja':0.5, 'Ethiopia':0.5 },
-  'SOD':  { 'Decaf Colombia':1.0 },
-  'CRSC': { 'Decaf Colombia':1.0 },
-  'CRHS': { 'Costa Rica':1.0 },
-  'GMBA': { 'Guatemala Monja':1.0 },
-  'PECL': { 'Peru Ely':1.0 },
-  '1895': { 'Brazil FdI':0.5, 'Honduras Capucas':0.5 },
-  'COTU': { 'Brazil FdI':0.4, 'Guatemala Monja':0.3, 'Sumatra':0.3 },
-  'QUST': { 'Brazil FdI':0.5, 'Honduras Capucas':0.5 },
-  'BSKT': { 'Guatemala Monja':0.5, 'Costa Rica':0.5 },
-  'DOSD': { 'Sumatra':0.5, 'Honduras Capucas':0.5 },
-  'DSIG': { 'Brazil FdI':0.4, 'Honduras Capucas':0.4, 'Guatemala Monja':0.2 },
-  'OTIS': { 'Brazil FdI':0.5, 'Honduras Capucas':0.5 },
-  'ETTK': { 'Ethiopia':1.0 },
-  'KHBD': { 'Brazil FdI':0.4, 'Honduras Capucas':0.3, 'Sumatra':0.3 },
-};
-
-const GREEN_ORIGINS = [
-  { name:'Brazil FdI',       costPerLb:4.2,  bagSize:132 },
-  { name:'Honduras Capucas', costPerLb:4.09, bagSize:152 },
-  { name:'Guatemala Monja',  costPerLb:4.89, bagSize:152 },
-  { name:'Sumatra',          costPerLb:5.61, bagSize:132 },
-  { name:'Ethiopia',         costPerLb:4.76, bagSize:66  },
-  { name:'Peru Ely',         costPerLb:3.85, bagSize:132 },
-  { name:'Costa Rica',       costPerLb:3.66, bagSize:152 },
-  { name:'Decaf Colombia',   costPerLb:4.45, bagSize:132 },
-];
-
+// ═══════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════
+const BAG_WEIGHTS = { '4oz':0.25,'6oz':0.375,'12oz':0.756,'1lb':1.0,'2lb':2.0,'5lb':5.0,'20lb':20.0 };
 const SHIP_BOXES = [
-  { type:'First Class',       weight:14,  rate:6  },
-  { type:'Padded Flat Rate',  weight:15,  rate:9  },
-  { type:'Medium Flat Rate',  weight:Infinity, rate:14 },
+  { type:'First Class', rate:6 },
+  { type:'Padded Flat Rate', rate:9 },
+  { type:'Medium Flat Rate', rate:14 },
 ];
+const GRIND_LABEL = { wb:'Whole Bean', drip:'Drip', espresso:'Espresso', french:'French Press', pour:'Pour Over' };
+const REGION_LABEL = { seattle:'Seattle', pt:'Port Townsend', ship:'Ship', pickup:'Pickup' };
+const DAYS = ['MON','TUE','WED','WKND'];
 
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+let currentUser = null;
+let currentProfile = null;
+let currentCycleId = null;
 let orders = [];
+let coffees = [];
 let inventory = {};
 let greenInv = {};
-let lineItemCount = 1;
 let roastSchedule = [];
+let cycles = [];
 
-// ═══════════════════════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='signup')));
+  document.getElementById('login-form').style.display = tab==='login' ? 'block' : 'none';
+  document.getElementById('signup-form').style.display = tab==='signup' ? 'block' : 'none';
+  document.getElementById('auth-error').style.display = 'none';
+}
 
-function init() {
-  // Date
-  const d = new Date();
-  document.getElementById('cycle-date').textContent = 
-    d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!email || !password) { showAuthError('Please enter email and password.'); return; }
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) showAuthError(error.message);
+}
 
-  // Load saved data
-  const saved = localStorage.getItem('conduit_data');
-  if (saved) {
-    try {
-      const data = JSON.parse(saved);
-      orders = data.orders || [];
-      inventory = data.inventory || {};
-      greenInv = data.greenInv || {};
-    } catch(e) {}
+async function doSignup() {
+  const name = document.getElementById('signup-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const password = document.getElementById('signup-password').value;
+  const role = document.getElementById('signup-role').value;
+  if (!name || !email || !password) { showAuthError('Please fill in all fields.'); return; }
+  if (password.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
+
+  const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: name } } });
+  if (error) { showAuthError(error.message); return; }
+
+  // Set role
+  if (data.user) {
+    // Check if first user — make them owner regardless
+    const { count } = await sb.from('profiles').select('*', { count:'exact', head:true });
+    const assignedRole = count === 0 ? 'owner' : role;
+    await sb.from('profiles').update({ role: assignedRole, full_name: name }).eq('id', data.user.id);
+  }
+  toast('Account created! Signing you in...', 'success');
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  currentUser = null; currentProfile = null;
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT AFTER LOGIN
+// ═══════════════════════════════════════════════════════════
+async function initApp(user) {
+  currentUser = user;
+
+  // Load profile
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  currentProfile = profile;
+
+  // Show app
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+
+  // Set user display
+  document.getElementById('user-name-display').textContent = profile?.full_name || user.email;
+  const dot = document.getElementById('role-dot');
+  const roleColors = { owner:'var(--amber)', staff:'var(--green)', wholesale:'var(--blue)', subscriber:'var(--muted2)' };
+  dot.style.background = roleColors[profile?.role] || 'var(--muted2)';
+
+  // Role-based UI
+  const role = profile?.role || 'subscriber';
+  const isStaff = ['owner','staff'].includes(role);
+
+  // Show/hide tabs
+  document.querySelector('[data-tab="orders"]').classList.toggle('hidden', !isStaff);
+  document.querySelector('[data-tab="roast"]').classList.toggle('hidden', !isStaff);
+  document.querySelector('[data-tab="bags"]').classList.toggle('hidden', !isStaff);
+  document.querySelector('[data-tab="green"]').classList.toggle('hidden', !isStaff);
+  document.querySelector('[data-tab="inventory"]').classList.toggle('hidden', !isStaff);
+  document.querySelector('[data-tab="portal"]').classList.toggle('hidden', isStaff);
+  document.querySelector('[data-tab="admin"]').classList.toggle('hidden', role !== 'owner');
+  document.getElementById('btn-new-cycle').style.display = isStaff ? 'block' : 'none';
+  if (document.getElementById('csv-card')) document.getElementById('csv-card').style.display = isStaff ? 'block' : 'none';
+  if (document.getElementById('btn-add-order')) document.getElementById('btn-add-order').style.display = isStaff ? 'inline-block' : 'none';
+
+  // Load coffees first
+  await loadCoffees();
+  populateCoffeeDropdowns();
+
+  // Load cycles
+  await loadCycles();
+
+  if (isStaff) {
+    await loadOrders();
+    await loadInventory();
+    document.querySelector('[data-tab="orders"]').click();
+  } else {
+    // Customer portal
+    document.getElementById('portal-name').textContent = profile?.full_name || '';
+    document.querySelector('[data-tab="portal"]').click();
+    await loadPortalOrders();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// CYCLES
+// ═══════════════════════════════════════════════════════════
+async function loadCycles() {
+  const { data } = await sb.from('cycles').select('*').order('created_at', { ascending:false });
+  cycles = data || [];
+  const sel = document.getElementById('cycle-select');
+  sel.innerHTML = '';
+
+  if (!cycles.length) {
+    // Auto-create first cycle
+    await createNewCycle(true);
+    return;
   }
 
-  // Populate coffee dropdowns
-  populateCoffeeDropdowns();
-  renderInventoryTable();
-  renderGreenInvTable();
-  renderBlendEditor();
+  cycles.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = `${c.name} — ${c.status}`;
+    sel.appendChild(opt);
+  });
+
+  currentCycleId = cycles[0].id;
+  document.getElementById('cycle-badge').textContent = cycles[0].name;
+}
+
+async function createNewCycle(silent=false) {
+  const d = new Date();
+  const name = `Week of ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`;
+  const { data, error } = await sb.from('cycles').insert({ name, created_by: currentUser.id }).select().single();
+  if (error) { toast('Error creating cycle', 'error'); return; }
+  cycles.unshift(data);
+  currentCycleId = data.id;
+  const sel = document.getElementById('cycle-select');
+  const opt = document.createElement('option');
+  opt.value = data.id; opt.textContent = `${data.name} — open`;
+  sel.insertBefore(opt, sel.firstChild);
+  sel.value = data.id;
+  document.getElementById('cycle-badge').textContent = data.name;
+  if (!silent) { toast('New cycle created', 'success'); await loadOrders(); }
+}
+
+function onCycleChange() {
+  const sel = document.getElementById('cycle-select');
+  currentCycleId = sel.value;
+  const cycle = cycles.find(c => c.id === currentCycleId);
+  if (cycle) document.getElementById('cycle-badge').textContent = cycle.name;
+  loadOrders();
+}
+
+// ═══════════════════════════════════════════════════════════
+// COFFEES
+// ═══════════════════════════════════════════════════════════
+async function loadCoffees() {
+  const { data } = await sb.from('coffees').select('*').eq('active', true).order('name');
+  coffees = data || [];
+}
+
+function populateCoffeeDropdowns() {
+  ['f-coffee','p-coffee'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = coffees.map(c => `<option value="${c.sku}">${c.name}</option>`).join('');
+  });
+}
+
+function getCoffee(sku) { return coffees.find(c => c.sku === sku) || { sku, name:sku, water_loss:0.15, blend_recipe:{} }; }
+
+// ═══════════════════════════════════════════════════════════
+// ORDERS
+// ═══════════════════════════════════════════════════════════
+async function loadOrders() {
+  if (!currentCycleId) return;
+  const tbody = document.getElementById('orders-tbody');
+  tbody.innerHTML = '<tr><td colspan="11" class="loading"><div class="spinner"></div> Loading...</td></tr>';
+  const { data, error } = await sb.from('orders').select('*').eq('cycle_id', currentCycleId).order('created_at');
+  if (error) { toast('Error loading orders', 'error'); return; }
+  orders = data || [];
   renderOrdersTable();
   updateStats();
 }
 
-function populateCoffeeDropdowns() {
-  const selects = document.querySelectorAll('[id^="f-coffee-"]');
-  selects.forEach(sel => {
-    sel.innerHTML = '';
-    COFFEES.forEach(c => {
-      sel.innerHTML += `<option value="${c.sku}">${c.name}</option>`;
-    });
-  });
+function renderOrdersTable() {
+  const tbody = document.getElementById('orders-tbody');
+  if (!orders.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">No orders yet for this cycle.</td></tr>'; return; }
+  tbody.innerHTML = orders.map((o,i) => `
+    <tr>
+      <td class="mono" style="color:var(--muted);font-size:11px;">${i+1}</td>
+      <td><div style="font-weight:500;">${o.customer_name}</div><div style="font-size:11px;color:var(--muted);">${o.city||''} ${o.state||''}</div></td>
+      <td><span class="badge ${o.order_type==='subscription'?'badge-blue':o.order_type==='wholesale'?'badge-amber':'badge-gray'}">${o.order_type}</span></td>
+      <td>${o.coffee_name}</td>
+      <td><span class="sku">${o.coffee_sku}</span></td>
+      <td class="mono">${o.size}</td>
+      <td class="num mono">${o.qty}</td>
+      <td style="color:var(--muted2)">${GRIND_LABEL[o.grind]||o.grind}</td>
+      <td><span class="badge ${o.region==='pickup'?'badge-green':'badge-gray'}">${REGION_LABEL[o.region]||o.region}</span></td>
+      <td style="color:var(--muted);font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;">${o.notes||'—'}</td>
+      <td>${['owner','staff'].includes(currentProfile?.role)?`<button class="btn btn-danger btn-sm" onclick="deleteOrder('${o.id}')">✕</button>`:''}</td>
+    </tr>`).join('');
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// TABS
-// ═══════════════════════════════════════════════════════════════════════
-
-function showTab(name) {
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('panel-' + name).classList.add('active');
-  event.target.classList.add('active');
-  if (name === 'roast') generateRoastSchedule();
-  if (name === 'bags') renderBagsTable();
-  if (name === 'green') renderGreenTable();
+function updateStats() {
+  document.getElementById('stat-orders').textContent = orders.length;
+  const totalBags = orders.reduce((s,o) => s+o.qty, 0);
+  document.getElementById('stat-bags').textContent = totalBags;
+  const totalLbs = orders.reduce((s,o) => s+(BAG_WEIGHTS[o.size]||0)*o.qty, 0);
+  document.getElementById('stat-lbs').textContent = totalLbs.toFixed(1);
+  const ships = orders.filter(o=>o.region==='ship').length;
+  const pickups = orders.filter(o=>o.region==='pickup').length;
+  document.getElementById('stat-ship').textContent = `${ships}/${pickups}`;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// CSV PARSING
-// ═══════════════════════════════════════════════════════════════════════
+function toggleAddOrder() {
+  const f = document.getElementById('add-order-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
 
+async function saveOrder() {
+  if (!currentCycleId) { toast('No active cycle', 'warn'); return; }
+  const customer = document.getElementById('f-customer').value.trim();
+  if (!customer) { toast('Please enter a customer name', 'warn'); return; }
+  const sku = document.getElementById('f-coffee').value;
+  const coffee = getCoffee(sku);
+  const order = {
+    cycle_id: currentCycleId,
+    customer_name: customer,
+    profile_id: currentUser.id,
+    order_type: document.getElementById('f-type').value,
+    region: document.getElementById('f-region').value,
+    coffee_sku: sku,
+    coffee_name: coffee.name,
+    qty: parseInt(document.getElementById('f-qty').value)||1,
+    size: document.getElementById('f-size').value,
+    grind: document.getElementById('f-grind').value,
+    notes: document.getElementById('f-notes').value,
+    source_order_id: 'manual-' + Date.now(),
+  };
+  const { error } = await sb.from('orders').insert(order);
+  if (error) { toast('Error saving order: ' + error.message, 'error'); return; }
+  toast('Order saved', 'success');
+  document.getElementById('f-customer').value = '';
+  document.getElementById('f-notes').value = '';
+  toggleAddOrder();
+  await loadOrders();
+}
+
+async function deleteOrder(id) {
+  if (!confirm('Delete this order?')) return;
+  const { error } = await sb.from('orders').delete().eq('id', id);
+  if (error) { toast('Error deleting order', 'error'); return; }
+  toast('Order deleted', 'success');
+  await loadOrders();
+}
+
+// ═══════════════════════════════════════════════════════════
+// CSV IMPORT
+// ═══════════════════════════════════════════════════════════
 function handleDrop(e) {
-  e.preventDefault();
-  e.currentTarget.classList.remove('drag');
+  e.preventDefault(); e.currentTarget.classList.remove('drag');
   const file = e.dataTransfer.files[0];
-  if (file && file.name.endsWith('.csv')) handleCSV(file);
+  if (file?.name.endsWith('.csv')) handleCSV(file);
   else toast('Please drop a .csv file', 'warn');
 }
 
-function handleCSV(file) {
+async function handleCSV(file) {
+  if (!currentCycleId) { toast('No active cycle', 'warn'); return; }
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     const lines = e.target.result.split('\n');
     const headers = parseCSVLine(lines[0]);
-    const getCol = name => headers.findIndex(h => h.trim().toLowerCase() === name.toLowerCase());
-    
+    const col = name => headers.findIndex(h => h.trim().toLowerCase() === name.toLowerCase());
     const cols = {
-      name: getCol('Name'), email: getCol('Email'), lineitemname: getCol('Lineitem name'),
-      lineitemqty: getCol('Lineitem quantity'), shipping: getCol('Shipping Name'),
-      addr1: getCol('Shipping Address1'), city: getCol('Shipping City'),
-      zip: getCol('Shipping Zip'), state: getCol('Shipping Province Name'),
-      notes: getCol('Notes'), tags: getCol('Tags'), method: getCol('Shipping Method'),
-      shippingcost: getCol('Shipping'), fulfillment: getCol('Fulfillment Status'),
+      lineitemname: col('Lineitem name'), lineitemqty: col('Lineitem quantity'),
+      shipping: col('Shipping Name'), notes: col('Notes'), method: col('Shipping Method'),
+      city: col('Shipping City'), state: col('Shipping Province Name'), tags: col('Tags'),
     };
-
-    let imported = 0, skipped = 0;
-    const seen = {};
-
+    const toInsert = [];
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
       const row = parseCSVLine(lines[i]);
       if (row.length < 20) continue;
-
-      const orderName = (row[cols.name] || '').trim();
-      const lineItemName = (row[cols.lineitemname] || '').trim();
-      if (!orderName || !lineItemName) continue;
-
-      // Parse product name: "Coffee Name - Xpound / Grind" or similar
+      const lineItemName = (row[cols.lineitemname]||'').trim();
+      if (!lineItemName) continue;
       const { sku, size, grind } = parseProductName(lineItemName);
-      
-      const qty = parseInt(row[cols.lineitemqty]) || 1;
-      const notes = (row[cols.notes] || '').trim();
-      const isPickup = notes.toLowerCase().includes('pick up') || notes.toLowerCase().includes('pickup');
-      const shippingMethod = row[cols.method] || '';
-
-      const order = {
-        id: 'SH-' + orderName.replace('#',''),
-        customer: row[cols.shipping] || row[cols.name] || 'Unknown',
-        type: (row[cols.tags] || '').includes('subscription') ? 'subscription' : 'online',
-        region: isPickup ? 'pickup' : 'ship',
-        coffee: sku,
-        coffeeName: getCoffeeName(sku),
-        qty: qty,
-        size: size,
-        grind: grind,
-        notes: notes,
-        source: 'shopify',
-        shippingMethod: shippingMethod,
-        city: row[cols.city] || '',
-        state: row[cols.state] || '',
-      };
-
-      orders.push(order);
-      imported++;
+      const coffee = getCoffee(sku);
+      const notes = (row[cols.notes]||'').trim();
+      toInsert.push({
+        cycle_id: currentCycleId, profile_id: currentUser.id,
+        customer_name: row[cols.shipping] || 'Shopify Customer',
+        order_type: (row[cols.tags]||'').includes('subscription') ? 'subscription' : 'online',
+        region: notes.toLowerCase().includes('pick up') ? 'pickup' : 'ship',
+        coffee_sku: sku, coffee_name: coffee.name,
+        qty: parseInt(row[cols.lineitemqty])||1, size, grind, notes,
+        shipping_method: row[cols.method]||'',
+        city: row[cols.city]||'', state: row[cols.state]||'',
+        source_order_id: 'shopify-' + Date.now() + '-' + i,
+      });
     }
-
-    renderOrdersTable();
-    updateStats();
-    saveData();
-    toast(`Imported ${imported} orders from Shopify CSV`, 'success');
-    document.getElementById('csv-preview').style.display = 'none';
+    if (toInsert.length) {
+      const { error } = await sb.from('orders').insert(toInsert);
+      if (error) { toast('Import error: ' + error.message, 'error'); return; }
+      toast(`Imported ${toInsert.length} orders`, 'success');
+      await loadOrders();
+    } else toast('No orders found in CSV', 'warn');
   };
   reader.readAsText(file);
 }
 
 function parseCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
+  const result = []; let current = ''; let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
-    if (line[i] === '"') inQuotes = !inQuotes;
-    else if (line[i] === ',' && !inQuotes) { result.push(current); current = ''; }
-    else current += line[i];
+    if (line[i]==='"') inQuotes=!inQuotes;
+    else if (line[i]===',' && !inQuotes) { result.push(current); current=''; }
+    else current+=line[i];
   }
-  result.push(current);
-  return result;
+  result.push(current); return result;
 }
 
 function parseProductName(name) {
-  // Patterns: "Lakeside - 2 pound / Wholebean", "Roaster's Choice - 12 oz / Whole Bean"
-  let sku = 'LOCO', size = '2lb', grind = 'wb';
-
-  // Match coffee name to SKU
+  let sku='LOCO', size='2lb', grind='wb';
   const lower = name.toLowerCase();
-  for (const c of COFFEES) {
-    if (lower.includes(c.name.toLowerCase())) { sku = c.sku; break; }
-  }
-  // Fallback partial matches
-  if (lower.includes('lakeside')) sku = 'LAKE';
-  else if (lower.includes('ship canal') || lower.includes('5 pound bulk') || lower.includes('ship canal')) sku = 'SHIP';
-  else if (lower.includes('locofocos') || lower.includes('loco')) sku = 'LOCO';
-  else if (lower.includes('decaf') && !lower.includes('cross')) sku = 'SOD';
-  else if (lower.includes('cross current')) sku = 'CRSC';
-  else if (lower.includes('seasonal')) sku = 'SEBD';
-  else if (lower.includes('nove') || lower.includes('9to5')) sku = '9to5';
-  else if (lower.includes("aldrich")) sku = '1895';
-  else if (lower.includes("roaster")) sku = 'SEBD'; // Roaster's Choice → current seasonal
-  else if (lower.includes("baskette")) sku = 'BSKT';
-
-  // Size
-  if (/5\s*lb|5\s*pound/i.test(name)) size = '5lb';
-  else if (/2\s*lb|2\s*pound/i.test(name)) size = '2lb';
-  else if (/1\s*lb|1\s*pound/i.test(name)) size = '1lb';
-  else if (/12\s*oz/i.test(name)) size = '12oz';
-  else if (/6\s*oz/i.test(name)) size = '6oz';
-  else if (/4\s*oz/i.test(name)) size = '4oz';
-  else if (/20\s*lb|bulk/i.test(name)) size = '20lb';
-
-  // Grind
-  if (/whole\s*bean|wholebean/i.test(name)) grind = 'wb';
-  else if (/drip/i.test(name)) grind = 'drip';
-  else if (/espresso/i.test(name)) grind = 'espresso';
-  else if (/french/i.test(name)) grind = 'french';
-  else if (/pour/i.test(name)) grind = 'pour';
-  else grind = 'wb';
-
+  const skuMap = [
+    ['lakeside','LAKE'],['ship canal','SHIP'],['locofocos','LOCO'],['loco','LOCO'],
+    ['decaf','SOD'],['cross current','CRSC'],['seasonal','SEBD'],['nove','9to5'],
+    ['aldrich','1895'],['roaster','SEBD'],['baskette','BSKT'],['costa rica','CRHS'],
+    ['ethiopia','ETTK'],['peru','PECL'],['guatemala','GMBA'],
+  ];
+  for (const [key, val] of skuMap) { if (lower.includes(key)) { sku=val; break; } }
+  if (/5\s*(lb|pound)/i.test(name)) size='5lb';
+  else if (/2\s*(lb|pound)/i.test(name)) size='2lb';
+  else if (/1\s*(lb|pound)/i.test(name)) size='1lb';
+  else if (/12\s*oz/i.test(name)) size='12oz';
+  else if (/6\s*oz/i.test(name)) size='6oz';
+  else if (/4\s*oz/i.test(name)) size='4oz';
+  else if (/20\s*lb|bulk/i.test(name)) size='20lb';
+  if (/whole\s*bean|wholebean/i.test(name)) grind='wb';
+  else if (/drip/i.test(name)) grind='drip';
+  else if (/espresso/i.test(name)) grind='espresso';
+  else if (/french/i.test(name)) grind='french';
   return { sku, size, grind };
 }
 
-function getCoffeeName(sku) {
-  const c = COFFEES.find(c => c.sku === sku);
-  return c ? c.name : sku;
-}
-
-function getCoffeeData(sku) {
-  return COFFEES.find(c => c.sku === sku) || COFFEES[0];
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// ORDERS
-// ═══════════════════════════════════════════════════════════════════════
-
-function showAddOrder() {
-  const form = document.getElementById('add-order-form');
-  form.style.display = form.style.display === 'none' ? 'block' : 'none';
-}
-
-function addLineItem() {
-  const container = document.getElementById('line-items-container');
-  const id = lineItemCount++;
-  const div = document.createElement('div');
-  div.className = 'form-row cols-4';
-  div.id = `line-item-${id}`;
-  div.innerHTML = `
-    <div class="form-group"><label>Coffee</label><select id="f-coffee-${id}" style="width:100%"></select></div>
-    <div class="form-group"><label>Qty</label><input type="number" id="f-qty-${id}" value="1" min="1" style="width:100%"></div>
-    <div class="form-group"><label>Size</label>
-      <select id="f-size-${id}" style="width:100%">
-        <option value="5lb">5 lb</option><option value="2lb" selected>2 lb</option>
-        <option value="1lb">1 lb</option><option value="12oz">12 oz</option>
-        <option value="6oz">6 oz</option><option value="4oz">4 oz</option><option value="20lb">20 lb bulk</option>
-      </select>
-    </div>
-    <div class="form-group"><label>Grind</label>
-      <select id="f-grind-${id}" style="width:100%">
-        <option value="wb">Whole Bean</option><option value="drip">Drip</option>
-        <option value="espresso">Espresso</option><option value="french">French Press</option>
-        <option value="pour">Pour Over</option>
-      </select>
-    </div>
-  `;
-  container.appendChild(div);
-  // Populate coffee select
-  const sel = document.getElementById(`f-coffee-${id}`);
-  COFFEES.forEach(c => { sel.innerHTML += `<option value="${c.sku}">${c.name}</option>`; });
-}
-
-function saveOrder() {
-  const customer = document.getElementById('f-customer').value.trim();
-  if (!customer) { toast('Please enter a customer name', 'warn'); return; }
-
-  const lineItems = document.querySelectorAll('[id^="line-item-"]');
-  lineItems.forEach((li, idx) => {
-    const idNum = li.id.split('-').pop();
-    const sku = document.getElementById(`f-coffee-${idNum}`)?.value;
-    const qty = parseInt(document.getElementById(`f-qty-${idNum}`)?.value) || 1;
-    const size = document.getElementById(`f-size-${idNum}`)?.value;
-    const grind = document.getElementById(`f-grind-${idNum}`)?.value;
-    if (!sku) return;
-    orders.push({
-      id: 'M-' + Date.now() + '-' + idx,
-      customer,
-      type: document.getElementById('f-type').value,
-      region: document.getElementById('f-region').value,
-      coffee: sku,
-      coffeeName: getCoffeeName(sku),
-      qty, size, grind,
-      notes: document.getElementById('f-notes').value,
-      source: 'manual',
-    });
-  });
-
-  renderOrdersTable();
-  updateStats();
-  saveData();
-  document.getElementById('add-order-form').style.display = 'none';
-  document.getElementById('f-customer').value = '';
-  document.getElementById('f-notes').value = '';
-  toast('Order saved', 'success');
-}
-
-function deleteOrder(id) {
-  orders = orders.filter(o => o.id !== id);
-  renderOrdersTable();
-  updateStats();
-  saveData();
-}
-
-function renderOrdersTable() {
-  const tbody = document.getElementById('orders-tbody');
-  if (!orders.length) {
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px;">No orders yet. Upload a Shopify CSV or add manually.</td></tr>';
-    return;
-  }
-  const grindLabel = { wb:'Whole Bean', drip:'Drip', espresso:'Espresso', french:'French Press', pour:'Pour Over' };
-  const regionLabel = { seattle:'Seattle', pt:'Port Townsend', ship:'Ship', pickup:'Pickup' };
-  tbody.innerHTML = orders.map((o, i) => `
-    <tr>
-      <td class="mono" style="color:var(--muted);font-size:11px;">${i+1}</td>
-      <td><div style="font-weight:500;">${o.customer}</div>
-          <div style="font-size:11px;color:var(--muted);">${o.city||''} ${o.state||''}</div></td>
-      <td><span class="badge ${o.type==='subscription'?'badge-blue':o.type==='wholesale'?'badge-amber':'badge-gray'}">${o.type}</span></td>
-      <td>${o.coffeeName}</td>
-      <td><span class="sku">${o.coffee}</span></td>
-      <td class="mono">${o.size}</td>
-      <td class="num mono">${o.qty}</td>
-      <td style="color:var(--muted2)">${grindLabel[o.grind]||o.grind}</td>
-      <td><span class="badge ${o.region==='pickup'?'badge-green':'badge-gray'}">${regionLabel[o.region]||o.region}</span></td>
-      <td style="color:var(--muted);font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;">${o.notes||'—'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteOrder('${o.id}')">✕</button></td>
-    </tr>
-  `).join('');
-}
-
-function updateStats() {
-  document.getElementById('stat-orders').textContent = orders.length;
-  const totalBags = orders.reduce((s,o) => s + o.qty, 0);
-  document.getElementById('stat-bags').textContent = totalBags;
-  
-  // Total lbs
-  let totalLbs = 0;
-  orders.forEach(o => {
-    const w = BAG_WEIGHTS[o.size] || 0;
-    totalLbs += w * o.qty;
-  });
-  document.getElementById('stat-lbs').textContent = totalLbs.toFixed(1);
-  
-  const ships = orders.filter(o => o.region === 'ship').length;
-  const pickups = orders.filter(o => o.region === 'pickup').length;
-  document.getElementById('stat-ship').textContent = `${ships}/${pickups}`;
-}
-
-// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // ROAST SCHEDULE
-// ═══════════════════════════════════════════════════════════════════════
-
+// ═══════════════════════════════════════════════════════════
 function generateRoastSchedule() {
-  // Sum up roasted lbs needed per SKU
   const needed = {};
-  orders.forEach(o => {
-    const w = BAG_WEIGHTS[o.size] || 0;
-    needed[o.coffee] = (needed[o.coffee] || 0) + (w * o.qty);
-  });
-
-  // Build schedule rows
-  const rows = [];
-  const DAYS = ['MON','TUE','WED','WKND'];
-  const dayTotals = { MON:0, TUE:0, WED:0, WKND:0 };
-  let dayIdx = 0;
-
+  orders.forEach(o => { needed[o.coffee_sku] = (needed[o.coffee_sku]||0) + (BAG_WEIGHTS[o.size]||0)*o.qty; });
+  const rows = []; const dayTotals = {MON:0,TUE:0,WED:0,WKND:0}; let dayIdx = 0;
   Object.entries(needed).forEach(([sku, roastedNeed]) => {
-    const coffee = getCoffeeData(sku);
+    const coffee = getCoffee(sku);
+    const wl = coffee.water_loss || 0.15;
     const onHand = inventory[sku] || 0;
     const netToRoast = Math.max(0, roastedNeed - onHand);
-    
-    if (netToRoast <= 0) {
-      rows.push({ sku, name:coffee.name, onHand, totalNeed:roastedNeed, netToRoast:0, greenNeeded:0, batches:0, batchType:'none', day:'—', output:0, surplus:onHand - roastedNeed, waterLoss:coffee.waterLoss });
-      return;
-    }
-
-    const greenNeeded = netToRoast / (1 - coffee.waterLoss);
+    if (netToRoast <= 0) { rows.push({sku,name:coffee.name,onHand,totalNeed:roastedNeed,netToRoast:0,greenNeeded:0,batches:0,batchType:'none',day:'—',output:0,surplus:onHand-roastedNeed,waterLoss:wl}); return; }
+    const greenNeeded = netToRoast / (1 - wl);
     const fullBatches = Math.floor(greenNeeded / 10);
     const remainder = greenNeeded % 10;
-    const isPartial = remainder > 0;
+    const isPartial = remainder > 0.01;
     const totalBatches = fullBatches + (isPartial ? 1 : 0);
-    const batchType = totalBatches === 1 && isPartial ? 'partial' : isPartial ? 'full+partial' : 'full';
-    const output = fullBatches * 10 * (1 - coffee.waterLoss) + (isPartial ? remainder * (1 - coffee.waterLoss) : 0);
-    const surplus = output - netToRoast;
-
-    // Assign to day (spread across days)
+    const batchType = totalBatches===1&&isPartial ? 'partial' : isPartial ? 'full+partial' : 'full';
+    const output = fullBatches*10*(1-wl) + (isPartial ? remainder*(1-wl) : 0);
     const day = DAYS[dayIdx % 4];
     dayTotals[day] += totalBatches;
-    if (dayTotals[day] >= 8) dayIdx++; // move to next day after ~8 batches (~80lb)
-
-    rows.push({ sku, name:coffee.name, onHand, totalNeed:roastedNeed, netToRoast, greenNeeded, batches:totalBatches, batchType, day, output, surplus, waterLoss:coffee.waterLoss, fullBatches, remainder:isPartial?remainder:0 });
+    if (dayTotals[day] >= 8) dayIdx++;
+    rows.push({sku,name:coffee.name,onHand,totalNeed:roastedNeed,netToRoast,greenNeeded,batches:totalBatches,batchType,day,output,surplus:output-netToRoast,waterLoss:wl,fullBatches,remainder:isPartial?remainder:0,blendRecipe:coffee.blend_recipe||{}});
   });
-
   roastSchedule = rows;
   renderRoastTable(rows, dayTotals);
+  renderGreenTable();
 }
 
 function renderRoastTable(rows, dayTotals) {
   const tbody = document.getElementById('roast-tbody');
-  
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px;">Add orders first.</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = rows.map(r => {
-    const surplusClass = r.surplus > 0 ? 'badge-green' : r.surplus < -0.5 ? 'badge-red' : 'badge-gray';
-    const batchBadge = r.batchType === 'partial' ? 'badge-amber' : r.batchType === 'none' ? 'badge-gray' : 'badge-green';
-    return `
-      <tr>
-        <td><div style="font-weight:500;">${r.name}</div>${r.sku==='COTU'?'<div style="font-size:11px;color:var(--muted);">base: SHIP</div>':''}</td>
-        <td><span class="sku">${r.sku}</span></td>
-        <td class="num mono">${r.onHand.toFixed(2)}</td>
-        <td class="num mono">${r.totalNeed.toFixed(2)}</td>
-        <td class="num mono" style="color:var(--amber2)">${r.netToRoast.toFixed(2)}</td>
-        <td class="num" style="color:var(--muted2)">${(r.waterLoss*100).toFixed(1)}%</td>
-        <td class="num mono" style="color:var(--amber3)">${r.greenNeeded.toFixed(2)}</td>
-        <td class="num mono">${r.batches}</td>
-        <td><span class="badge ${batchBadge}">${r.batchType}</span></td>
-        <td class="mono" style="font-size:12px;">${r.day}</td>
-        <td class="num mono">${r.output.toFixed(2)}</td>
-        <td><span class="badge ${surplusClass} mono">${r.surplus > 0 ? '+' : ''}${r.surplus.toFixed(2)}</span></td>
-      </tr>
-    `;
-  }).join('');
-
-  // Day blocks
-  const days = ['mon','tue','wed','wknd'];
-  const dayKeys = ['MON','TUE','WED','WKND'];
-  days.forEach((d, i) => {
-    const key = dayKeys[i];
-    const dayRows = rows.filter(r => r.day === key);
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="12" class="empty">No orders.</td></tr>'; return; }
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td style="font-weight:500;">${r.name}</td>
+    <td><span class="sku">${r.sku}</span></td>
+    <td class="num mono">${r.onHand.toFixed(2)}</td>
+    <td class="num mono">${r.totalNeed.toFixed(2)}</td>
+    <td class="num mono" style="color:var(--amber2)">${r.netToRoast.toFixed(2)}</td>
+    <td class="num" style="color:var(--muted2)">${(r.waterLoss*100).toFixed(1)}%</td>
+    <td class="num mono" style="color:var(--amber3)">${r.greenNeeded.toFixed(2)}</td>
+    <td class="num mono">${r.batches}</td>
+    <td><span class="badge ${r.batchType==='partial'?'badge-amber':r.batchType==='none'?'badge-gray':'badge-green'}">${r.batchType}</span></td>
+    <td class="mono" style="font-size:12px;">${r.day}</td>
+    <td class="num mono">${r.output.toFixed(2)}</td>
+    <td><span class="badge ${r.surplus>0?'badge-green':r.surplus<-0.5?'badge-red':'badge-gray'} mono">${r.surplus>0?'+':''}${r.surplus.toFixed(2)}</span></td>
+  </tr>`).join('');
+  ['mon','tue','wed','wknd'].forEach((d,i) => {
+    const key = DAYS[i];
+    const dayRows = rows.filter(r=>r.day===key);
     const el = document.getElementById(`day-${d}`);
-    if (!dayRows.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;">No batches</div>'; return; }
-    const totalBatches = dayRows.reduce((s,r) => s+r.batches, 0);
-    const totalGreen = dayRows.reduce((s,r) => s+r.greenNeeded, 0);
-    el.innerHTML = dayRows.map(r => `
-      <div class="day-batch">
-        <span class="sku-sm">${r.sku}</span>
-        <span style="font-size:11px;">${r.batches}× ${r.fullBatches>0?'10lb':''}${r.remainder>0?` +${r.remainder.toFixed(1)}lb`:''}</span>
-      </div>
-    `).join('') + `<div class="day-total"><span>${totalBatches} batches</span><span>${totalGreen.toFixed(0)} lb green</span></div>`;
+    if (!dayRows.length) { el.innerHTML='<div style="color:var(--muted);font-size:12px;">No batches</div>'; return; }
+    const totB = dayRows.reduce((s,r)=>s+r.batches,0);
+    const totG = dayRows.reduce((s,r)=>s+r.greenNeeded,0);
+    el.innerHTML = dayRows.map(r=>`<div class="day-batch"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--amber)">${r.sku}</span><span style="font-size:11px;">${r.batches}× ${r.fullBatches>0?'10lb':''}${r.remainder>0?` +${r.remainder.toFixed(1)}lb`:''}</span></div>`).join('')
+      + `<div class="day-total"><span>${totB} batches</span><span>${totG.toFixed(0)}lb</span></div>`;
   });
-
-  // Totals
-  const totBatches = rows.reduce((s,r) => s+r.batches, 0);
-  const totGreen = rows.reduce((s,r) => s+r.greenNeeded, 0);
-  const totOutput = rows.reduce((s,r) => s+r.output, 0);
-  const daysUsed = Object.values(dayTotals||{}).filter(v=>v>0).length;
-  document.getElementById('tot-batches').textContent = totBatches;
-  document.getElementById('tot-green').textContent = totGreen.toFixed(1) + ' lb';
-  document.getElementById('tot-output').textContent = totOutput.toFixed(1) + ' lb';
+  const totB = rows.reduce((s,r)=>s+r.batches,0);
+  const totG = rows.reduce((s,r)=>s+r.greenNeeded,0);
+  const totO = rows.reduce((s,r)=>s+r.output,0);
+  const daysUsed = Object.values(dayTotals).filter(v=>v>0).length;
+  document.getElementById('tot-batches').textContent = totB;
+  document.getElementById('tot-green').textContent = totG.toFixed(1)+' lb';
+  document.getElementById('tot-output').textContent = totO.toFixed(1)+' lb';
   document.getElementById('tot-days').textContent = daysUsed;
   document.getElementById('roast-totals').style.display = 'block';
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// BAGS & GRINDING
-// ═══════════════════════════════════════════════════════════════════════
-
+// ═══════════════════════════════════════════════════════════
+// BAGS
+// ═══════════════════════════════════════════════════════════
 function renderBagsTable() {
-  // Aggregate per-coffee, per-size, per-grind
   const agg = {};
   orders.forEach(o => {
-    if (!agg[o.coffee]) agg[o.coffee] = { name:o.coffeeName, sku:o.coffee, sizes:{}, grinds:{}, notes:[] };
-    agg[o.coffee].sizes[o.size] = (agg[o.coffee].sizes[o.size] || 0) + o.qty;
-    agg[o.coffee].grinds[o.grind] = (agg[o.coffee].grinds[o.grind] || 0) + o.qty;
-    if (o.notes) agg[o.coffee].notes.push(o.notes);
+    if (!agg[o.coffee_sku]) agg[o.coffee_sku] = {name:o.coffee_name,sku:o.coffee_sku,sizes:{},grinds:{},notes:[]};
+    agg[o.coffee_sku].sizes[o.size] = (agg[o.coffee_sku].sizes[o.size]||0)+o.qty;
+    agg[o.coffee_sku].grinds[o.grind] = (agg[o.coffee_sku].grinds[o.grind]||0)+o.qty;
+    if (o.notes) agg[o.coffee_sku].notes.push(o.notes);
   });
-
   const rows = Object.values(agg);
   const tbody = document.getElementById('bags-tbody');
-
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:24px;">No orders.</td></tr>';
-    return;
-  }
-
-  let tot5=0,tot2=0,tot1=0,totSample=0,totGrind=0;
-
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="13" class="empty">No orders.</td></tr>'; return; }
+  let tot5=0,tot2=0,tot1=0,totS=0,totG=0;
   tbody.innerHTML = rows.map(r => {
-    const s5 = r.sizes['5lb'] || 0;
-    const s2 = r.sizes['2lb'] || 0;
-    const s1 = (r.sizes['1lb'] || 0) + (r.sizes['12oz'] || 0);
-    const s6 = r.sizes['6oz'] || 0;
-    const s4 = r.sizes['4oz'] || 0;
-    const retail = s5 + s2 + s1 + s6 + s4;
-    const gWB = r.grinds['wb'] || 0;
-    const gDrip = r.grinds['drip'] || 0;
-    const gEsp = r.grinds['espresso'] || 0;
-    const gFr = r.grinds['french'] || 0;
-    const gGrindTotal = gDrip + gEsp + gFr + (r.grinds['pour']||0);
-    tot5+=s5; tot2+=s2; tot1+=s1; totSample+=s6+s4; totGrind+=gGrindTotal;
-    const uniqueNotes = [...new Set(r.notes.filter(Boolean))].join('; ');
-    return `
-      <tr>
-        <td style="font-weight:500;">${r.name}</td>
-        <td><span class="sku">${r.sku}</span></td>
-        <td class="num mono ${s5?'':''}"><b>${s5||'—'}</b></td>
-        <td class="num mono"><b>${s2||'—'}</b></td>
-        <td class="num mono"><b>${s1||'—'}</b></td>
-        <td class="num mono">${s6||'—'}</td>
-        <td class="num mono">${s4||'—'}</td>
-        <td class="num mono" style="color:var(--amber2);font-weight:600;">${retail}</td>
-        <td class="num mono">${gWB||'—'}</td>
-        <td class="num mono ${gDrip?'':'color:var(--muted)'}">${gDrip||'—'}</td>
-        <td class="num mono ${gEsp?'':'color:var(--muted)'}">${gEsp||'—'}</td>
-        <td class="num mono ${gFr?'':'color:var(--muted)'}">${gFr||'—'}</td>
-        <td style="font-size:11px;color:var(--muted);">${uniqueNotes||'—'}</td>
-      </tr>
-    `;
+    const s5=r.sizes['5lb']||0, s2=r.sizes['2lb']||0, s1=(r.sizes['1lb']||0)+(r.sizes['12oz']||0);
+    const s6=r.sizes['6oz']||0, s4=r.sizes['4oz']||0, retail=s5+s2+s1+s6+s4;
+    const gWB=r.grinds['wb']||0, gDrip=r.grinds['drip']||0, gEsp=r.grinds['espresso']||0, gFr=r.grinds['french']||0;
+    const grindTot=gDrip+gEsp+gFr+(r.grinds['pour']||0);
+    tot5+=s5; tot2+=s2; tot1+=s1; totS+=s6+s4; totG+=grindTot;
+    return `<tr>
+      <td style="font-weight:500;">${r.name}</td><td><span class="sku">${r.sku}</span></td>
+      <td class="num mono">${s5||'—'}</td><td class="num mono">${s2||'—'}</td>
+      <td class="num mono">${s1||'—'}</td><td class="num mono">${s6||'—'}</td><td class="num mono">${s4||'—'}</td>
+      <td class="num mono" style="color:var(--amber2);font-weight:600;">${retail}</td>
+      <td class="num mono">${gWB||'—'}</td><td class="num mono">${gDrip||'—'}</td>
+      <td class="num mono">${gEsp||'—'}</td><td class="num mono">${gFr||'—'}</td>
+      <td style="font-size:11px;color:var(--muted);">${[...new Set(r.notes.filter(Boolean))].join('; ')||'—'}</td>
+    </tr>`;
   }).join('');
-
-  document.getElementById('bag-5lb').textContent = tot5;
-  document.getElementById('bag-2lb').textContent = tot2;
-  document.getElementById('bag-1lb').textContent = tot1;
-  document.getElementById('bag-sample').textContent = totSample;
-  document.getElementById('bag-grind').textContent = totGrind;
-
-  // Shipping boxes
-  const shipOrders = orders.filter(o => o.region === 'ship');
+  document.getElementById('bag-5lb').textContent=tot5;
+  document.getElementById('bag-2lb').textContent=tot2;
+  document.getElementById('bag-1lb').textContent=tot1;
+  document.getElementById('bag-sample').textContent=totS;
+  document.getElementById('bag-grind').textContent=totG;
+  // Shipping
+  const shipOrders = orders.filter(o=>o.region==='ship');
   const boxCounts = {};
   shipOrders.forEach(o => {
-    const weightOz = (BAG_WEIGHTS[o.size] || 0) * 16; // convert to oz
-    const box = SHIP_BOXES.find(b => weightOz <= b.weight * 16);
-    if (box) boxCounts[box.type] = (boxCounts[box.type] || 0) + 1;
+    const lbs = (BAG_WEIGHTS[o.size]||0)*o.qty;
+    const box = lbs <= 0.875 ? SHIP_BOXES[0] : lbs <= 1.9 ? SHIP_BOXES[1] : SHIP_BOXES[2];
+    boxCounts[box.type] = (boxCounts[box.type]||0)+1;
   });
-
-  const stbody = document.getElementById('ship-tbody');
   let shipTotal = 0;
-  stbody.innerHTML = SHIP_BOXES.map(b => {
-    const count = boxCounts[b.type] || 0;
-    const sub = count * b.rate;
-    shipTotal += sub;
-    return `<tr>
-      <td>${b.type}</td>
-      <td class="num mono">${b.weight === Infinity ? 'any' : b.weight + ' oz'}</td>
-      <td class="num mono">$${b.rate}</td>
-      <td class="num mono">${count}</td>
-      <td class="num mono">$${sub.toFixed(2)}</td>
-    </tr>`;
+  document.getElementById('ship-tbody').innerHTML = SHIP_BOXES.map(b => {
+    const c=boxCounts[b.type]||0; const sub=c*b.rate; shipTotal+=sub;
+    return `<tr><td>${b.type}</td><td class="num mono">$${b.rate}</td><td class="num mono">${c}</td><td class="num mono">$${sub.toFixed(2)}</td></tr>`;
   }).join('');
-  document.getElementById('ship-total').textContent = '$' + shipTotal.toFixed(2);
+  document.getElementById('ship-total').textContent='$'+shipTotal.toFixed(2);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // GREEN BEANS
-// ═══════════════════════════════════════════════════════════════════════
-
+// ═══════════════════════════════════════════════════════════
 function renderGreenTable() {
-  if (!roastSchedule.length) generateRoastSchedule();
-  
   const tbody = document.getElementById('green-tbody');
   const originTotals = {};
-
-  tbody.innerHTML = roastSchedule.filter(r => r.greenNeeded > 0).map(r => {
-    const recipe = BLEND_RECIPES[r.sku] || {};
-    const originCols = ['Brazil FdI','Honduras Capucas','Guatemala Monja','Sumatra','Ethiopia','Peru Ely','Decaf Colombia'];
+  const originCols = ['Brazil FdI','Honduras Capucas','Guatemala Monja','Sumatra','Ethiopia','Peru Ely','Decaf Colombia'];
+  tbody.innerHTML = roastSchedule.filter(r=>r.greenNeeded>0).map(r => {
+    const recipe = r.blendRecipe || {};
     const cells = originCols.map(o => {
-      const pct = recipe[o] || 0;
-      const lbs = r.greenNeeded * pct;
-      if (lbs > 0) originTotals[o] = (originTotals[o] || 0) + lbs;
-      return `<td class="num mono">${lbs > 0 ? lbs.toFixed(2) : '—'}</td>`;
+      const pct = recipe[o]||0; const lbs = r.greenNeeded*pct;
+      if (lbs>0) originTotals[o]=(originTotals[o]||0)+lbs;
+      return `<td class="num mono">${lbs>0?lbs.toFixed(2):'—'}</td>`;
     });
-    const otherOrigins = Object.keys(recipe).filter(k => !originCols.includes(k));
-    const otherLbs = otherOrigins.reduce((s,k) => s + r.greenNeeded*(recipe[k]||0), 0);
-    if (otherLbs > 0) originTotals['Other'] = (originTotals['Other'] || 0) + otherLbs;
-    return `<tr>
-      <td style="font-weight:500;">${r.name}</td>
-      <td class="num mono">${r.netToRoast.toFixed(2)}</td>
-      <td class="num" style="color:var(--muted2)">${(r.waterLoss*100).toFixed(1)}%</td>
-      <td class="num mono" style="color:var(--amber3)">${r.greenNeeded.toFixed(2)}</td>
-      ${cells.join('')}
-      <td class="num mono">${otherLbs > 0 ? otherLbs.toFixed(2) : '—'}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px;">No roast data.</td></tr>';
-
-  // Origin totals grid
+    const otherLbs = Object.entries(recipe).filter(([k])=>!originCols.includes(k)).reduce((s,[k,v])=>s+r.greenNeeded*v,0);
+    if (otherLbs>0) originTotals['Other']=(originTotals['Other']||0)+otherLbs;
+    return `<tr><td style="font-weight:500;">${r.name}</td><td class="num mono">${r.netToRoast.toFixed(2)}</td><td class="num" style="color:var(--muted2)">${(r.waterLoss*100).toFixed(1)}%</td><td class="num mono" style="color:var(--amber3)">${r.greenNeeded.toFixed(2)}</td>${cells.join('')}<td class="num mono">${otherLbs>0?otherLbs.toFixed(2):'—'}</td></tr>`;
+  }).join('') || '<tr><td colspan="12" class="empty">No data.</td></tr>';
   const grid = document.getElementById('green-totals-grid');
-  grid.innerHTML = Object.entries(originTotals).map(([origin, lbs]) => {
-    const inv = greenInv[origin] || 0;
-    const need = lbs - inv;
-    return `<div class="stat">
-      <div class="stat-label">${origin}</div>
-      <div class="stat-value" style="font-size:18px;">${lbs.toFixed(1)} lb</div>
-      <div class="stat-sub">${inv > 0 ? `On hand: ${inv}lb · Need: ${Math.max(0,need).toFixed(1)}lb` : 'No inventory set'}</div>
-    </div>`;
-  }).join('') || '<div style="color:var(--muted);font-size:13px;">No data yet.</div>';
-}
-
-function renderBlendEditor() {
-  const el = document.getElementById('blend-editor');
-  el.innerHTML = Object.entries(BLEND_RECIPES).map(([sku, recipe]) => {
-    const coffee = getCoffeeData(sku);
-    const parts = Object.entries(recipe).map(([origin, pct]) =>
-      `<span style="font-size:12px;margin-right:12px;color:var(--muted2);">
-        <span style="color:var(--amber)">${(pct*100).toFixed(0)}%</span> ${origin}
-      </span>`
-    ).join('');
-    return `<div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid rgba(255,200,120,0.06);">
-      <span class="sku" style="min-width:44px;">${sku}</span>
-      <span style="min-width:180px;font-size:13px;">${coffee.name}</span>
-      <div>${parts}</div>
-    </div>`;
+  const entries = Object.entries(originTotals);
+  if (!entries.length) { grid.innerHTML='<div class="empty">No data yet.</div>'; return; }
+  grid.innerHTML = entries.map(([o,lbs]) => {
+    const inv = greenInv[o]||0; const need = Math.max(0,lbs-inv);
+    return `<div class="stat"><div class="stat-label">${o}</div><div class="stat-value" style="font-size:18px;">${lbs.toFixed(1)} lb</div><div class="stat-sub">${inv>0?`On hand: ${inv}lb · Need: ${need.toFixed(1)}lb`:'No inventory set'}</div></div>`;
   }).join('');
 }
 
-// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // INVENTORY
-// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+async function loadInventory() {
+  if (!currentCycleId) return;
+  const { data: invData } = await sb.from('inventory').select('*').eq('cycle_id', currentCycleId);
+  inventory = {};
+  (invData||[]).forEach(r => { inventory[r.coffee_sku] = r.on_hand_lbs; });
+  const { data: greenData } = await sb.from('green_inventory').select('*');
+  greenInv = {};
+  (greenData||[]).forEach(r => { greenInv[r.origin] = r.on_hand_lbs; });
+  renderInventoryTable();
+  renderGreenInvTable();
+}
 
 function renderInventoryTable() {
   const tbody = document.getElementById('inv-tbody');
-  tbody.innerHTML = COFFEES.map(c => {
-    const onHand = inventory[c.sku] || 0;
-    const par = 10; // default par
-    const status = onHand >= par ? 'badge-green' : onHand > 0 ? 'badge-amber' : 'badge-red';
-    const statusText = onHand >= par ? 'OK' : onHand > 0 ? 'Low' : 'Out';
-    return `<tr>
-      <td>${c.name}</td>
-      <td><span class="sku">${c.sku}</span></td>
-      <td class="num"><input class="inline-num" type="number" value="${onHand}" min="0" step="0.5" 
-        onchange="inventory['${c.sku}']=parseFloat(this.value)||0" style="width:80px;"></td>
-      <td class="num mono" style="color:var(--muted);">${par}</td>
-      <td><span class="badge ${status}">${statusText}</span></td>
-    </tr>`;
+  tbody.innerHTML = coffees.map(c => {
+    const onHand = inventory[c.sku]||0;
+    const status = onHand>=10?'badge-green':onHand>0?'badge-amber':'badge-red';
+    const statusText = onHand>=10?'OK':onHand>0?'Low':'Out';
+    return `<tr><td>${c.name}</td><td><span class="sku">${c.sku}</span></td>
+      <td class="num"><input class="inline-num" type="number" value="${onHand}" min="0" step="0.5" data-sku="${c.sku}" onchange="inventory['${c.sku}']=parseFloat(this.value)||0"></td>
+      <td><span class="badge ${status}">${statusText}</span></td></tr>`;
   }).join('');
 }
 
 function renderGreenInvTable() {
   const tbody = document.getElementById('green-inv-tbody');
-  tbody.innerHTML = GREEN_ORIGINS.map(o => {
-    const onHand = greenInv[o.name] || 0;
-    const status = onHand > o.bagSize ? 'badge-green' : onHand > 0 ? 'badge-amber' : 'badge-red';
-    const statusText = onHand > o.bagSize ? 'Stocked' : onHand > 0 ? 'Low' : 'Out';
-    return `<tr>
-      <td>${o.name}</td>
-      <td class="num mono">$${o.costPerLb.toFixed(2)}</td>
-      <td class="num mono">${o.bagSize} lb</td>
-      <td class="num"><input class="inline-num" type="number" value="${onHand}" min="0" step="1"
-        onchange="greenInv['${o.name}']=parseFloat(this.value)||0" style="width:80px;"></td>
-      <td><span class="badge ${status}">${statusText}</span></td>
-    </tr>`;
+  const { data: origins } = { data: Object.entries(greenInv).length ? Object.entries(greenInv).map(([o,v])=>({origin:o,on_hand_lbs:v})) : [] };
+  // Use loaded green inventory data
+  tbody.innerHTML = ['Brazil FdI','Honduras Capucas','Guatemala Monja','Sumatra','Ethiopia','Peru Ely','Costa Rica','Decaf Colombia'].map(o => {
+    const onHand = greenInv[o]||0;
+    const status = onHand>100?'badge-green':onHand>0?'badge-amber':'badge-red';
+    return `<tr><td>${o}</td><td class="num mono">—</td><td class="num mono">—</td>
+      <td class="num"><input class="inline-num" type="number" value="${onHand}" min="0" step="1" onchange="greenInv['${o}']=parseFloat(this.value)||0"></td>
+      <td><span class="badge ${status}">${onHand>100?'Stocked':onHand>0?'Low':'Out'}</span></td></tr>`;
   }).join('');
 }
 
-function saveInventory() {
-  saveData();
+async function saveInventory() {
+  if (!currentCycleId) return;
+  const rows = Object.entries(inventory).map(([sku,lbs]) => ({ cycle_id:currentCycleId, coffee_sku:sku, on_hand_lbs:lbs, updated_by:currentUser.id }));
+  if (rows.length) {
+    const { error } = await sb.from('inventory').upsert(rows, { onConflict:'cycle_id,coffee_sku' });
+    if (error) { toast('Error saving inventory: '+error.message,'error'); return; }
+  }
+  // Save green inventory
+  const greenRows = Object.entries(greenInv).map(([origin,lbs]) => ({ origin, on_hand_lbs:lbs }));
+  if (greenRows.length) {
+    const { error } = await sb.from('green_inventory').upsert(greenRows, { onConflict:'origin' });
+    if (error) { toast('Error saving green inventory','error'); return; }
+  }
   toast('Inventory saved', 'success');
 }
 
-// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// CUSTOMER PORTAL
+// ═══════════════════════════════════════════════════════════
+async function placeCustomerOrder() {
+  if (!currentCycleId) { toast('No open cycle — contact your roaster', 'warn'); return; }
+  const sku = document.getElementById('p-coffee').value;
+  const coffee = getCoffee(sku);
+  const order = {
+    cycle_id: currentCycleId, profile_id: currentUser.id,
+    customer_name: currentProfile?.full_name || currentUser.email,
+    customer_email: currentUser.email,
+    order_type: 'subscription',
+    region: 'ship',
+    coffee_sku: sku, coffee_name: coffee.name,
+    qty: parseInt(document.getElementById('p-qty').value)||1,
+    size: document.getElementById('p-size').value,
+    grind: document.getElementById('p-grind').value,
+    notes: document.getElementById('p-notes').value,
+    source_order_id: 'portal-' + Date.now(),
+  };
+  const { error } = await sb.from('orders').insert(order);
+  if (error) { toast('Error placing order: '+error.message,'error'); return; }
+  toast('Order placed!', 'success');
+  document.getElementById('p-notes').value = '';
+  await loadPortalOrders();
+}
+
+async function loadPortalOrders() {
+  const { data } = await sb.from('orders').select('*').eq('profile_id', currentUser.id).order('created_at', {ascending:false});
+  const el = document.getElementById('portal-orders');
+  if (!data?.length) { el.innerHTML='<div class="empty">No orders yet.</div>'; return; }
+  el.innerHTML = data.map(o => `
+    <div class="order-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:500;">${o.coffee_name}</div>
+        <span class="badge ${o.fulfilled?'badge-green':'badge-amber'}">${o.fulfilled?'Fulfilled':'Pending'}</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px;">${o.size} · ${GRIND_LABEL[o.grind]||o.grind} · qty ${o.qty} · ${new Date(o.created_at).toLocaleDateString()}</div>
+      ${o.notes?`<div style="font-size:12px;color:var(--muted2);margin-top:4px;">${o.notes}</div>`:''}
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// ADMIN
+// ═══════════════════════════════════════════════════════════
+async function loadAdminUsers() {
+  const { data } = await sb.from('profiles').select('*').order('created_at');
+  const tbody = document.getElementById('admin-users-tbody');
+  if (!data?.length) { tbody.innerHTML='<tr><td colspan="5" class="empty">No users.</td></tr>'; return; }
+  tbody.innerHTML = data.map(u => `<tr>
+    <td>${u.full_name||'—'}</td><td style="color:var(--muted)">${u.email}</td>
+    <td><span class="badge ${u.role==='owner'?'badge-amber':u.role==='staff'?'badge-green':u.role==='wholesale'?'badge-blue':'badge-gray'}">${u.role}</span></td>
+    <td style="color:var(--muted);font-size:12px;">${new Date(u.created_at).toLocaleDateString()}</td>
+    <td><select style="width:120px;padding:4px;" onchange="updateUserRole('${u.id}',this.value)">
+      <option ${u.role==='owner'?'selected':''} value="owner">Owner</option>
+      <option ${u.role==='staff'?'selected':''} value="staff">Staff</option>
+      <option ${u.role==='wholesale'?'selected':''} value="wholesale">Wholesale</option>
+      <option ${u.role==='subscriber'?'selected':''} value="subscriber">Subscriber</option>
+    </select></td>
+  </tr>`).join('');
+}
+
+async function updateUserRole(userId, role) {
+  const { error } = await sb.from('profiles').update({ role }).eq('id', userId);
+  if (error) toast('Error updating role','error');
+  else toast('Role updated','success');
+}
+
+// ═══════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════
+function showTab(name, el) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  if (el) el.classList.add('active');
+  if (name==='roast') generateRoastSchedule();
+  if (name==='bags') renderBagsTable();
+  if (name==='green') { if (!roastSchedule.length) generateRoastSchedule(); else renderGreenTable(); }
+  if (name==='inventory') loadInventory();
+  if (name==='portal') loadPortalOrders();
+  if (name==='admin') loadAdminUsers();
+}
+
+// ═══════════════════════════════════════════════════════════
 // EXPORT
-// ═══════════════════════════════════════════════════════════════════════
-
-function exportAll() {
-  // Build a CSV summary for now (full Excel export requires backend)
-  let csv = 'Conduit Coffee - Roast Schedule Export\n';
-  csv += `Generated: ${new Date().toLocaleString()}\n\n`;
-  csv += 'ORDERS\n';
-  csv += 'Customer,Type,Coffee,SKU,Size,Qty,Grind,Region,Notes\n';
-  orders.forEach(o => {
-    csv += `"${o.customer}","${o.type}","${o.coffeeName}","${o.coffee}","${o.size}","${o.qty}","${o.grind}","${o.region}","${o.notes||''}"\n`;
-  });
-  csv += '\nROAST SCHEDULE\n';
-  csv += 'Coffee,SKU,On Hand,Total Need,Net to Roast,Green Needed,Batches,Day\n';
-  roastSchedule.forEach(r => {
-    csv += `"${r.name}","${r.sku}","${r.onHand.toFixed(2)}","${r.totalNeed.toFixed(2)}","${r.netToRoast.toFixed(2)}","${r.greenNeeded.toFixed(2)}","${r.batches}","${r.day}"\n`;
-  });
-
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `conduit-roast-${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
-  toast('CSV exported', 'success');
+// ═══════════════════════════════════════════════════════════
+function exportCSV() {
+  let csv = `Conduit Coffee — Roast Schedule Export\nGenerated: ${new Date().toLocaleString()}\n\nORDERS\nCustomer,Type,Coffee,SKU,Size,Qty,Grind,Region,Notes\n`;
+  orders.forEach(o => { csv += `"${o.customer_name}","${o.order_type}","${o.coffee_name}","${o.coffee_sku}","${o.size}","${o.qty}","${o.grind}","${o.region}","${o.notes||''}"\n`; });
+  csv += `\nROAST SCHEDULE\nCoffee,SKU,On Hand,Total Need,Net Roast,Green Needed,Batches,Day\n`;
+  roastSchedule.forEach(r => { csv += `"${r.name}","${r.sku}","${r.onHand.toFixed(2)}","${r.totalNeed.toFixed(2)}","${r.netToRoast.toFixed(2)}","${r.greenNeeded.toFixed(2)}","${r.batches}","${r.day}"\n`; });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`conduit-roast-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  toast('CSV exported','success');
 }
 
-function recalcAll() {
-  generateRoastSchedule();
-  renderBagsTable();
-  renderGreenTable();
-  updateStats();
-  toast('Recalculated', 'success');
-}
-
-function resetCycle() {
-  if (!confirm('Start a new cycle? This will clear all current orders.')) return;
-  orders = [];
-  roastSchedule = [];
-  renderOrdersTable();
-  updateStats();
-  saveData();
-  toast('New cycle started', 'success');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// PERSISTENCE
-// ═══════════════════════════════════════════════════════════════════════
-
-function saveData() {
-  localStorage.setItem('conduit_data', JSON.stringify({ orders, inventory, greenInv }));
-}
-
-// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // TOAST
-// ═══════════════════════════════════════════════════════════════════════
-
+// ═══════════════════════════════════════════════════════════
 function toast(msg, type='info') {
   const c = document.getElementById('toasts');
-  const t = document.createElement('div');
-  t.className = 'toast';
-  const colors = { success:'var(--green)', warn:'var(--amber)', error:'var(--red)', info:'var(--blue)' };
-  t.style.borderLeftColor = colors[type] || colors.info;
-  t.style.borderLeftWidth = '3px';
-  t.textContent = msg;
-  c.appendChild(t);
-  setTimeout(() => t.remove(), 3200);
+  const t = document.createElement('div'); t.className='toast';
+  const colors = {success:'var(--green)',warn:'var(--amber)',error:'var(--red)',info:'var(--blue)'};
+  t.style.borderLeft = `3px solid ${colors[type]||colors.info}`;
+  t.textContent = msg; c.appendChild(t);
+  setTimeout(()=>t.remove(), 3200);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // BOOT
-// ═══════════════════════════════════════════════════════════════════════
-
-init();
+// ═══════════════════════════════════════════════════════════
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session?.user) await initApp(session.user);
+  else {
+    document.getElementById('auth-screen').style.display='flex';
+    document.getElementById('main-app').style.display='none';
+  }
+});
 </script>
 </body>
 </html>
