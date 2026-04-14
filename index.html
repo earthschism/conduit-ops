@@ -3,233 +3,211 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conduit Coffee — Roasting Operations v2</title>
+<title>Conduit Coffee — Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0f0d0b; --bg2: #161310; --bg3: #1e1a16; --bg4: #252018; --bg5: #2d2820;
-  --border: rgba(255,200,120,0.12); --border2: rgba(255,200,120,0.22);
-  --amber: #e8a040; --amber2: #f0b85a; --amber3: #fdd68a; --cream: #f5ead8;
-  --muted: #8a7d6a; --muted2: #b09880; --red: #e05555; --green: #5ba870;
-  --blue: #5b90c8; --text: #ede0cc; --radius: 8px;
+  --ink:#1c1714;--ink2:#3a2e28;--ink3:#6b5a50;
+  --paper:#faf6f0;--paper2:#f2ebe0;--paper3:#e8ddd0;
+  --rule:rgba(90,60,30,0.14);--rule2:rgba(90,60,30,0.26);
+  --rust:#b84c1e;--rust2:#d4622a;--rust3:#e88055;
+  --gold:#c49a2a;--green:#3d6b45;--green2:#5a9464;
+  --radius:6px;--shadow:0 1px 3px rgba(28,23,20,0.08),0 4px 12px rgba(28,23,20,0.05);
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; min-height: 100vh; }
-h1,h2,h3 { font-family: 'Playfair Display', serif; }
-.mono { font-family: 'JetBrains Mono', monospace; }
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--paper);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;}
+h1,h2,h3,.serif{font-family:'Libre Baskerville',serif;}
+.mono{font-family:'DM Mono',monospace;}
 
-/* AUTH SCREEN */
-#auth-screen {
-  min-height: 100vh; display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(ellipse at 30% 50%, rgba(232,160,64,0.06) 0%, transparent 60%),
-              radial-gradient(ellipse at 70% 20%, rgba(232,160,64,0.04) 0%, transparent 50%), var(--bg);
-}
-.auth-card {
-  background: var(--bg3); border: 1px solid var(--border2); border-radius: 16px;
-  padding: 40px; width: 100%; max-width: 400px;
-}
-.auth-logo { font-family: 'Playfair Display', serif; font-size: 26px; color: var(--amber2); font-weight: 700; margin-bottom: 4px; }
-.auth-sub { font-size: 13px; color: var(--muted); margin-bottom: 32px; }
-.auth-tabs { display: flex; gap: 0; margin-bottom: 24px; background: var(--bg4); border-radius: 8px; padding: 3px; }
-.auth-tab { flex: 1; padding: 8px; text-align: center; font-size: 13px; cursor: pointer; border-radius: 6px; color: var(--muted); transition: all 0.15s; }
-.auth-tab.active { background: var(--bg3); color: var(--text); }
-.auth-role-info { background: var(--bg4); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: var(--muted2); line-height: 1.6; display: none; }
-.auth-role-info.show { display: block; }
+/* AUTH */
+#auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--paper2);}
+.auth-card{background:var(--paper);border:1px solid var(--rule2);border-radius:12px;padding:44px 40px;width:100%;max-width:420px;box-shadow:var(--shadow);}
+.auth-wordmark{font-family:'Libre Baskerville',serif;font-size:28px;color:var(--ink);font-weight:700;letter-spacing:-0.5px;margin-bottom:2px;}
+.auth-wordmark span{color:var(--rust);}
+.auth-sub{font-size:12px;color:var(--ink3);margin-bottom:32px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;}
+.auth-tabs{display:flex;background:var(--paper2);border-radius:6px;padding:3px;margin-bottom:24px;border:1px solid var(--rule);}
+.auth-tab{flex:1;padding:8px;text-align:center;font-size:13px;cursor:pointer;border-radius:4px;color:var(--ink3);transition:all 0.15s;font-weight:500;}
+.auth-tab.active{background:var(--paper);color:var(--ink);box-shadow:0 1px 3px rgba(28,23,20,0.1);}
+.auth-info{background:var(--paper2);border:1px solid var(--rule);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--ink3);line-height:1.6;margin-bottom:16px;}
 
 /* HEADER */
-.header {
-  background: var(--bg2); border-bottom: 1px solid var(--border);
-  padding: 0 24px; display: flex; align-items: center; justify-content: space-between;
-  position: sticky; top: 0; z-index: 100;
-}
-.header-left { display: flex; align-items: center; gap: 16px; padding: 14px 0; }
-.logo { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--amber2); font-weight: 700; }
-.logo span { color: var(--muted2); font-weight: 400; font-size: 13px; margin-left: 8px; font-family: 'DM Sans', sans-serif; }
-.cycle-badge { background: var(--bg4); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--amber3); font-family: 'JetBrains Mono', monospace; }
-.user-pill { display: flex; align-items: center; gap: 8px; background: var(--bg4); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; }
-.role-dot { width: 6px; height: 6px; border-radius: 50%; }
-.role-owner { background: var(--amber); }
-.role-staff { background: var(--green); }
-.role-wholesale { background: var(--blue); }
-.role-subscriber { background: var(--muted2); }
+.header{background:var(--ink);padding:0 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;border-bottom:3px solid var(--rust);}
+.header-left{display:flex;align-items:center;gap:20px;padding:13px 0;}
+.wordmark{font-family:'Libre Baskerville',serif;font-size:19px;color:var(--paper);font-weight:700;letter-spacing:-0.3px;}
+.wordmark span{color:var(--rust3);}
+.cycle-pill{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:4px 12px;font-size:12px;color:rgba(255,255,255,0.7);font-family:'DM Mono',monospace;}
+.user-pill{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,0.65);}
+.role-pip{width:7px;height:7px;border-radius:50%;}
 
 /* TABS */
-.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--bg2); padding: 0 24px; overflow-x: auto; }
-.tab { padding: 12px 18px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.15s; }
-.tab:hover { color: var(--text); }
-.tab.active { color: var(--amber2); border-bottom-color: var(--amber); }
-.tab.hidden { display: none; }
+.tabs{background:var(--ink2);display:flex;padding:0 28px;overflow-x:auto;border-bottom:1px solid rgba(255,255,255,0.08);}
+.tab{padding:11px 18px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.4);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all 0.15s;}
+.tab:hover{color:rgba(255,255,255,0.75);}
+.tab.active{color:var(--rust3);border-bottom-color:var(--rust);}
+.tab.hidden{display:none;}
 
 /* LAYOUT */
-.content { padding: 24px; max-width: 1400px; margin: 0 auto; }
-.panel { display: none; }
-.panel.active { display: block; }
-
-/* CARDS */
-.card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
-.card-title { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--amber3); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-.card-title .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
-
-/* TABLES */
-.tbl-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { background: var(--bg4); color: var(--muted2); font-weight: 500; text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
-td { padding: 8px 10px; border-bottom: 1px solid rgba(255,200,120,0.06); vertical-align: middle; }
-tr:last-child td { border-bottom: none; }
-tr:hover td { background: rgba(255,200,120,0.03); }
-.num { font-family: 'JetBrains Mono', monospace; text-align: right; }
-.sku { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--amber); background: rgba(232,160,64,0.12); padding: 2px 6px; border-radius: 4px; }
-
-/* BADGES */
-.badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
-.badge-green { background: rgba(91,168,112,0.15); color: #7dd494; border: 1px solid rgba(91,168,112,0.25); }
-.badge-amber { background: rgba(232,160,64,0.15); color: var(--amber2); border: 1px solid rgba(232,160,64,0.25); }
-.badge-red { background: rgba(224,85,85,0.15); color: #f07070; border: 1px solid rgba(224,85,85,0.25); }
-.badge-blue { background: rgba(91,144,200,0.15); color: #80b0e0; border: 1px solid rgba(91,144,200,0.25); }
-.badge-gray { background: var(--bg4); color: var(--muted2); border: 1px solid var(--border); }
-
-/* FORMS */
-input, select, textarea {
-  background: var(--bg4); border: 1px solid var(--border); border-radius: 6px;
-  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
-  padding: 8px 10px; outline: none; transition: border-color 0.15s; width: 100%;
-}
-input:focus, select:focus, textarea:focus { border-color: var(--amber); }
-select option { background: var(--bg4); }
-label { font-size: 12px; color: var(--muted2); display: block; margin-bottom: 4px; }
-.form-row { display: grid; gap: 12px; margin-bottom: 12px; }
-.form-row.cols-2 { grid-template-columns: 1fr 1fr; }
-.form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
-.form-row.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
-.form-group { display: flex; flex-direction: column; }
-
-/* BUTTONS */
-.btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
-.btn-primary { background: var(--amber); color: #1a1200; }
-.btn-primary:hover { background: var(--amber2); }
-.btn-ghost { background: transparent; color: var(--muted2); border: 1px solid var(--border); }
-.btn-ghost:hover { border-color: var(--border2); color: var(--text); }
-.btn-danger { background: rgba(224,85,85,0.15); color: #f07070; border: 1px solid rgba(224,85,85,0.25); }
-.btn-sm { padding: 4px 10px; font-size: 12px; }
-.btn-full { width: 100%; padding: 11px; font-size: 14px; }
-
-/* STATS */
-.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.stat { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; font-family: 'JetBrains Mono', monospace; }
-.stat-value { font-size: 26px; font-weight: 600; color: var(--amber3); font-family: 'JetBrains Mono', monospace; line-height: 1; }
-.stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
-
-/* UPLOAD */
-.upload-zone {
-  border: 2px dashed var(--border2); border-radius: var(--radius);
-  padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg4);
-}
-.upload-zone:hover, .upload-zone.drag { border-color: var(--amber); background: rgba(232,160,64,0.05); }
-
-/* DAY GRID */
-.day-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-.day-block { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
-.day-name { font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.08em; margin-bottom: 10px; }
-.day-batch { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,200,120,0.06); font-size: 12px; }
-.day-batch:last-child { border-bottom: none; }
-.day-total { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--amber3); }
+.content{padding:28px;max-width:1300px;margin:0 auto;}
+.panel{display:none;}.panel.active{display:block;}
 
 /* SECTION HEADERS */
-.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.section-title { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--cream); }
-.section-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.section-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;}
+.section-title{font-family:'Libre Baskerville',serif;font-size:22px;color:var(--ink);font-weight:700;letter-spacing:-0.3px;}
+.section-sub{font-size:12px;color:var(--ink3);margin-top:3px;}
 
-/* CYCLE SELECTOR */
-.cycle-selector { display: flex; align-items: center; gap: 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 20px; }
-.cycle-selector select { background: transparent; border: none; color: var(--amber2); font-family: 'JetBrains Mono', monospace; font-size: 13px; width: auto; }
+/* CARDS */
+.card{background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow);}
+.card-title{font-family:'Libre Baskerville',serif;font-size:15px;color:var(--ink);margin-bottom:14px;display:flex;align-items:center;gap:8px;font-weight:700;}
+.card-title::before{content:'';display:block;width:3px;height:16px;background:var(--rust);border-radius:2px;flex-shrink:0;}
+
+/* STATS */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;}
+.stat{background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);}
+.stat-label{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;font-weight:600;}
+.stat-value{font-size:28px;font-weight:700;color:var(--rust);font-family:'DM Mono',monospace;line-height:1;}
+.stat-sub{font-size:11px;color:var(--ink3);margin-top:4px;}
+
+/* TABLES */
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{background:var(--paper2);color:var(--ink3);font-weight:600;text-align:left;padding:9px 10px;border-bottom:2px solid var(--rule2);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;white-space:nowrap;}
+td{padding:9px 10px;border-bottom:1px solid var(--rule);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--paper2);}
+.num{font-family:'DM Mono',monospace;text-align:right;}
+
+/* BADGES */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:0.02em;}
+.badge-rust{background:rgba(184,76,30,0.1);color:var(--rust);border:1px solid rgba(184,76,30,0.2);}
+.badge-gold{background:rgba(196,154,42,0.12);color:var(--gold);border:1px solid rgba(196,154,42,0.2);}
+.badge-green{background:rgba(61,107,69,0.1);color:var(--green);border:1px solid rgba(61,107,69,0.2);}
+.badge-gray{background:var(--paper2);color:var(--ink3);border:1px solid var(--rule);}
+.sku{font-family:'DM Mono',monospace;font-size:11px;color:var(--rust);background:rgba(184,76,30,0.08);padding:2px 7px;border-radius:4px;border:1px solid rgba(184,76,30,0.15);}
+
+/* FORMS */
+input,select,textarea{background:white;border:1px solid var(--rule2);border-radius:var(--radius);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 11px;outline:none;transition:border-color 0.15s,box-shadow 0.15s;width:100%;}
+input:focus,select:focus,textarea:focus{border-color:var(--rust);box-shadow:0 0 0 3px rgba(184,76,30,0.1);}
+label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px;letter-spacing:0.03em;text-transform:uppercase;}
+.form-row{display:grid;gap:12px;margin-bottom:12px;}
+.form-row.c2{grid-template-columns:1fr 1fr;}
+.form-row.c3{grid-template-columns:1fr 1fr 1fr;}
+.form-row.c4{grid-template-columns:1fr 1fr 1fr 1fr;}
+.form-group{display:flex;flex-direction:column;}
+
+/* BUTTONS */
+.btn{padding:9px 18px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;font-family:'DM Sans',sans-serif;}
+.btn-primary{background:var(--rust);color:white;}.btn-primary:hover{background:var(--rust2);}
+.btn-secondary{background:var(--ink);color:white;}.btn-secondary:hover{background:var(--ink2);}
+.btn-ghost{background:transparent;color:var(--ink3);border:1px solid var(--rule2);}.btn-ghost:hover{border-color:var(--ink3);color:var(--ink);background:var(--paper2);}
+.btn-danger{background:transparent;color:#c0392b;border:1px solid rgba(192,57,43,0.3);}.btn-danger:hover{background:rgba(192,57,43,0.08);}
+.btn-sm{padding:5px 11px;font-size:12px;}
+.btn-full{width:100%;padding:12px;font-size:14px;}
+
+/* CYCLE BAR */
+.cycle-bar{display:flex;align-items:center;gap:12px;background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:11px 16px;margin-bottom:20px;box-shadow:var(--shadow);}
+.cycle-bar-label{font-size:11px;color:var(--ink3);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;}
+.cycle-bar select{border:none;background:transparent;padding:0;color:var(--rust);font-weight:600;font-size:14px;width:auto;box-shadow:none;}
+.cycle-bar select:focus{box-shadow:none;}
+
+/* UPLOAD */
+.upload-zone{border:2px dashed var(--rule2);border-radius:var(--radius);padding:28px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--paper2);}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--rust);background:rgba(184,76,30,0.04);}
+
+/* LINE ITEM */
+.line-item-row{display:grid;grid-template-columns:2fr 1fr 1fr 80px 32px;gap:10px;align-items:end;padding:10px 0;border-bottom:1px solid var(--rule);}
+.line-item-row:last-of-type{border-bottom:none;}
+.remove-btn{width:28px;height:28px;background:none;border:1px solid var(--rule2);border-radius:4px;color:var(--ink3);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;margin-bottom:1px;}
+.remove-btn:hover{border-color:#c0392b;color:#c0392b;background:rgba(192,57,43,0.06);}
+
+/* PRINT SHEET */
+.print-sheet{background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:32px;margin-bottom:20px;box-shadow:var(--shadow);}
+.print-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;padding-bottom:16px;border-bottom:3px solid var(--ink);}
+.print-title{font-family:'Libre Baskerville',serif;font-size:22px;font-weight:700;color:var(--ink);}
+.print-meta{font-size:12px;color:var(--ink3);margin-top:4px;font-family:'DM Mono',monospace;}
+.print-section{margin-bottom:24px;}
+.print-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink3);margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--rule);}
+.sheet-actions{display:flex;gap:8px;margin-bottom:14px;}
+
+/* COFFEE CARDS (portal) */
+.coffee-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-bottom:20px;}
+.coffee-card{background:white;border:2px solid var(--rule);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all 0.15s;}
+.coffee-card:hover{border-color:var(--rust);transform:translateY(-1px);box-shadow:var(--shadow);}
+.coffee-card.selected{border-color:var(--rust);background:rgba(184,76,30,0.03);}
+.coffee-card-name{font-family:'Libre Baskerville',serif;font-size:15px;font-weight:700;color:var(--ink);margin-bottom:5px;}
+.coffee-card-notes{font-size:12px;color:var(--ink3);line-height:1.5;margin-bottom:10px;}
+
+/* POPUP */
+.popup-overlay{position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;}
+.popup{background:white;border-radius:12px;padding:30px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(28,23,20,0.3);}
+.popup-title{font-family:'Libre Baskerville',serif;font-size:22px;font-weight:700;color:var(--ink);margin-bottom:4px;}
+
+/* ALERTS */
+.alert{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;line-height:1.5;}
+.alert-error{background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);color:#c0392b;}
+.alert-warn{background:rgba(196,154,42,0.1);border:1px solid rgba(196,154,42,0.3);color:#8a6b10;}
+.alert-success{background:rgba(61,107,69,0.1);border:1px solid rgba(61,107,69,0.25);color:var(--green);}
+.pending-notice{background:rgba(196,154,42,0.08);border:1px solid rgba(196,154,42,0.25);border-radius:var(--radius);padding:20px;text-align:center;font-size:14px;color:#7a5e10;line-height:1.7;}
+.empty{text-align:center;color:var(--ink3);padding:32px;font-size:13px;}
+.loading{display:flex;align-items:center;justify-content:center;padding:40px;color:var(--ink3);gap:10px;}
+.spinner{width:18px;height:18px;border:2px solid var(--rule2);border-top-color:var(--rust);border-radius:50%;animation:spin 0.7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
 
 /* INLINE EDIT */
-.inline-num { font-family: 'JetBrains Mono', monospace; background: transparent; border: none; color: var(--text); width: 70px; text-align: right; padding: 2px 4px; border-radius: 4px; }
-.inline-num:focus { background: var(--bg4); border: 1px solid var(--amber); outline: none; }
+.inline-num{font-family:'DM Mono',monospace;background:transparent;border:none;color:var(--ink);width:60px;text-align:right;padding:2px 4px;border-radius:4px;}
+.inline-num:focus{background:var(--paper2);border:1px solid var(--rust);outline:none;}
 
 /* TOAST */
-.toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
-.toast { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 12px 16px; font-size: 13px; color: var(--text); max-width: 320px; animation: slideIn 0.2s ease; }
-@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-/* LOADING */
-.loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--muted); gap: 10px; }
-.spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--amber); border-radius: 50%; animation: spin 0.7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* CUSTOMER PORTAL */
-.portal-welcome { text-align: center; padding: 40px 20px; }
-.portal-welcome h2 { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--amber3); margin-bottom: 8px; }
-.order-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.toast-container{position:fixed;bottom:24px;right:24px;z-index:300;display:flex;flex-direction:column;gap:8px;}
+.toast{background:var(--ink);color:var(--paper);border-radius:var(--radius);padding:11px 16px;font-size:13px;max-width:300px;animation:slideUp 0.2s ease;border-left:3px solid var(--rust);}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
 
 /* SCROLLBAR */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg2); }
-::-webkit-scrollbar-thumb { background: var(--bg5); border-radius: 3px; }
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--paper2);}
+::-webkit-scrollbar-thumb{background:var(--paper3);border-radius:3px;}
 
-/* EMPTY STATE */
-.empty { text-align: center; color: var(--muted); padding: 32px; font-size: 13px; }
-
-/* ALERT */
-.alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
-.alert-warn { background: rgba(232,160,64,0.1); border: 1px solid rgba(232,160,64,0.25); color: var(--amber3); }
-.alert-error { background: rgba(224,85,85,0.1); border: 1px solid rgba(224,85,85,0.25); color: #f07070; }
+/* PRINT */
+@media print{
+  .header,.tabs,.sheet-actions,.cycle-bar,.btn,#btn-add-order,.section-header .btn,#csv-card,#add-order-card{display:none!important;}
+  body{background:white;font-size:12px;}
+  .content{padding:0;}
+  .print-sheet{box-shadow:none;border:none;padding:0;margin:0;}
+  table{font-size:11px;}
+  th,td{padding:6px 8px;}
+  .panel{display:block!important;}
+  #panel-orders,#panel-roast,#panel-portal,#panel-admin,#panel-catalog{display:none!important;}
+  #panel-output{display:block!important;}
+}
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════ AUTH SCREEN ══ -->
+<!-- AUTH -->
 <div id="auth-screen">
   <div class="auth-card">
-    <div class="auth-logo">Conduit Coffee</div>
-    <div class="auth-sub">Roasting Operations Platform</div>
-
+    <div class="auth-wordmark">Conduit <span>Coffee</span></div>
+    <div class="auth-sub">Order Management</div>
     <div class="auth-tabs">
       <div class="auth-tab active" onclick="switchAuthTab('login')">Sign In</div>
       <div class="auth-tab" onclick="switchAuthTab('signup')">Create Account</div>
     </div>
-
     <div id="auth-error" class="alert alert-error" style="display:none;"></div>
-
-    <!-- LOGIN -->
     <div id="login-form">
-      <div class="form-group" style="margin-bottom:12px;">
-        <label>Email</label>
-        <input type="email" id="login-email" placeholder="you@example.com">
-      </div>
-      <div class="form-group" style="margin-bottom:20px;">
-        <label>Password</label>
-        <input type="password" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
-      </div>
+      <div class="form-group" style="margin-bottom:12px;"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
+      <div class="form-group" style="margin-bottom:20px;"><label>Password</label><input type="password" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <button class="btn btn-primary btn-full" onclick="doLogin()">Sign In</button>
     </div>
-
-    <!-- SIGNUP -->
     <div id="signup-form" style="display:none;">
-      <div class="auth-role-info show" id="signup-role-info">
-        <strong style="color:var(--amber2);">First account = Owner.</strong> The first person to sign up becomes the owner with full access. Share this page with staff or customers after — they'll sign up as their role.
-      </div>
-      <div class="form-group" style="margin-bottom:12px;">
-        <label>Full Name</label>
-        <input type="text" id="signup-name" placeholder="Your name">
-      </div>
-      <div class="form-group" style="margin-bottom:12px;">
-        <label>Email</label>
-        <input type="email" id="signup-email" placeholder="you@example.com">
-      </div>
-      <div class="form-group" style="margin-bottom:12px;">
-        <label>Password</label>
-        <input type="password" id="signup-password" placeholder="At least 6 characters">
-      </div>
-      <div class="form-group" style="margin-bottom:20px;">
-        <label>I am a...</label>
+      <div class="auth-info">The first account becomes the owner. Wholesale accounts are reviewed before activation.</div>
+      <div class="form-group" style="margin-bottom:12px;"><label>Full Name</label><input type="text" id="signup-name" placeholder="Your name"></div>
+      <div class="form-group" style="margin-bottom:12px;"><label>Email</label><input type="email" id="signup-email" placeholder="you@example.com"></div>
+      <div class="form-group" style="margin-bottom:12px;"><label>Password</label><input type="password" id="signup-password" placeholder="At least 6 characters"></div>
+      <div class="form-group" style="margin-bottom:20px;"><label>Account Type</label>
         <select id="signup-role">
-          <option value="owner">Owner / Roaster</option>
-          <option value="staff">Staff</option>
+          <option value="subscriber">Retail / Subscriber</option>
           <option value="wholesale">Wholesale Account</option>
-          <option value="subscriber">Subscriber / Retail Customer</option>
+          <option value="staff">Staff</option>
         </select>
       </div>
       <button class="btn btn-primary btn-full" onclick="doSignup()">Create Account</button>
@@ -237,81 +215,67 @@ label { font-size: 12px; color: var(--muted2); display: block; margin-bottom: 4p
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════ MAIN APP ══ -->
+<!-- MAIN APP -->
 <div id="main-app" style="display:none;">
 
 <div class="header">
   <div class="header-left">
-    <div class="logo">Conduit Coffee <span>Roasting Operations</span></div>
-    <div class="cycle-badge" id="cycle-badge">Loading...</div>
+    <div class="wordmark">Conduit <span>Coffee</span></div>
+    <div class="cycle-pill" id="cycle-pill">—</div>
   </div>
-  <div style="display:flex;gap:8px;align-items:center;">
-    <div class="user-pill">
-      <div class="role-dot" id="role-dot"></div>
-      <span id="user-name-display">—</span>
-    </div>
-    <button class="btn btn-ghost btn-sm" onclick="exportCSV()">↓ Export</button>
-    <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign Out</button>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <div class="user-pill"><div class="role-pip" id="role-pip"></div><span id="user-display">—</span></div>
+    <button class="btn btn-ghost btn-sm" style="color:rgba(255,255,255,0.55);border-color:rgba(255,255,255,0.18);" onclick="doLogout()">Sign Out</button>
   </div>
 </div>
 
 <div class="tabs" id="main-tabs">
-  <div class="tab active" data-tab="orders" onclick="showTab('orders',this)">① Orders</div>
-  <div class="tab" data-tab="roast" onclick="showTab('roast',this)">② Roast Schedule</div>
-  <div class="tab" data-tab="bags" onclick="showTab('bags',this)">③ Bags & Grinding</div>
-  <div class="tab" data-tab="green" onclick="showTab('green',this)">④ Green Beans</div>
-  <div class="tab" data-tab="inventory" onclick="showTab('inventory',this)">⑤ Inventory</div>
-  <div class="tab hidden" data-tab="portal" onclick="showTab('portal',this)">My Orders</div>
-  <div class="tab hidden" data-tab="admin" onclick="showTab('admin',this)">⚙ Admin</div>
+  <div class="tab active" data-tab="orders" onclick="showTab('orders',this)">Orders</div>
+  <div class="tab" data-tab="roast" onclick="showTab('roast',this)">Roast Schedule</div>
+  <div class="tab" data-tab="output" onclick="showTab('output',this)">Print &amp; Export</div>
+  <div class="tab hidden" data-tab="portal" onclick="showTab('portal',this)">Place Order</div>
+  <div class="tab hidden" data-tab="admin" onclick="showTab('admin',this)">Admin</div>
+  <div class="tab hidden" data-tab="catalog" onclick="showTab('catalog',this)">Catalog</div>
 </div>
 
 <div class="content">
 
-<!-- ══════════════════════════════════════════════ ORDERS ══ -->
+<!-- ORDERS -->
 <div class="panel active" id="panel-orders">
   <div class="section-header">
-    <div>
-      <div class="section-title">Order Entry</div>
-      <div class="section-sub">Current cycle orders — shared across your team in real time</div>
-    </div>
+    <div><div class="section-title">Orders</div><div class="section-sub">Current cycle · shared across your team in real time</div></div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-ghost btn-sm" id="btn-add-order" onclick="toggleAddOrder()">+ Add Order</button>
-      <button class="btn btn-primary btn-sm" onclick="loadOrders()">↻ Refresh</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadOrders()">↻ Refresh</button>
     </div>
   </div>
 
-  <!-- CYCLE SELECTOR -->
-  <div class="cycle-selector">
-    <span style="font-size:12px;color:var(--muted);">Cycle:</span>
+  <div class="cycle-bar">
+    <span class="cycle-bar-label">Cycle</span>
     <select id="cycle-select" onchange="onCycleChange()"></select>
+    <div style="flex:1;"></div>
     <button class="btn btn-ghost btn-sm" id="btn-new-cycle" onclick="createNewCycle()" style="display:none;">+ New Cycle</button>
   </div>
 
   <div class="stats-row">
-    <div class="stat"><div class="stat-label">Total Orders</div><div class="stat-value" id="stat-orders">0</div></div>
+    <div class="stat"><div class="stat-label">Orders</div><div class="stat-value" id="stat-orders">0</div></div>
     <div class="stat"><div class="stat-label">Total Bags</div><div class="stat-value" id="stat-bags">0</div></div>
-    <div class="stat"><div class="stat-label">Lbs to Roast</div><div class="stat-value" id="stat-lbs">0</div></div>
-    <div class="stat"><div class="stat-label">Ship / Pickup</div><div class="stat-value" id="stat-ship">0/0</div></div>
+    <div class="stat"><div class="stat-label">Lbs Needed</div><div class="stat-value" id="stat-lbs">0</div></div>
+    <div class="stat"><div class="stat-label">Ship / Pickup</div><div class="stat-value" id="stat-ship">—</div></div>
   </div>
 
-  <!-- CSV UPLOAD (staff/owner only) -->
   <div class="card" id="csv-card">
-    <div class="card-title"><span class="dot"></span>Shopify CSV Import</div>
-    <div class="upload-zone" onclick="document.getElementById('csv-input').click()"
-         ondragover="event.preventDefault();this.classList.add('drag')"
-         ondragleave="this.classList.remove('drag')"
-         ondrop="handleDrop(event)">
+    <div class="card-title">Shopify CSV Import</div>
+    <div class="upload-zone" onclick="document.getElementById('csv-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
       <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSV(this.files[0])">
-      <div style="font-size:28px;margin-bottom:8px;">☁</div>
-      <div style="font-size:14px;margin-bottom:4px;">Drop Shopify CSV here or click to browse</div>
-      <div style="font-size:12px;color:var(--muted);">Parses coffee name, weight, grind, and shipping automatically</div>
+      <div style="font-size:13px;color:var(--ink3);margin-bottom:4px;font-weight:600;">Drop Shopify orders export here or click to browse</div>
+      <div style="font-size:12px;color:var(--ink3);">Parses coffee, weight, grind, and shipping automatically</div>
     </div>
   </div>
 
-  <!-- ADD ORDER FORM -->
-  <div class="card" id="add-order-form" style="display:none;">
-    <div class="card-title"><span class="dot"></span>Manual Order Entry</div>
-    <div class="form-row cols-3">
+  <div class="card" id="add-order-card" style="display:none;">
+    <div class="card-title">Manual Order Entry</div>
+    <div class="form-row c3">
       <div class="form-group"><label>Customer / Account</label><input type="text" id="f-customer" placeholder="Name or account"></div>
       <div class="form-group"><label>Order Type</label>
         <select id="f-type">
@@ -323,224 +287,239 @@ label { font-size: 12px; color: var(--muted2); display: block; margin-bottom: 4p
       </div>
       <div class="form-group"><label>Region</label>
         <select id="f-region">
+          <option value="ship">Ship (mail)</option>
           <option value="seattle">Seattle</option>
           <option value="pt">Port Townsend</option>
-          <option value="ship">Ship (mail)</option>
           <option value="pickup">Café Pickup</option>
         </select>
       </div>
     </div>
-    <div class="form-row cols-4">
-      <div class="form-group"><label>Coffee</label><select id="f-coffee"></select></div>
-      <div class="form-group"><label>Qty</label><input type="number" id="f-qty" value="1" min="1"></div>
-      <div class="form-group"><label>Size</label>
-        <select id="f-size">
-          <option value="5lb">5 lb</option><option value="2lb" selected>2 lb</option>
-          <option value="1lb">1 lb</option><option value="12oz">12 oz</option>
-          <option value="6oz">6 oz</option><option value="4oz">4 oz</option>
-          <option value="20lb">20 lb bulk</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Grind</label>
-        <select id="f-grind">
-          <option value="wb">Whole Bean</option><option value="drip">Drip</option>
-          <option value="espresso">Espresso</option><option value="french">French Press</option>
-          <option value="pour">Pour Over</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-group" style="margin-bottom:12px;"><label>Notes</label><input type="text" id="f-notes" placeholder="Pickup, grind specs, special instructions..."></div>
+    <div id="line-items-container"></div>
+    <div style="margin:10px 0 14px;"><button class="btn btn-ghost btn-sm" onclick="addLineItem()">+ Add Another Coffee</button></div>
+    <div class="form-group" style="margin-bottom:14px;"><label>Notes</label><input type="text" id="f-notes" placeholder="Special instructions, pickup notes..."></div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-primary" onclick="saveOrder()">Save Order</button>
       <button class="btn btn-ghost" onclick="toggleAddOrder()">Cancel</button>
     </div>
   </div>
 
-  <!-- ORDERS TABLE -->
   <div class="card">
-    <div class="card-title"><span class="dot"></span>Current Cycle Orders</div>
+    <div class="card-title">Current Cycle Orders</div>
     <div class="tbl-wrap">
       <table>
-        <thead>
-          <tr><th>#</th><th>Customer</th><th>Type</th><th>Coffee</th><th>SKU</th><th>Size</th><th>Qty</th><th>Grind</th><th>Region</th><th>Notes</th><th></th></tr>
-        </thead>
-        <tbody id="orders-tbody"><tr><td colspan="11" class="empty">Loading orders...</td></tr></tbody>
+        <thead><tr><th>#</th><th>Customer</th><th>Type</th><th>Coffee</th><th>SKU</th><th>Size</th><th>Qty</th><th>Grind</th><th>Region</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="orders-tbody"><tr><td colspan="11" class="loading"><div class="spinner"></div></td></tr></tbody>
       </table>
     </div>
   </div>
 </div>
 
-<!-- ════════════════════════════════════ ROAST SCHEDULE ══ -->
+<!-- ROAST SCHEDULE -->
 <div class="panel" id="panel-roast">
   <div class="section-header">
-    <div><div class="section-title">Roast Schedule</div>
-    <div class="section-sub">Auto-calculated · max 10 lb green per batch · partial batches for top-offs</div></div>
-    <button class="btn btn-primary btn-sm" onclick="generateRoastSchedule()">↻ Generate</button>
+    <div><div class="section-title">Roast Schedule</div><div class="section-sub">10 lb batches · you decide partials on the day</div></div>
+    <button class="btn btn-primary btn-sm" onclick="generateSchedule()">↻ Calculate</button>
   </div>
-  <div class="day-grid">
-    <div class="day-block"><div class="day-name">Monday</div><div id="day-mon" style="color:var(--muted);font-size:12px;">—</div></div>
-    <div class="day-block"><div class="day-name">Tuesday</div><div id="day-tue" style="color:var(--muted);font-size:12px;">—</div></div>
-    <div class="day-block"><div class="day-name">Wednesday</div><div id="day-wed" style="color:var(--muted);font-size:12px;">—</div></div>
-    <div class="day-block"><div class="day-name">Weekend</div><div id="day-wknd" style="color:var(--muted);font-size:12px;">—</div></div>
+
+  <div class="stats-row" id="roast-stats" style="display:none;">
+    <div class="stat"><div class="stat-label">Total Batches</div><div class="stat-value" id="rs-batches">—</div><div class="stat-sub">full ×10lb</div></div>
+    <div class="stat"><div class="stat-label">Green Needed</div><div class="stat-value" id="rs-green">—</div><div class="stat-sub">lbs total</div></div>
+    <div class="stat"><div class="stat-label">Roasted Output</div><div class="stat-value" id="rs-output">—</div><div class="stat-sub">lbs est.</div></div>
+    <div class="stat"><div class="stat-label">SKUs</div><div class="stat-value" id="rs-skus">—</div></div>
   </div>
+
   <div class="card">
-    <div class="card-title"><span class="dot"></span>Per-Coffee Roast Detail</div>
+    <div class="card-title">Batch Requirements</div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Coffee</th><th>SKU</th><th>On Hand</th><th>Need</th><th>Net Roast</th><th>Water Loss</th><th>Green Needed</th><th>Batches</th><th>Type</th><th>Day</th><th>Output</th><th>Surplus</th></tr></thead>
-        <tbody id="roast-tbody"><tr><td colspan="12" class="empty">Add orders first, then generate.</td></tr></tbody>
+        <thead><tr><th>Coffee</th><th>SKU</th><th style="text-align:right;">Roasted Need (lb)</th><th style="text-align:right;">Water Loss</th><th style="text-align:right;">Green Needed (lb)</th><th style="text-align:right;">Full Batches ×10lb</th><th style="text-align:right;">Remainder (lb)</th><th style="text-align:right;">Est. Output (lb)</th></tr></thead>
+        <tbody id="roast-tbody"><tr><td colspan="8" class="empty">Add orders, then calculate.</td></tr></tbody>
       </table>
     </div>
   </div>
-  <div class="card" id="roast-totals" style="display:none;">
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
-      <div><div class="stat-label">Total Batches</div><div class="stat-value" id="tot-batches" style="font-size:20px;">—</div></div>
-      <div><div class="stat-label">Green Needed</div><div class="stat-value" id="tot-green" style="font-size:20px;">—</div></div>
-      <div><div class="stat-label">Roasted Output</div><div class="stat-value" id="tot-output" style="font-size:20px;">—</div></div>
-      <div><div class="stat-label">Days Used</div><div class="stat-value" id="tot-days" style="font-size:20px;">—</div></div>
+
+  <div class="card" id="green-card" style="display:none;">
+    <div class="card-title">Green Bean Requirements by Origin</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Origin</th><th style="text-align:right;">Total Needed (lb)</th><th>Blend Used In</th></tr></thead>
+        <tbody id="green-tbody"></tbody>
+      </table>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════ BAGS & GRINDING ══ -->
-<div class="panel" id="panel-bags">
+<!-- PRINT & EXPORT -->
+<div class="panel" id="panel-output">
   <div class="section-header">
-    <div><div class="section-title">Bags & Grinding</div>
-    <div class="section-sub">Thursday–Saturday bagging task list</div></div>
-    <button class="btn btn-ghost btn-sm" onclick="window.print()">Print</button>
+    <div><div class="section-title">Print &amp; Export</div><div class="section-sub">Roasting sheet and bagging sheet — formatted for the floor</div></div>
+    <button class="btn btn-ghost btn-sm" onclick="generateSchedule()">↻ Recalculate</button>
   </div>
-  <div class="stats-row">
-    <div class="stat"><div class="stat-label">5 lb bags</div><div class="stat-value" id="bag-5lb">0</div></div>
-    <div class="stat"><div class="stat-label">2 lb bags</div><div class="stat-value" id="bag-2lb">0</div></div>
-    <div class="stat"><div class="stat-label">1 lb / 12oz</div><div class="stat-value" id="bag-1lb">0</div></div>
-    <div class="stat"><div class="stat-label">Samples</div><div class="stat-value" id="bag-sample">0</div></div>
-    <div class="stat"><div class="stat-label">Grind Orders</div><div class="stat-value" id="bag-grind">0</div></div>
+
+  <div class="sheet-actions">
+    <strong style="font-size:13px;color:var(--ink2);align-self:center;">Roasting Sheet</strong>
+    <button class="btn btn-secondary btn-sm" onclick="printSheet('roast')">🖨 Print</button>
+    <button class="btn btn-ghost btn-sm" onclick="downloadCSV('roast')">↓ CSV</button>
   </div>
-  <div class="card">
-    <div class="card-title"><span class="dot"></span>Bagging Task List</div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th>Coffee</th><th>SKU</th><th>5 lb</th><th>2 lb</th><th>1lb/12oz</th><th>6oz</th><th>4oz</th><th>Retail Total</th><th>Whole Bean</th><th>Drip</th><th>Espresso</th><th>French</th><th>Notes</th></tr></thead>
-        <tbody id="bags-tbody"><tr><td colspan="13" class="empty">Load orders first.</td></tr></tbody>
+
+  <div class="print-sheet" id="roast-sheet">
+    <div class="print-header">
+      <div>
+        <div class="print-title">Conduit Coffee — Roasting Sheet</div>
+        <div class="print-meta" id="roast-sheet-meta">—</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'DM Mono',monospace;font-size:28px;font-weight:700;color:var(--rust);" id="roast-sheet-batches">—</div>
+        <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;">Total Batches</div>
+      </div>
+    </div>
+    <div class="print-section">
+      <div class="print-section-title">Batch List</div>
+      <table id="roast-print-table">
+        <thead>
+          <tr>
+            <th style="width:28px;">#</th><th>Coffee</th><th>SKU</th>
+            <th style="text-align:right;">Roasted Need</th>
+            <th style="text-align:right;">Green (lb)</th>
+            <th style="text-align:right;">Batches ×10lb</th>
+            <th style="text-align:right;">Remainder</th>
+            <th style="text-align:right;">Est. Output</th>
+            <th style="min-width:80px;">Roaster Notes</th>
+          </tr>
+        </thead>
+        <tbody id="roast-print-tbody"><tr><td colspan="9" class="empty">Calculate schedule first.</td></tr></tbody>
       </table>
     </div>
-  </div>
-  <div class="card">
-    <div class="card-title"><span class="dot"></span>Shipping Boxes</div>
-    <div class="tbl-wrap">
+    <div class="print-section">
+      <div class="print-section-title">Green Bean Pull List</div>
       <table>
-        <thead><tr><th>Box Type</th><th>Rate</th><th>Count</th><th>Subtotal</th></tr></thead>
-        <tbody id="ship-tbody"></tbody>
+        <thead><tr><th>Origin</th><th style="text-align:right;">Lbs to Pull</th><th>Used In</th></tr></thead>
+        <tbody id="green-print-tbody"></tbody>
       </table>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-      <div style="text-align:right;"><div class="stat-label">Total Postage</div><div class="mono" id="ship-total" style="font-size:18px;color:var(--amber3);">$0.00</div></div>
+    <div style="margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;">
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Roaster</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Date Roasted</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Notes</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
+    </div>
+  </div>
+
+  <div class="sheet-actions" style="margin-top:28px;">
+    <strong style="font-size:13px;color:var(--ink2);align-self:center;">Bagging &amp; Grinding Sheet</strong>
+    <button class="btn btn-secondary btn-sm" onclick="printSheet('bags')">🖨 Print</button>
+    <button class="btn btn-ghost btn-sm" onclick="downloadCSV('bags')">↓ CSV</button>
+  </div>
+
+  <div class="print-sheet" id="bag-sheet">
+    <div class="print-header">
+      <div>
+        <div class="print-title">Conduit Coffee — Bagging &amp; Grinding Sheet</div>
+        <div class="print-meta" id="bag-sheet-meta">—</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'DM Mono',monospace;font-size:28px;font-weight:700;color:var(--rust);" id="bag-sheet-total">—</div>
+        <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;">Total Bags</div>
+      </div>
+    </div>
+    <div class="print-section">
+      <div class="print-section-title">Bags by Coffee</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Coffee</th><th>SKU</th>
+            <th style="text-align:right;">5 lb</th><th style="text-align:right;">2 lb</th><th style="text-align:right;">1 lb/12oz</th><th style="text-align:right;">6oz</th><th style="text-align:right;">4oz</th>
+            <th style="text-align:right;">Total</th>
+            <th style="text-align:right;">Whole Bean</th><th style="text-align:right;">Drip</th><th style="text-align:right;">Coarse</th><th style="text-align:right;">Fine</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="bag-print-tbody"><tr><td colspan="13" class="empty">Calculate schedule first.</td></tr></tbody>
+      </table>
+    </div>
+    <div class="print-section" id="shipping-section">
+      <div class="print-section-title">Shipping Summary</div>
+      <table>
+        <thead><tr><th>Box Type</th><th style="text-align:right;">Count</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Subtotal</th></tr></thead>
+        <tbody id="shipping-tbody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;">
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Packed by</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Date</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Notes</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════ GREEN BEANS ══ -->
-<div class="panel" id="panel-green">
-  <div class="section-header">
-    <div><div class="section-title">Green Bean Needs</div>
-    <div class="section-sub">Blend recipes × roasted needs → origin purchase requirements</div></div>
-  </div>
-  <div class="card">
-    <div class="card-title"><span class="dot"></span>Required by Coffee</div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th>Coffee</th><th>Roasted Need</th><th>Water Loss</th><th>Green Total</th><th>Brazil FdI</th><th>Honduras</th><th>Guatemala</th><th>Sumatra</th><th>Ethiopia</th><th>Peru Ely</th><th>Decaf Col.</th><th>Other</th></tr></thead>
-        <tbody id="green-tbody"><tr><td colspan="12" class="empty">Generate roast schedule first.</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-title"><span class="dot"></span>Total by Origin</div>
-    <div id="green-totals-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
-      <div class="empty">Generate schedule to see totals.</div>
-    </div>
-  </div>
-</div>
-
-<!-- ════════════════════════════════════════ INVENTORY ══ -->
-<div class="panel" id="panel-inventory">
-  <div class="section-header">
-    <div><div class="section-title">Inventory</div>
-    <div class="section-sub">On-hand roasted coffee + green bean stock</div></div>
-    <button class="btn btn-primary btn-sm" onclick="saveInventory()">Save Inventory</button>
-  </div>
-  <div class="card">
-    <div class="card-title"><span class="dot"></span>Roasted Coffee On Hand (lbs)</div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th>Coffee</th><th>SKU</th><th>On Hand (lb)</th><th>Status</th></tr></thead>
-        <tbody id="inv-tbody"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-title"><span class="dot"></span>Green Bean Stock (lbs)</div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th>Origin</th><th>Cost/lb</th><th>Bag Size</th><th>On Hand (lb)</th><th>Status</th></tr></thead>
-        <tbody id="green-inv-tbody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════ CUSTOMER PORTAL ══ -->
+<!-- CUSTOMER PORTAL -->
 <div class="panel" id="panel-portal">
-  <div class="portal-welcome">
-    <h2>Welcome back, <span id="portal-name">—</span></h2>
-    <p style="color:var(--muted);font-size:13px;margin-top:6px;">Place an order or view your order history below.</p>
+  <div class="section-header">
+    <div><div class="section-title">Place an Order</div><div class="section-sub" id="portal-sub">Welcome back</div></div>
   </div>
-  <div class="card">
-    <div class="card-title"><span class="dot"></span>Place an Order</div>
-    <div class="form-row cols-4">
-      <div class="form-group"><label>Coffee</label><select id="p-coffee"></select></div>
-      <div class="form-group"><label>Size</label>
-        <select id="p-size">
-          <option value="2lb" selected>2 lb</option><option value="1lb">1 lb</option>
-          <option value="5lb">5 lb</option><option value="12oz">12 oz</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Grind</label>
-        <select id="p-grind">
-          <option value="wb">Whole Bean</option><option value="drip">Drip</option>
-          <option value="espresso">Espresso</option><option value="french">French Press</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Qty</label><input type="number" id="p-qty" value="1" min="1"></div>
+  <div id="portal-pending" class="pending-notice" style="display:none;">
+    Your wholesale account is pending approval.<br>You'll hear from us at <strong>hello@conduitcoffee.com</strong> once activated.
+  </div>
+  <div id="portal-form-wrap">
+    <div class="coffee-grid" id="portal-coffee-grid"><div class="loading"><div class="spinner"></div></div></div>
+    <div class="card" id="portal-order-card" style="display:none;">
+      <div class="card-title">Your Order</div>
+      <div id="portal-line-items"></div>
+      <div style="margin:10px 0 14px;"><button class="btn btn-ghost btn-sm" onclick="addPortalLine()">+ Add Another Coffee</button></div>
+      <div class="form-group" style="margin-bottom:14px;"><label>Notes</label><input type="text" id="portal-notes" placeholder="Any special requests..."></div>
+      <button class="btn btn-primary" onclick="placePortalOrder()">Place Order</button>
     </div>
-    <div class="form-group" style="margin-bottom:12px;"><label>Notes</label><input type="text" id="p-notes" placeholder="Any special requests..."></div>
-    <button class="btn btn-primary" onclick="placeCustomerOrder()">Place Order</button>
   </div>
-  <div class="card">
-    <div class="card-title"><span class="dot"></span>Your Orders</div>
-    <div id="portal-orders"><div class="empty">No orders yet.</div></div>
+  <div class="card" style="margin-top:20px;">
+    <div class="card-title">Your Order History</div>
+    <div id="portal-history"><div class="empty">No orders yet.</div></div>
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════ ADMIN ══ -->
+<!-- ADMIN -->
 <div class="panel" id="panel-admin">
   <div class="section-header">
-    <div><div class="section-title">Admin</div>
-    <div class="section-sub">User management and system settings</div></div>
+    <div><div class="section-title">Admin</div><div class="section-sub">Users · approvals · account management</div></div>
   </div>
   <div class="card">
-    <div class="card-title"><span class="dot"></span>All Users</div>
+    <div class="card-title">All Users</div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th>Change Role</th></tr></thead>
-        <tbody id="admin-users-tbody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Type</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+        <tbody id="admin-tbody"><tr><td colspan="7" class="loading"><div class="spinner"></div></td></tr></tbody>
       </table>
     </div>
   </div>
 </div>
 
-</div><!-- end .content -->
-</div><!-- end #main-app -->
+<!-- CATALOG -->
+<div class="panel" id="panel-catalog">
+  <div class="section-header">
+    <div><div class="section-title">Coffee Catalog</div><div class="section-sub">SKUs · visibility · descriptions · sort order</div></div>
+  </div>
+  <div class="card">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>SKU</th><th>Name</th><th>Roast</th><th>Visibility</th><th>Customer Facing</th><th>Active</th><th>Sort</th></tr></thead>
+        <tbody id="catalog-tbody"><tr><td colspan="7" class="loading"><div class="spinner"></div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div><!-- .content -->
+</div><!-- #main-app -->
+
+<!-- INFO POPUP -->
+<div id="info-popup" class="popup-overlay" style="display:none;" onclick="if(event.target===this)closePopup()">
+  <div class="popup">
+    <div class="popup-title" id="popup-name">—</div>
+    <div style="font-size:12px;color:var(--ink3);margin:4px 0 12px;" id="popup-origin">—</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;" id="popup-tags"></div>
+    <p style="font-size:14px;color:var(--ink2);line-height:1.65;margin-bottom:10px;" id="popup-desc">—</p>
+    <p style="font-size:13px;color:var(--ink3);font-style:italic;" id="popup-notes">—</p>
+    <button class="btn btn-ghost btn-sm" style="margin-top:20px;" onclick="closePopup()">Close</button>
+  </div>
+</div>
 
 <div class="toast-container" id="toasts"></div>
 
@@ -554,702 +533,694 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ═══════════════════════════════════════════════════════════
-// CONSTANTS
-// ═══════════════════════════════════════════════════════════
-const BAG_WEIGHTS = { '4oz':0.25,'6oz':0.375,'12oz':0.756,'1lb':1.0,'2lb':2.0,'5lb':5.0,'20lb':20.0 };
-const SHIP_BOXES = [
-  { type:'First Class', rate:6 },
-  { type:'Padded Flat Rate', rate:9 },
-  { type:'Medium Flat Rate', rate:14 },
-];
-const GRIND_LABEL = { wb:'Whole Bean', drip:'Drip', espresso:'Espresso', french:'French Press', pour:'Pour Over' };
-const REGION_LABEL = { seattle:'Seattle', pt:'Port Townsend', ship:'Ship', pickup:'Pickup' };
-const DAYS = ['MON','TUE','WED','WKND'];
+// ── CONSTANTS ──────────────────────────────────────
+const BAG_W = {'4oz':0.25,'6oz':0.375,'12oz':0.756,'1lb':1.0,'2lb':2.0,'5lb':5.0,'20lb':20.0};
+const GRIND_L = {wb:'Whole Bean',drip:'Drip',coarse:'Coarse',fine:'Fine'};
+const REGION_L = {seattle:'Seattle',pt:'Port Townsend',ship:'Ship',pickup:'Pickup'};
+const TYPE_L = {subscription:'Subscription',wholesale:'Wholesale',manual:'Manual',walkin:'Walk-in',online:'Online'};
+const SHIP_BOXES = [{type:'First Class',rate:6},{type:'Padded Flat Rate',rate:9},{type:'Medium Flat Rate',rate:14}];
 
-// ═══════════════════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════════════════
-let currentUser = null;
-let currentProfile = null;
-let currentCycleId = null;
-let orders = [];
-let coffees = [];
-let inventory = {};
-let greenInv = {};
-let roastSchedule = [];
-let cycles = [];
+// ── STATE ──────────────────────────────────────────
+let currentUser=null, currentProfile=null;
+let currentCycleId=null, cycles=[];
+let orders=[], coffees=[], roastSchedule=[];
+let lineItemCount=0, portalLineId=0;
 
-// ═══════════════════════════════════════════════════════════
-// AUTH
-// ═══════════════════════════════════════════════════════════
+// ── AUTH ───────────────────────────────────────────
 function switchAuthTab(tab) {
-  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='signup')));
-  document.getElementById('login-form').style.display = tab==='login' ? 'block' : 'none';
-  document.getElementById('signup-form').style.display = tab==='signup' ? 'block' : 'none';
-  document.getElementById('auth-error').style.display = 'none';
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='signup')));
+  document.getElementById('login-form').style.display=tab==='login'?'block':'none';
+  document.getElementById('signup-form').style.display=tab==='signup'?'block':'none';
+  document.getElementById('auth-error').style.display='none';
 }
 
 async function doLogin() {
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  if (!email || !password) { showAuthError('Please enter email and password.'); return; }
-  const { error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) showAuthError(error.message);
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-password').value;
+  if(!email||!pass){showAuthErr('Please enter your email and password.');return;}
+  const {error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error) showAuthErr(error.message);
 }
 
 async function doSignup() {
-  const name = document.getElementById('signup-name').value.trim();
-  const email = document.getElementById('signup-email').value.trim();
-  const password = document.getElementById('signup-password').value;
-  const role = document.getElementById('signup-role').value;
-  if (!name || !email || !password) { showAuthError('Please fill in all fields.'); return; }
-  if (password.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
-
-  const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: name } } });
-  if (error) { showAuthError(error.message); return; }
-
-  // Set role
-  if (data.user) {
-    // Check if first user — make them owner regardless
-    const { count } = await sb.from('profiles').select('*', { count:'exact', head:true });
-    const assignedRole = count === 0 ? 'owner' : role;
-    await sb.from('profiles').update({ role: assignedRole, full_name: name }).eq('id', data.user.id);
+  const name=document.getElementById('signup-name').value.trim();
+  const email=document.getElementById('signup-email').value.trim();
+  const pass=document.getElementById('signup-password').value;
+  const role=document.getElementById('signup-role').value;
+  if(!name||!email||!pass){showAuthErr('Please fill in all fields.');return;}
+  if(pass.length<6){showAuthErr('Password must be at least 6 characters.');return;}
+  const {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{full_name:name}}});
+  if(error){showAuthErr(error.message);return;}
+  if(data.user){
+    const {count}=await sb.from('profiles').select('*',{count:'exact',head:true});
+    const isFirst=(count===null||count===0);
+    const assignedRole=isFirst?'owner':role;
+    const pending=(!isFirst&&role==='wholesale');
+    await sb.from('profiles').update({role:assignedRole,full_name:name,account_type:role,pending_approval:pending,approved:!pending}).eq('id',data.user.id);
   }
-  toast('Account created! Signing you in...', 'success');
+  toast('Account created! Signing you in...','success');
 }
 
 async function doLogout() {
   await sb.auth.signOut();
-  currentUser = null; currentProfile = null;
-  document.getElementById('main-app').style.display = 'none';
-  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('main-app').style.display='none';
+  document.getElementById('auth-screen').style.display='flex';
 }
 
-function showAuthError(msg) {
-  const el = document.getElementById('auth-error');
-  el.textContent = msg; el.style.display = 'block';
-}
+function showAuthErr(msg){const el=document.getElementById('auth-error');el.textContent=msg;el.style.display='block';}
 
-// ═══════════════════════════════════════════════════════════
-// INIT AFTER LOGIN
-// ═══════════════════════════════════════════════════════════
+// ── INIT ───────────────────────────────────────────
 async function initApp(user) {
-  currentUser = user;
+  currentUser=user;
+  const {data:profile}=await sb.from('profiles').select('*').eq('id',user.id).single();
+  currentProfile=profile;
 
-  // Load profile
-  const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
-  currentProfile = profile;
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('main-app').style.display='block';
+  document.getElementById('user-display').textContent=profile?.full_name||user.email;
 
-  // Show app
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('main-app').style.display = 'block';
+  const roleColors={owner:'#b84c1e',staff:'#3d6b45',wholesale:'#c49a2a',subscriber:'#999'};
+  document.getElementById('role-pip').style.background=roleColors[profile?.role]||'#999';
 
-  // Set user display
-  document.getElementById('user-name-display').textContent = profile?.full_name || user.email;
-  const dot = document.getElementById('role-dot');
-  const roleColors = { owner:'var(--amber)', staff:'var(--green)', wholesale:'var(--blue)', subscriber:'var(--muted2)' };
-  dot.style.background = roleColors[profile?.role] || 'var(--muted2)';
+  const role=profile?.role||'subscriber';
+  const isStaff=['owner','staff'].includes(role);
 
-  // Role-based UI
-  const role = profile?.role || 'subscriber';
-  const isStaff = ['owner','staff'].includes(role);
+  document.querySelector('[data-tab="orders"]').classList.toggle('hidden',!isStaff);
+  document.querySelector('[data-tab="roast"]').classList.toggle('hidden',!isStaff);
+  document.querySelector('[data-tab="output"]').classList.toggle('hidden',!isStaff);
+  document.querySelector('[data-tab="portal"]').classList.toggle('hidden',isStaff);
+  document.querySelector('[data-tab="admin"]').classList.toggle('hidden',role!=='owner');
+  document.querySelector('[data-tab="catalog"]').classList.toggle('hidden',role!=='owner');
+  document.getElementById('btn-new-cycle').style.display=isStaff?'block':'none';
+  document.getElementById('btn-add-order').style.display=isStaff?'inline-block':'none';
+  if(document.getElementById('csv-card')) document.getElementById('csv-card').style.display=isStaff?'block':'none';
 
-  // Show/hide tabs
-  document.querySelector('[data-tab="orders"]').classList.toggle('hidden', !isStaff);
-  document.querySelector('[data-tab="roast"]').classList.toggle('hidden', !isStaff);
-  document.querySelector('[data-tab="bags"]').classList.toggle('hidden', !isStaff);
-  document.querySelector('[data-tab="green"]').classList.toggle('hidden', !isStaff);
-  document.querySelector('[data-tab="inventory"]').classList.toggle('hidden', !isStaff);
-  document.querySelector('[data-tab="portal"]').classList.toggle('hidden', isStaff);
-  document.querySelector('[data-tab="admin"]').classList.toggle('hidden', role !== 'owner');
-  document.getElementById('btn-new-cycle').style.display = isStaff ? 'block' : 'none';
-  if (document.getElementById('csv-card')) document.getElementById('csv-card').style.display = isStaff ? 'block' : 'none';
-  if (document.getElementById('btn-add-order')) document.getElementById('btn-add-order').style.display = isStaff ? 'inline-block' : 'none';
-
-  // Load coffees first
   await loadCoffees();
-  populateCoffeeDropdowns();
-
-  // Load cycles
   await loadCycles();
 
-  if (isStaff) {
+  if(isStaff){
     await loadOrders();
-    await loadInventory();
     document.querySelector('[data-tab="orders"]').click();
   } else {
-    // Customer portal
-    document.getElementById('portal-name').textContent = profile?.full_name || '';
+    document.getElementById('portal-sub').textContent=`Welcome back, ${profile?.full_name||''}`;
     document.querySelector('[data-tab="portal"]').click();
-    await loadPortalOrders();
+    if(profile?.pending_approval){
+      document.getElementById('portal-pending').style.display='block';
+      document.getElementById('portal-form-wrap').style.display='none';
+    } else {
+      await loadPortalCoffees();
+      await loadPortalHistory();
+    }
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// CYCLES
-// ═══════════════════════════════════════════════════════════
+// ── COFFEES ────────────────────────────────────────
+async function loadCoffees() {
+  const {data}=await sb.from('coffees').select('*').eq('active',true).order('sort_order');
+  coffees=data||[];
+}
+
+function getCoffee(sku){return coffees.find(c=>c.sku===sku)||{sku,name:sku,water_loss:0.15,blend_recipe:{}};}
+
+function coffeeOpts(filter) {
+  return (filter?coffees.filter(filter):coffees).map(c=>`<option value="${c.sku}">${c.name}</option>`).join('');
+}
+
+// ── CYCLES ────────────────────────────────────────
 async function loadCycles() {
-  const { data } = await sb.from('cycles').select('*').order('created_at', { ascending:false });
-  cycles = data || [];
-  const sel = document.getElementById('cycle-select');
-  sel.innerHTML = '';
-
-  if (!cycles.length) {
-    // Auto-create first cycle
-    await createNewCycle(true);
-    return;
-  }
-
-  cycles.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.id;
-    opt.textContent = `${c.name} — ${c.status}`;
-    sel.appendChild(opt);
+  const {data}=await sb.from('cycles').select('*').order('created_at',{ascending:false});
+  cycles=data||[];
+  const sel=document.getElementById('cycle-select');
+  sel.innerHTML='';
+  if(!cycles.length){await createNewCycle(true);return;}
+  cycles.forEach(c=>{
+    const o=document.createElement('option');
+    o.value=c.id; o.textContent=c.name; sel.appendChild(o);
   });
-
-  currentCycleId = cycles[0].id;
-  document.getElementById('cycle-badge').textContent = cycles[0].name;
+  currentCycleId=cycles[0].id;
+  document.getElementById('cycle-pill').textContent=cycles[0].name;
 }
 
 async function createNewCycle(silent=false) {
-  const d = new Date();
-  const name = `Week of ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`;
-  const { data, error } = await sb.from('cycles').insert({ name, created_by: currentUser.id }).select().single();
-  if (error) { toast('Error creating cycle', 'error'); return; }
-  cycles.unshift(data);
-  currentCycleId = data.id;
-  const sel = document.getElementById('cycle-select');
-  const opt = document.createElement('option');
-  opt.value = data.id; opt.textContent = `${data.name} — open`;
-  sel.insertBefore(opt, sel.firstChild);
-  sel.value = data.id;
-  document.getElementById('cycle-badge').textContent = data.name;
-  if (!silent) { toast('New cycle created', 'success'); await loadOrders(); }
+  const d=new Date();
+  const name=`Week of ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`;
+  const {data,error}=await sb.from('cycles').insert({name,created_by:currentUser.id}).select().single();
+  if(error){toast('Error creating cycle','error');return;}
+  cycles.unshift(data); currentCycleId=data.id;
+  const sel=document.getElementById('cycle-select');
+  const o=document.createElement('option'); o.value=data.id; o.textContent=data.name;
+  sel.insertBefore(o,sel.firstChild); sel.value=data.id;
+  document.getElementById('cycle-pill').textContent=data.name;
+  if(!silent){toast('New cycle created','success');await loadOrders();}
 }
 
 function onCycleChange() {
-  const sel = document.getElementById('cycle-select');
-  currentCycleId = sel.value;
-  const cycle = cycles.find(c => c.id === currentCycleId);
-  if (cycle) document.getElementById('cycle-badge').textContent = cycle.name;
+  const sel=document.getElementById('cycle-select');
+  currentCycleId=sel.value;
+  const c=cycles.find(c=>c.id===currentCycleId);
+  if(c) document.getElementById('cycle-pill').textContent=c.name;
   loadOrders();
 }
 
-// ═══════════════════════════════════════════════════════════
-// COFFEES
-// ═══════════════════════════════════════════════════════════
-async function loadCoffees() {
-  const { data } = await sb.from('coffees').select('*').eq('active', true).order('name');
-  coffees = data || [];
-}
-
-function populateCoffeeDropdowns() {
-  ['f-coffee','p-coffee'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    sel.innerHTML = coffees.map(c => `<option value="${c.sku}">${c.name}</option>`).join('');
-  });
-}
-
-function getCoffee(sku) { return coffees.find(c => c.sku === sku) || { sku, name:sku, water_loss:0.15, blend_recipe:{} }; }
-
-// ═══════════════════════════════════════════════════════════
-// ORDERS
-// ═══════════════════════════════════════════════════════════
+// ── ORDERS ─────────────────────────────────────────
 async function loadOrders() {
-  if (!currentCycleId) return;
-  const tbody = document.getElementById('orders-tbody');
-  tbody.innerHTML = '<tr><td colspan="11" class="loading"><div class="spinner"></div> Loading...</td></tr>';
-  const { data, error } = await sb.from('orders').select('*').eq('cycle_id', currentCycleId).order('created_at');
-  if (error) { toast('Error loading orders', 'error'); return; }
-  orders = data || [];
+  if(!currentCycleId) return;
+  document.getElementById('orders-tbody').innerHTML='<tr><td colspan="11" class="loading"><div class="spinner"></div></td></tr>';
+  const {data}=await sb.from('orders').select('*').eq('cycle_id',currentCycleId).order('created_at');
+  orders=data||[];
   renderOrdersTable();
   updateStats();
 }
 
 function renderOrdersTable() {
-  const tbody = document.getElementById('orders-tbody');
-  if (!orders.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">No orders yet for this cycle.</td></tr>'; return; }
-  tbody.innerHTML = orders.map((o,i) => `
+  const tbody=document.getElementById('orders-tbody');
+  if(!orders.length){tbody.innerHTML='<tr><td colspan="11" class="empty">No orders yet for this cycle.</td></tr>';return;}
+  tbody.innerHTML=orders.map((o,i)=>`
     <tr>
-      <td class="mono" style="color:var(--muted);font-size:11px;">${i+1}</td>
-      <td><div style="font-weight:500;">${o.customer_name}</div><div style="font-size:11px;color:var(--muted);">${o.city||''} ${o.state||''}</div></td>
-      <td><span class="badge ${o.order_type==='subscription'?'badge-blue':o.order_type==='wholesale'?'badge-amber':'badge-gray'}">${o.order_type}</span></td>
-      <td>${o.coffee_name}</td>
+      <td class="mono" style="color:var(--ink3);font-size:11px;">${i+1}</td>
+      <td><div style="font-weight:600;">${o.customer_name}</div><div style="font-size:11px;color:var(--ink3);">${o.city||''} ${o.state||''}</div></td>
+      <td><span class="badge ${o.order_type==='wholesale'?'badge-gold':o.order_type==='subscription'?'badge-green':'badge-gray'}">${TYPE_L[o.order_type]||o.order_type}</span></td>
+      <td style="font-weight:500;">${o.coffee_name}</td>
       <td><span class="sku">${o.coffee_sku}</span></td>
       <td class="mono">${o.size}</td>
       <td class="num mono">${o.qty}</td>
-      <td style="color:var(--muted2)">${GRIND_LABEL[o.grind]||o.grind}</td>
-      <td><span class="badge ${o.region==='pickup'?'badge-green':'badge-gray'}">${REGION_LABEL[o.region]||o.region}</span></td>
-      <td style="color:var(--muted);font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;">${o.notes||'—'}</td>
-      <td>${['owner','staff'].includes(currentProfile?.role)?`<button class="btn btn-danger btn-sm" onclick="deleteOrder('${o.id}')">✕</button>`:''}</td>
+      <td style="color:var(--ink3);">${GRIND_L[o.grind]||o.grind}</td>
+      <td><span class="badge ${o.region==='pickup'?'badge-green':'badge-gray'}">${REGION_L[o.region]||o.region}</span></td>
+      <td style="color:var(--ink3);font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.notes||'—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteOrder('${o.id}')">✕</button></td>
     </tr>`).join('');
 }
 
 function updateStats() {
-  document.getElementById('stat-orders').textContent = orders.length;
-  const totalBags = orders.reduce((s,o) => s+o.qty, 0);
-  document.getElementById('stat-bags').textContent = totalBags;
-  const totalLbs = orders.reduce((s,o) => s+(BAG_WEIGHTS[o.size]||0)*o.qty, 0);
-  document.getElementById('stat-lbs').textContent = totalLbs.toFixed(1);
-  const ships = orders.filter(o=>o.region==='ship').length;
-  const pickups = orders.filter(o=>o.region==='pickup').length;
-  document.getElementById('stat-ship').textContent = `${ships}/${pickups}`;
+  document.getElementById('stat-orders').textContent=orders.length;
+  document.getElementById('stat-bags').textContent=orders.reduce((s,o)=>s+o.qty,0);
+  document.getElementById('stat-lbs').textContent=orders.reduce((s,o)=>s+(BAG_W[o.size]||0)*o.qty,0).toFixed(1);
+  document.getElementById('stat-ship').textContent=`${orders.filter(o=>o.region==='ship').length} / ${orders.filter(o=>o.region==='pickup').length}`;
 }
 
+// ── LINE ITEMS ─────────────────────────────────────
 function toggleAddOrder() {
-  const f = document.getElementById('add-order-form');
-  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  const c=document.getElementById('add-order-card');
+  const showing=c.style.display!=='none';
+  c.style.display=showing?'none':'block';
+  if(!showing){lineItemCount=0;document.getElementById('line-items-container').innerHTML='';addLineItem();}
+}
+
+function addLineItem() {
+  const id=lineItemCount++;
+  const container=document.getElementById('line-items-container');
+  const div=document.createElement('div');
+  div.className='line-item-row'; div.id=`li-${id}`;
+  div.innerHTML=`
+    <div class="form-group">${id===0?'<label>Coffee</label>':''}<select id="li-coffee-${id}">${coffeeOpts()}</select></div>
+    <div class="form-group">${id===0?'<label>Size</label>':''}
+      <select id="li-size-${id}">
+        <option value="5lb">5 lb</option><option value="2lb" selected>2 lb</option>
+        <option value="1lb">1 lb</option><option value="12oz">12 oz</option>
+        <option value="6oz">6 oz</option><option value="4oz">4 oz</option><option value="20lb">20 lb bulk</option>
+      </select>
+    </div>
+    <div class="form-group">${id===0?'<label>Grind</label>':''}
+      <select id="li-grind-${id}">
+        <option value="wb">Whole Bean</option><option value="drip">Drip</option>
+        <option value="coarse">Coarse</option><option value="fine">Fine</option>
+      </select>
+    </div>
+    <div class="form-group">${id===0?'<label>Qty</label>':''}<input type="number" id="li-qty-${id}" value="1" min="1"></div>
+    <button class="remove-btn" onclick="document.getElementById('li-${id}').remove()" ${id===0?'style="visibility:hidden;"':''}>×</button>`;
+  container.appendChild(div);
 }
 
 async function saveOrder() {
-  if (!currentCycleId) { toast('No active cycle', 'warn'); return; }
-  const customer = document.getElementById('f-customer').value.trim();
-  if (!customer) { toast('Please enter a customer name', 'warn'); return; }
-  const sku = document.getElementById('f-coffee').value;
-  const coffee = getCoffee(sku);
-  const order = {
-    cycle_id: currentCycleId,
-    customer_name: customer,
-    profile_id: currentUser.id,
-    order_type: document.getElementById('f-type').value,
-    region: document.getElementById('f-region').value,
-    coffee_sku: sku,
-    coffee_name: coffee.name,
-    qty: parseInt(document.getElementById('f-qty').value)||1,
-    size: document.getElementById('f-size').value,
-    grind: document.getElementById('f-grind').value,
-    notes: document.getElementById('f-notes').value,
-    source_order_id: 'manual-' + Date.now(),
-  };
-  const { error } = await sb.from('orders').insert(order);
-  if (error) { toast('Error saving order: ' + error.message, 'error'); return; }
-  toast('Order saved', 'success');
-  document.getElementById('f-customer').value = '';
-  document.getElementById('f-notes').value = '';
+  if(!currentCycleId){toast('No active cycle','warn');return;}
+  const customer=document.getElementById('f-customer').value.trim();
+  if(!customer){toast('Please enter a customer name','warn');return;}
+  const rows=document.querySelectorAll('[id^="li-"]');
+  const toInsert=[];
+  rows.forEach(row=>{
+    const id=row.id.replace('li-','');
+    const sku=document.getElementById(`li-coffee-${id}`)?.value;
+    if(!sku) return;
+    const coffee=getCoffee(sku);
+    toInsert.push({
+      cycle_id:currentCycleId,profile_id:currentUser.id,
+      customer_name:customer,order_type:document.getElementById('f-type').value,
+      region:document.getElementById('f-region').value,
+      coffee_sku:sku,coffee_name:coffee.name,
+      qty:parseInt(document.getElementById(`li-qty-${id}`)?.value)||1,
+      size:document.getElementById(`li-size-${id}`)?.value,
+      grind:document.getElementById(`li-grind-${id}`)?.value,
+      notes:document.getElementById('f-notes').value,
+      source_order_id:'manual-'+Date.now(),
+    });
+  });
+  if(!toInsert.length){toast('Add at least one coffee','warn');return;}
+  const {error}=await sb.from('orders').insert(toInsert);
+  if(error){toast('Error: '+error.message,'error');return;}
+  toast(`${toInsert.length} line${toInsert.length>1?'s':''} saved`,'success');
+  document.getElementById('f-customer').value='';
+  document.getElementById('f-notes').value='';
   toggleAddOrder();
   await loadOrders();
 }
 
 async function deleteOrder(id) {
-  if (!confirm('Delete this order?')) return;
-  const { error } = await sb.from('orders').delete().eq('id', id);
-  if (error) { toast('Error deleting order', 'error'); return; }
-  toast('Order deleted', 'success');
+  if(!confirm('Delete this order?')) return;
+  await sb.from('orders').delete().eq('id',id);
+  toast('Deleted','success');
   await loadOrders();
 }
 
-// ═══════════════════════════════════════════════════════════
-// CSV IMPORT
-// ═══════════════════════════════════════════════════════════
-function handleDrop(e) {
-  e.preventDefault(); e.currentTarget.classList.remove('drag');
-  const file = e.dataTransfer.files[0];
-  if (file?.name.endsWith('.csv')) handleCSV(file);
-  else toast('Please drop a .csv file', 'warn');
-}
+// ── CSV IMPORT ─────────────────────────────────────
+function handleDrop(e){e.preventDefault();e.currentTarget.classList.remove('drag');const f=e.dataTransfer.files[0];if(f?.name.endsWith('.csv'))handleCSV(f);else toast('Please drop a .csv file','warn');}
 
 async function handleCSV(file) {
-  if (!currentCycleId) { toast('No active cycle', 'warn'); return; }
-  const reader = new FileReader();
-  reader.onload = async e => {
-    const lines = e.target.result.split('\n');
-    const headers = parseCSVLine(lines[0]);
-    const col = name => headers.findIndex(h => h.trim().toLowerCase() === name.toLowerCase());
-    const cols = {
-      lineitemname: col('Lineitem name'), lineitemqty: col('Lineitem quantity'),
-      shipping: col('Shipping Name'), notes: col('Notes'), method: col('Shipping Method'),
-      city: col('Shipping City'), state: col('Shipping Province Name'), tags: col('Tags'),
-    };
-    const toInsert = [];
-    for (let i = 1; i < lines.length; i++) {
-      if (!lines[i].trim()) continue;
-      const row = parseCSVLine(lines[i]);
-      if (row.length < 20) continue;
-      const lineItemName = (row[cols.lineitemname]||'').trim();
-      if (!lineItemName) continue;
-      const { sku, size, grind } = parseProductName(lineItemName);
-      const coffee = getCoffee(sku);
-      const notes = (row[cols.notes]||'').trim();
+  if(!currentCycleId){toast('No active cycle','warn');return;}
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const lines=e.target.result.split('\n');
+    const headers=parseCSVLine(lines[0]);
+    const col=n=>headers.findIndex(h=>h.trim().toLowerCase()===n.toLowerCase());
+    const C={lineitemname:col('Lineitem name'),lineitemqty:col('Lineitem quantity'),shipping:col('Shipping Name'),notes:col('Notes'),method:col('Shipping Method'),city:col('Shipping City'),state:col('Shipping Province Name'),tags:col('Tags')};
+    const toInsert=[];
+    for(let i=1;i<lines.length;i++){
+      if(!lines[i].trim()) continue;
+      const row=parseCSVLine(lines[i]);
+      if(row.length<20) continue;
+      const item=(row[C.lineitemname]||'').trim();
+      if(!item) continue;
+      const {sku,size,grind}=parseProductName(item);
+      const coffee=getCoffee(sku);
+      const notes=(row[C.notes]||'').trim();
       toInsert.push({
-        cycle_id: currentCycleId, profile_id: currentUser.id,
-        customer_name: row[cols.shipping] || 'Shopify Customer',
-        order_type: (row[cols.tags]||'').includes('subscription') ? 'subscription' : 'online',
-        region: notes.toLowerCase().includes('pick up') ? 'pickup' : 'ship',
-        coffee_sku: sku, coffee_name: coffee.name,
-        qty: parseInt(row[cols.lineitemqty])||1, size, grind, notes,
-        shipping_method: row[cols.method]||'',
-        city: row[cols.city]||'', state: row[cols.state]||'',
-        source_order_id: 'shopify-' + Date.now() + '-' + i,
+        cycle_id:currentCycleId,profile_id:currentUser.id,
+        customer_name:row[C.shipping]||'Shopify Customer',
+        order_type:(row[C.tags]||'').includes('subscription')?'subscription':'online',
+        region:notes.toLowerCase().includes('pick up')?'pickup':'ship',
+        coffee_sku:sku,coffee_name:coffee.name,
+        qty:parseInt(row[C.lineitemqty])||1,size,grind,notes,
+        shipping_method:row[C.method]||'',city:row[C.city]||'',state:row[C.state]||'',
+        source_order_id:'shopify-'+i+'-'+Date.now(),
       });
     }
-    if (toInsert.length) {
-      const { error } = await sb.from('orders').insert(toInsert);
-      if (error) { toast('Import error: ' + error.message, 'error'); return; }
-      toast(`Imported ${toInsert.length} orders`, 'success');
-      await loadOrders();
-    } else toast('No orders found in CSV', 'warn');
+    if(!toInsert.length){toast('No valid orders found','warn');return;}
+    const {error}=await sb.from('orders').insert(toInsert);
+    if(error){toast('Import error: '+error.message,'error');return;}
+    toast(`Imported ${toInsert.length} orders`,'success');
+    await loadOrders();
   };
   reader.readAsText(file);
 }
 
-function parseCSVLine(line) {
-  const result = []; let current = ''; let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    if (line[i]==='"') inQuotes=!inQuotes;
-    else if (line[i]===',' && !inQuotes) { result.push(current); current=''; }
-    else current+=line[i];
-  }
-  result.push(current); return result;
+function parseCSVLine(line){const r=[];let cur='',q=false;for(let i=0;i<line.length;i++){if(line[i]==='"')q=!q;else if(line[i]===',' && !q){r.push(cur);cur='';}else cur+=line[i];}r.push(cur);return r;}
+
+function parseProductName(name){
+  let sku='LOCO',size='2lb',grind='wb';
+  const l=name.toLowerCase();
+  const map=[['lakeside','LAKE'],['ship canal','SHIP'],['locofocos','LOCO'],['decaf lighter','SOD'],['cross current','CRSC'],['seasonal','SEBD'],['nove','9to5'],['aldrich','1895'],['roaster','SEBD'],['baskette','BSKT'],['costa rica','CRHS'],['ethiopia','ETTK'],['peru','PECL'],['dord','DOSD']];
+  for(const [k,v] of map){if(l.includes(k)){sku=v;break;}}
+  if(/5\s*(lb|pound)/i.test(name)) size='5lb';
+  else if(/2\s*(lb|pound)/i.test(name)) size='2lb';
+  else if(/1\s*(lb|pound)/i.test(name)) size='1lb';
+  else if(/12\s*oz/i.test(name)) size='12oz';
+  else if(/6\s*oz/i.test(name)) size='6oz';
+  else if(/4\s*oz/i.test(name)) size='4oz';
+  else if(/20\s*lb|bulk/i.test(name)) size='20lb';
+  if(/whole\s*bean|wholebean/i.test(name)) grind='wb';
+  else if(/drip/i.test(name)) grind='drip';
+  else if(/coarse|french/i.test(name)) grind='coarse';
+  else if(/fine|espresso/i.test(name)) grind='fine';
+  return {sku,size,grind};
 }
 
-function parseProductName(name) {
-  let sku='LOCO', size='2lb', grind='wb';
-  const lower = name.toLowerCase();
-  const skuMap = [
-    ['lakeside','LAKE'],['ship canal','SHIP'],['locofocos','LOCO'],['loco','LOCO'],
-    ['decaf','SOD'],['cross current','CRSC'],['seasonal','SEBD'],['nove','9to5'],
-    ['aldrich','1895'],['roaster','SEBD'],['baskette','BSKT'],['costa rica','CRHS'],
-    ['ethiopia','ETTK'],['peru','PECL'],['guatemala','GMBA'],
-  ];
-  for (const [key, val] of skuMap) { if (lower.includes(key)) { sku=val; break; } }
-  if (/5\s*(lb|pound)/i.test(name)) size='5lb';
-  else if (/2\s*(lb|pound)/i.test(name)) size='2lb';
-  else if (/1\s*(lb|pound)/i.test(name)) size='1lb';
-  else if (/12\s*oz/i.test(name)) size='12oz';
-  else if (/6\s*oz/i.test(name)) size='6oz';
-  else if (/4\s*oz/i.test(name)) size='4oz';
-  else if (/20\s*lb|bulk/i.test(name)) size='20lb';
-  if (/whole\s*bean|wholebean/i.test(name)) grind='wb';
-  else if (/drip/i.test(name)) grind='drip';
-  else if (/espresso/i.test(name)) grind='espresso';
-  else if (/french/i.test(name)) grind='french';
-  return { sku, size, grind };
-}
+// ── ROAST SCHEDULE ─────────────────────────────────
+function generateSchedule() {
+  const needed={};
+  orders.forEach(o=>{needed[o.coffee_sku]=(needed[o.coffee_sku]||0)+(BAG_W[o.size]||0)*o.qty;});
 
-// ═══════════════════════════════════════════════════════════
-// ROAST SCHEDULE
-// ═══════════════════════════════════════════════════════════
-function generateRoastSchedule() {
-  const needed = {};
-  orders.forEach(o => { needed[o.coffee_sku] = (needed[o.coffee_sku]||0) + (BAG_WEIGHTS[o.size]||0)*o.qty; });
-  const rows = []; const dayTotals = {MON:0,TUE:0,WED:0,WKND:0}; let dayIdx = 0;
-  Object.entries(needed).forEach(([sku, roastedNeed]) => {
-    const coffee = getCoffee(sku);
-    const wl = coffee.water_loss || 0.15;
-    const onHand = inventory[sku] || 0;
-    const netToRoast = Math.max(0, roastedNeed - onHand);
-    if (netToRoast <= 0) { rows.push({sku,name:coffee.name,onHand,totalNeed:roastedNeed,netToRoast:0,greenNeeded:0,batches:0,batchType:'none',day:'—',output:0,surplus:onHand-roastedNeed,waterLoss:wl}); return; }
-    const greenNeeded = netToRoast / (1 - wl);
-    const fullBatches = Math.floor(greenNeeded / 10);
-    const remainder = greenNeeded % 10;
-    const isPartial = remainder > 0.01;
-    const totalBatches = fullBatches + (isPartial ? 1 : 0);
-    const batchType = totalBatches===1&&isPartial ? 'partial' : isPartial ? 'full+partial' : 'full';
-    const output = fullBatches*10*(1-wl) + (isPartial ? remainder*(1-wl) : 0);
-    const day = DAYS[dayIdx % 4];
-    dayTotals[day] += totalBatches;
-    if (dayTotals[day] >= 8) dayIdx++;
-    rows.push({sku,name:coffee.name,onHand,totalNeed:roastedNeed,netToRoast,greenNeeded,batches:totalBatches,batchType,day,output,surplus:output-netToRoast,waterLoss:wl,fullBatches,remainder:isPartial?remainder:0,blendRecipe:coffee.blend_recipe||{}});
+  const rows=[];
+  const originTotals={};
+
+  Object.entries(needed).forEach(([sku,lbs])=>{
+    const coffee=getCoffee(sku);
+    const wl=coffee.water_loss||0.15;
+    const greenNeeded=lbs/(1-wl);
+    const fullBatches=Math.floor(greenNeeded/10);
+    const remainder=parseFloat((greenNeeded%10).toFixed(3));
+    const estOutput=parseFloat((greenNeeded*(1-wl)).toFixed(3));
+    const recipe=coffee.blend_recipe||{};
+    Object.entries(recipe).forEach(([origin,pct])=>{
+      if(!originTotals[origin]) originTotals[origin]={total:0,usedIn:[]};
+      originTotals[origin].total+=greenNeeded*pct;
+      if(!originTotals[origin].usedIn.includes(coffee.name)) originTotals[origin].usedIn.push(coffee.name);
+    });
+    rows.push({sku,name:coffee.name,lbs,wl,greenNeeded,fullBatches,remainder,estOutput});
   });
-  roastSchedule = rows;
-  renderRoastTable(rows, dayTotals);
-  renderGreenTable();
-}
 
-function renderRoastTable(rows, dayTotals) {
-  const tbody = document.getElementById('roast-tbody');
-  if (!rows.length) { tbody.innerHTML='<tr><td colspan="12" class="empty">No orders.</td></tr>'; return; }
-  tbody.innerHTML = rows.map(r => `<tr>
-    <td style="font-weight:500;">${r.name}</td>
+  roastSchedule=rows;
+
+  // Roast tab table
+  const tbody=document.getElementById('roast-tbody');
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="8" class="empty">No orders in this cycle.</td></tr>';return;}
+
+  tbody.innerHTML=rows.map(r=>`<tr>
+    <td style="font-weight:600;">${r.name}</td>
     <td><span class="sku">${r.sku}</span></td>
-    <td class="num mono">${r.onHand.toFixed(2)}</td>
-    <td class="num mono">${r.totalNeed.toFixed(2)}</td>
-    <td class="num mono" style="color:var(--amber2)">${r.netToRoast.toFixed(2)}</td>
-    <td class="num" style="color:var(--muted2)">${(r.waterLoss*100).toFixed(1)}%</td>
-    <td class="num mono" style="color:var(--amber3)">${r.greenNeeded.toFixed(2)}</td>
-    <td class="num mono">${r.batches}</td>
-    <td><span class="badge ${r.batchType==='partial'?'badge-amber':r.batchType==='none'?'badge-gray':'badge-green'}">${r.batchType}</span></td>
-    <td class="mono" style="font-size:12px;">${r.day}</td>
-    <td class="num mono">${r.output.toFixed(2)}</td>
-    <td><span class="badge ${r.surplus>0?'badge-green':r.surplus<-0.5?'badge-red':'badge-gray'} mono">${r.surplus>0?'+':''}${r.surplus.toFixed(2)}</span></td>
+    <td class="num mono">${r.lbs.toFixed(2)}</td>
+    <td class="num" style="color:var(--ink3);">${(r.wl*100).toFixed(1)}%</td>
+    <td class="num mono" style="font-weight:600;color:var(--rust);">${r.greenNeeded.toFixed(2)}</td>
+    <td class="num mono" style="font-weight:700;font-size:18px;">${r.fullBatches}</td>
+    <td class="num mono" style="color:var(--gold);">${r.remainder>0.05?r.remainder.toFixed(2):'—'}</td>
+    <td class="num mono">${r.estOutput.toFixed(2)}</td>
   </tr>`).join('');
-  ['mon','tue','wed','wknd'].forEach((d,i) => {
-    const key = DAYS[i];
-    const dayRows = rows.filter(r=>r.day===key);
-    const el = document.getElementById(`day-${d}`);
-    if (!dayRows.length) { el.innerHTML='<div style="color:var(--muted);font-size:12px;">No batches</div>'; return; }
-    const totB = dayRows.reduce((s,r)=>s+r.batches,0);
-    const totG = dayRows.reduce((s,r)=>s+r.greenNeeded,0);
-    el.innerHTML = dayRows.map(r=>`<div class="day-batch"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--amber)">${r.sku}</span><span style="font-size:11px;">${r.batches}× ${r.fullBatches>0?'10lb':''}${r.remainder>0?` +${r.remainder.toFixed(1)}lb`:''}</span></div>`).join('')
-      + `<div class="day-total"><span>${totB} batches</span><span>${totG.toFixed(0)}lb</span></div>`;
-  });
-  const totB = rows.reduce((s,r)=>s+r.batches,0);
-  const totG = rows.reduce((s,r)=>s+r.greenNeeded,0);
-  const totO = rows.reduce((s,r)=>s+r.output,0);
-  const daysUsed = Object.values(dayTotals).filter(v=>v>0).length;
-  document.getElementById('tot-batches').textContent = totB;
-  document.getElementById('tot-green').textContent = totG.toFixed(1)+' lb';
-  document.getElementById('tot-output').textContent = totO.toFixed(1)+' lb';
-  document.getElementById('tot-days').textContent = daysUsed;
-  document.getElementById('roast-totals').style.display = 'block';
+
+  const totBatches=rows.reduce((s,r)=>s+r.fullBatches+(r.remainder>0.05?1:0),0);
+  const totGreen=rows.reduce((s,r)=>s+r.greenNeeded,0);
+  const totOutput=rows.reduce((s,r)=>s+r.estOutput,0);
+  document.getElementById('rs-batches').textContent=totBatches;
+  document.getElementById('rs-green').textContent=totGreen.toFixed(1);
+  document.getElementById('rs-output').textContent=totOutput.toFixed(1);
+  document.getElementById('rs-skus').textContent=rows.length;
+  document.getElementById('roast-stats').style.display='grid';
+
+  document.getElementById('green-tbody').innerHTML=Object.entries(originTotals).sort((a,b)=>b[1].total-a[1].total).map(([o,d])=>`
+    <tr><td style="font-weight:600;">${o}</td><td class="num mono" style="font-weight:700;color:var(--rust);">${d.total.toFixed(2)}</td><td style="color:var(--ink3);font-size:12px;">${d.usedIn.join(', ')}</td></tr>`).join('');
+  document.getElementById('green-card').style.display='block';
+
+  buildPrintSheets(rows,originTotals);
 }
 
-// ═══════════════════════════════════════════════════════════
-// BAGS
-// ═══════════════════════════════════════════════════════════
-function renderBagsTable() {
-  const agg = {};
-  orders.forEach(o => {
-    if (!agg[o.coffee_sku]) agg[o.coffee_sku] = {name:o.coffee_name,sku:o.coffee_sku,sizes:{},grinds:{},notes:[]};
-    agg[o.coffee_sku].sizes[o.size] = (agg[o.coffee_sku].sizes[o.size]||0)+o.qty;
-    agg[o.coffee_sku].grinds[o.grind] = (agg[o.coffee_sku].grinds[o.grind]||0)+o.qty;
-    if (o.notes) agg[o.coffee_sku].notes.push(o.notes);
+// ── PRINT SHEETS ───────────────────────────────────
+function buildPrintSheets(rows,originTotals) {
+  const cycle=cycles.find(c=>c.id===currentCycleId);
+  const cycleName=cycle?.name||'Current Cycle';
+  const dateStr=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  const totBatches=rows.reduce((s,r)=>s+r.fullBatches+(r.remainder>0.05?1:0),0);
+
+  document.getElementById('roast-sheet-meta').textContent=`${cycleName} · Generated ${dateStr}`;
+  document.getElementById('roast-sheet-batches').textContent=totBatches;
+
+  document.getElementById('roast-print-tbody').innerHTML=rows.map((r,i)=>`
+    <tr style="${i%2===0?'background:var(--paper2);':''}">
+      <td class="mono" style="color:var(--ink3);">${i+1}</td>
+      <td style="font-weight:700;">${r.name}</td>
+      <td><span class="sku">${r.sku}</span></td>
+      <td class="num mono">${r.lbs.toFixed(2)}</td>
+      <td class="num mono" style="font-weight:700;color:var(--rust);">${r.greenNeeded.toFixed(2)}</td>
+      <td class="num mono" style="font-size:18px;font-weight:700;">${r.fullBatches}</td>
+      <td class="num mono" style="color:var(--gold);">${r.remainder>0.05?r.remainder.toFixed(2):'—'}</td>
+      <td class="num mono">${r.estOutput.toFixed(2)}</td>
+      <td style="border-bottom:1px solid var(--rule);min-width:80px;"></td>
+    </tr>`).join('');
+
+  document.getElementById('green-print-tbody').innerHTML=Object.entries(originTotals).sort((a,b)=>b[1].total-a[1].total).map(([o,d])=>`
+    <tr><td style="font-weight:600;">${o}</td><td class="num mono" style="font-weight:700;">${d.total.toFixed(2)}</td><td style="font-size:12px;color:var(--ink3);">${d.usedIn.join(', ')}</td></tr>`).join('');
+
+  // Bagging sheet
+  const bagAgg={};
+  orders.forEach(o=>{
+    if(!bagAgg[o.coffee_sku]) bagAgg[o.coffee_sku]={name:o.coffee_name,sku:o.coffee_sku,sizes:{},grinds:{},notes:[]};
+    bagAgg[o.coffee_sku].sizes[o.size]=(bagAgg[o.coffee_sku].sizes[o.size]||0)+o.qty;
+    bagAgg[o.coffee_sku].grinds[o.grind]=(bagAgg[o.coffee_sku].grinds[o.grind]||0)+o.qty;
+    if(o.notes) bagAgg[o.coffee_sku].notes.push(o.notes);
   });
-  const rows = Object.values(agg);
-  const tbody = document.getElementById('bags-tbody');
-  if (!rows.length) { tbody.innerHTML='<tr><td colspan="13" class="empty">No orders.</td></tr>'; return; }
-  let tot5=0,tot2=0,tot1=0,totS=0,totG=0;
-  tbody.innerHTML = rows.map(r => {
-    const s5=r.sizes['5lb']||0, s2=r.sizes['2lb']||0, s1=(r.sizes['1lb']||0)+(r.sizes['12oz']||0);
-    const s6=r.sizes['6oz']||0, s4=r.sizes['4oz']||0, retail=s5+s2+s1+s6+s4;
-    const gWB=r.grinds['wb']||0, gDrip=r.grinds['drip']||0, gEsp=r.grinds['espresso']||0, gFr=r.grinds['french']||0;
-    const grindTot=gDrip+gEsp+gFr+(r.grinds['pour']||0);
-    tot5+=s5; tot2+=s2; tot1+=s1; totS+=s6+s4; totG+=grindTot;
-    return `<tr>
-      <td style="font-weight:500;">${r.name}</td><td><span class="sku">${r.sku}</span></td>
-      <td class="num mono">${s5||'—'}</td><td class="num mono">${s2||'—'}</td>
-      <td class="num mono">${s1||'—'}</td><td class="num mono">${s6||'—'}</td><td class="num mono">${s4||'—'}</td>
-      <td class="num mono" style="color:var(--amber2);font-weight:600;">${retail}</td>
-      <td class="num mono">${gWB||'—'}</td><td class="num mono">${gDrip||'—'}</td>
-      <td class="num mono">${gEsp||'—'}</td><td class="num mono">${gFr||'—'}</td>
-      <td style="font-size:11px;color:var(--muted);">${[...new Set(r.notes.filter(Boolean))].join('; ')||'—'}</td>
+
+  let grandTotal=0;
+  document.getElementById('bag-print-tbody').innerHTML=Object.values(bagAgg).map((r,i)=>{
+    const s5=r.sizes['5lb']||0,s2=r.sizes['2lb']||0,s1=(r.sizes['1lb']||0)+(r.sizes['12oz']||0),s6=r.sizes['6oz']||0,s4=r.sizes['4oz']||0,tot=s5+s2+s1+s6+s4;
+    grandTotal+=tot;
+    const n=[...new Set(r.notes.filter(Boolean))].join('; ');
+    return `<tr style="${i%2===0?'background:var(--paper2);':''}">
+      <td style="font-weight:700;">${r.name}</td><td><span class="sku">${r.sku}</span></td>
+      <td class="num mono">${s5||'—'}</td><td class="num mono">${s2||'—'}</td><td class="num mono">${s1||'—'}</td>
+      <td class="num mono">${s6||'—'}</td><td class="num mono">${s4||'—'}</td>
+      <td class="num mono" style="font-weight:700;">${tot}</td>
+      <td class="num mono">${r.grinds['wb']||'—'}</td><td class="num mono">${r.grinds['drip']||'—'}</td>
+      <td class="num mono">${r.grinds['coarse']||'—'}</td><td class="num mono">${r.grinds['fine']||'—'}</td>
+      <td style="font-size:11px;color:var(--ink3);">${n||'—'}</td>
     </tr>`;
   }).join('');
-  document.getElementById('bag-5lb').textContent=tot5;
-  document.getElementById('bag-2lb').textContent=tot2;
-  document.getElementById('bag-1lb').textContent=tot1;
-  document.getElementById('bag-sample').textContent=totS;
-  document.getElementById('bag-grind').textContent=totG;
+
+  document.getElementById('bag-sheet-meta').textContent=`${cycleName} · Generated ${dateStr}`;
+  document.getElementById('bag-sheet-total').textContent=grandTotal;
+
   // Shipping
-  const shipOrders = orders.filter(o=>o.region==='ship');
-  const boxCounts = {};
-  shipOrders.forEach(o => {
-    const lbs = (BAG_WEIGHTS[o.size]||0)*o.qty;
-    const box = lbs <= 0.875 ? SHIP_BOXES[0] : lbs <= 1.9 ? SHIP_BOXES[1] : SHIP_BOXES[2];
-    boxCounts[box.type] = (boxCounts[box.type]||0)+1;
+  const shipOrders=orders.filter(o=>o.region==='ship');
+  const boxC={};
+  shipOrders.forEach(o=>{
+    const lbs=(BAG_W[o.size]||0)*o.qty;
+    const box=lbs<=0.875?SHIP_BOXES[0]:lbs<=1.9?SHIP_BOXES[1]:SHIP_BOXES[2];
+    boxC[box.type]=(boxC[box.type]||0)+1;
   });
-  let shipTotal = 0;
-  document.getElementById('ship-tbody').innerHTML = SHIP_BOXES.map(b => {
-    const c=boxCounts[b.type]||0; const sub=c*b.rate; shipTotal+=sub;
-    return `<tr><td>${b.type}</td><td class="num mono">$${b.rate}</td><td class="num mono">${c}</td><td class="num mono">$${sub.toFixed(2)}</td></tr>`;
-  }).join('');
-  document.getElementById('ship-total').textContent='$'+shipTotal.toFixed(2);
+  let shipTotal=0;
+  document.getElementById('shipping-tbody').innerHTML=SHIP_BOXES.map(b=>{
+    const c=boxC[b.type]||0;if(!c) return '';
+    const sub=c*b.rate;shipTotal+=sub;
+    return `<tr><td>${b.type}</td><td class="num mono">${c}</td><td class="num mono">$${b.rate}</td><td class="num mono" style="font-weight:700;">$${sub.toFixed(2)}</td></tr>`;
+  }).join('')+`<tr style="border-top:2px solid var(--rule2);"><td colspan="3" style="font-weight:700;text-align:right;padding-right:10px;">Total Postage</td><td class="num mono" style="font-weight:700;color:var(--rust);">$${shipTotal.toFixed(2)}</td></tr>`;
 }
 
-// ═══════════════════════════════════════════════════════════
-// GREEN BEANS
-// ═══════════════════════════════════════════════════════════
-function renderGreenTable() {
-  const tbody = document.getElementById('green-tbody');
-  const originTotals = {};
-  const originCols = ['Brazil FdI','Honduras Capucas','Guatemala Monja','Sumatra','Ethiopia','Peru Ely','Decaf Colombia'];
-  tbody.innerHTML = roastSchedule.filter(r=>r.greenNeeded>0).map(r => {
-    const recipe = r.blendRecipe || {};
-    const cells = originCols.map(o => {
-      const pct = recipe[o]||0; const lbs = r.greenNeeded*pct;
-      if (lbs>0) originTotals[o]=(originTotals[o]||0)+lbs;
-      return `<td class="num mono">${lbs>0?lbs.toFixed(2):'—'}</td>`;
+function printSheet(type) {
+  const roastEl=document.getElementById('roast-sheet');
+  const bagEl=document.getElementById('bag-sheet');
+  const roastActions=roastEl.previousElementSibling;
+  const bagActions=bagEl.previousElementSibling;
+  if(type==='roast'){bagEl.style.display='none';bagActions.style.display='none';}
+  else{roastEl.style.display='none';roastActions.style.display='none';}
+  window.print();
+  roastEl.style.display='';bagEl.style.display='';roastActions.style.display='';bagActions.style.display='';
+}
+
+// ── CSV DOWNLOAD ───────────────────────────────────
+function downloadCSV(type) {
+  let csv='',filename='';
+  if(type==='roast'){
+    filename=`conduit-roast-${new Date().toISOString().split('T')[0]}.csv`;
+    csv='Coffee,SKU,Roasted Need (lb),Water Loss,Green Needed (lb),Full Batches,Remainder (lb),Est Output (lb)\n';
+    roastSchedule.forEach(r=>{csv+=`"${r.name}","${r.sku}","${r.lbs.toFixed(2)}","${(r.wl*100).toFixed(1)}%","${r.greenNeeded.toFixed(2)}","${r.fullBatches}","${r.remainder>0.05?r.remainder.toFixed(2):0}","${r.estOutput.toFixed(2)}"\n`;});
+  } else {
+    filename=`conduit-bags-${new Date().toISOString().split('T')[0]}.csv`;
+    csv='Coffee,SKU,5lb,2lb,1lb/12oz,6oz,4oz,Total,Whole Bean,Drip,Coarse,Fine,Notes\n';
+    const bagAgg={};
+    orders.forEach(o=>{
+      if(!bagAgg[o.coffee_sku]) bagAgg[o.coffee_sku]={name:o.coffee_name,sku:o.coffee_sku,sizes:{},grinds:{},notes:[]};
+      bagAgg[o.coffee_sku].sizes[o.size]=(bagAgg[o.coffee_sku].sizes[o.size]||0)+o.qty;
+      bagAgg[o.coffee_sku].grinds[o.grind]=(bagAgg[o.coffee_sku].grinds[o.grind]||0)+o.qty;
+      if(o.notes) bagAgg[o.coffee_sku].notes.push(o.notes);
     });
-    const otherLbs = Object.entries(recipe).filter(([k])=>!originCols.includes(k)).reduce((s,[k,v])=>s+r.greenNeeded*v,0);
-    if (otherLbs>0) originTotals['Other']=(originTotals['Other']||0)+otherLbs;
-    return `<tr><td style="font-weight:500;">${r.name}</td><td class="num mono">${r.netToRoast.toFixed(2)}</td><td class="num" style="color:var(--muted2)">${(r.waterLoss*100).toFixed(1)}%</td><td class="num mono" style="color:var(--amber3)">${r.greenNeeded.toFixed(2)}</td>${cells.join('')}<td class="num mono">${otherLbs>0?otherLbs.toFixed(2):'—'}</td></tr>`;
-  }).join('') || '<tr><td colspan="12" class="empty">No data.</td></tr>';
-  const grid = document.getElementById('green-totals-grid');
-  const entries = Object.entries(originTotals);
-  if (!entries.length) { grid.innerHTML='<div class="empty">No data yet.</div>'; return; }
-  grid.innerHTML = entries.map(([o,lbs]) => {
-    const inv = greenInv[o]||0; const need = Math.max(0,lbs-inv);
-    return `<div class="stat"><div class="stat-label">${o}</div><div class="stat-value" style="font-size:18px;">${lbs.toFixed(1)} lb</div><div class="stat-sub">${inv>0?`On hand: ${inv}lb · Need: ${need.toFixed(1)}lb`:'No inventory set'}</div></div>`;
-  }).join('');
-}
-
-// ═══════════════════════════════════════════════════════════
-// INVENTORY
-// ═══════════════════════════════════════════════════════════
-async function loadInventory() {
-  if (!currentCycleId) return;
-  const { data: invData } = await sb.from('inventory').select('*').eq('cycle_id', currentCycleId);
-  inventory = {};
-  (invData||[]).forEach(r => { inventory[r.coffee_sku] = r.on_hand_lbs; });
-  const { data: greenData } = await sb.from('green_inventory').select('*');
-  greenInv = {};
-  (greenData||[]).forEach(r => { greenInv[r.origin] = r.on_hand_lbs; });
-  renderInventoryTable();
-  renderGreenInvTable();
-}
-
-function renderInventoryTable() {
-  const tbody = document.getElementById('inv-tbody');
-  tbody.innerHTML = coffees.map(c => {
-    const onHand = inventory[c.sku]||0;
-    const status = onHand>=10?'badge-green':onHand>0?'badge-amber':'badge-red';
-    const statusText = onHand>=10?'OK':onHand>0?'Low':'Out';
-    return `<tr><td>${c.name}</td><td><span class="sku">${c.sku}</span></td>
-      <td class="num"><input class="inline-num" type="number" value="${onHand}" min="0" step="0.5" data-sku="${c.sku}" onchange="inventory['${c.sku}']=parseFloat(this.value)||0"></td>
-      <td><span class="badge ${status}">${statusText}</span></td></tr>`;
-  }).join('');
-}
-
-function renderGreenInvTable() {
-  const tbody = document.getElementById('green-inv-tbody');
-  const { data: origins } = { data: Object.entries(greenInv).length ? Object.entries(greenInv).map(([o,v])=>({origin:o,on_hand_lbs:v})) : [] };
-  // Use loaded green inventory data
-  tbody.innerHTML = ['Brazil FdI','Honduras Capucas','Guatemala Monja','Sumatra','Ethiopia','Peru Ely','Costa Rica','Decaf Colombia'].map(o => {
-    const onHand = greenInv[o]||0;
-    const status = onHand>100?'badge-green':onHand>0?'badge-amber':'badge-red';
-    return `<tr><td>${o}</td><td class="num mono">—</td><td class="num mono">—</td>
-      <td class="num"><input class="inline-num" type="number" value="${onHand}" min="0" step="1" onchange="greenInv['${o}']=parseFloat(this.value)||0"></td>
-      <td><span class="badge ${status}">${onHand>100?'Stocked':onHand>0?'Low':'Out'}</span></td></tr>`;
-  }).join('');
-}
-
-async function saveInventory() {
-  if (!currentCycleId) return;
-  const rows = Object.entries(inventory).map(([sku,lbs]) => ({ cycle_id:currentCycleId, coffee_sku:sku, on_hand_lbs:lbs, updated_by:currentUser.id }));
-  if (rows.length) {
-    const { error } = await sb.from('inventory').upsert(rows, { onConflict:'cycle_id,coffee_sku' });
-    if (error) { toast('Error saving inventory: '+error.message,'error'); return; }
+    Object.values(bagAgg).forEach(r=>{
+      const s5=r.sizes['5lb']||0,s2=r.sizes['2lb']||0,s1=(r.sizes['1lb']||0)+(r.sizes['12oz']||0),s6=r.sizes['6oz']||0,s4=r.sizes['4oz']||0;
+      csv+=`"${r.name}","${r.sku}","${s5}","${s2}","${s1}","${s6}","${s4}","${s5+s2+s1+s6+s4}","${r.grinds['wb']||0}","${r.grinds['drip']||0}","${r.grinds['coarse']||0}","${r.grinds['fine']||0}","${[...new Set(r.notes)].join('; ')}"\n`;
+    });
   }
-  // Save green inventory
-  const greenRows = Object.entries(greenInv).map(([origin,lbs]) => ({ origin, on_hand_lbs:lbs }));
-  if (greenRows.length) {
-    const { error } = await sb.from('green_inventory').upsert(greenRows, { onConflict:'origin' });
-    if (error) { toast('Error saving green inventory','error'); return; }
-  }
-  toast('Inventory saved', 'success');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=filename;a.click();
+  toast('CSV downloaded','success');
 }
 
-// ═══════════════════════════════════════════════════════════
-// CUSTOMER PORTAL
-// ═══════════════════════════════════════════════════════════
-async function placeCustomerOrder() {
-  if (!currentCycleId) { toast('No open cycle — contact your roaster', 'warn'); return; }
-  const sku = document.getElementById('p-coffee').value;
-  const coffee = getCoffee(sku);
-  const order = {
-    cycle_id: currentCycleId, profile_id: currentUser.id,
-    customer_name: currentProfile?.full_name || currentUser.email,
-    customer_email: currentUser.email,
-    order_type: 'subscription',
-    region: 'ship',
-    coffee_sku: sku, coffee_name: coffee.name,
-    qty: parseInt(document.getElementById('p-qty').value)||1,
-    size: document.getElementById('p-size').value,
-    grind: document.getElementById('p-grind').value,
-    notes: document.getElementById('p-notes').value,
-    source_order_id: 'portal-' + Date.now(),
-  };
-  const { error } = await sb.from('orders').insert(order);
-  if (error) { toast('Error placing order: '+error.message,'error'); return; }
-  toast('Order placed!', 'success');
-  document.getElementById('p-notes').value = '';
-  await loadPortalOrders();
-}
-
-async function loadPortalOrders() {
-  const { data } = await sb.from('orders').select('*').eq('profile_id', currentUser.id).order('created_at', {ascending:false});
-  const el = document.getElementById('portal-orders');
-  if (!data?.length) { el.innerHTML='<div class="empty">No orders yet.</div>'; return; }
-  el.innerHTML = data.map(o => `
-    <div class="order-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-weight:500;">${o.coffee_name}</div>
-        <span class="badge ${o.fulfilled?'badge-green':'badge-amber'}">${o.fulfilled?'Fulfilled':'Pending'}</span>
+// ── CUSTOMER PORTAL ────────────────────────────────
+async function loadPortalCoffees() {
+  const role=currentProfile?.role;
+  let query=sb.from('coffees').select('*').eq('active',true).eq('customer_facing',true).order('sort_order');
+  if(role!=='wholesale') query=query.in('visibility',['retail','both']);
+  const {data}=await query;
+  const grid=document.getElementById('portal-coffee-grid');
+  if(!data?.length){grid.innerHTML='<div class="empty">No coffees available. Please contact us.</div>';return;}
+  grid.innerHTML=data.map(c=>`
+    <div class="coffee-card" onclick="selectPortalCoffee('${c.sku}')">
+      <div class="coffee-card-name">${c.name}</div>
+      <div class="coffee-card-notes">${c.tasting_notes||''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <span class="badge badge-gray">${c.roast_level||'medium'}</span>
+        ${c.origin_region?`<span class="badge badge-gray">${c.origin_region}</span>`:''}
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:6px;">${o.size} · ${GRIND_LABEL[o.grind]||o.grind} · qty ${o.qty} · ${new Date(o.created_at).toLocaleDateString()}</div>
-      ${o.notes?`<div style="font-size:12px;color:var(--muted2);margin-top:4px;">${o.notes}</div>`:''}
+      ${c.description?`<button class="btn btn-ghost btn-sm" style="margin-top:10px;font-size:11px;" onclick="event.stopPropagation();showPopup('${c.sku}')">More info</button>`:''}
     </div>`).join('');
 }
 
-// ═══════════════════════════════════════════════════════════
-// ADMIN
-// ═══════════════════════════════════════════════════════════
+function selectPortalCoffee(sku) {
+  document.querySelectorAll('.coffee-card').forEach(c=>c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  const card=document.getElementById('portal-order-card');
+  card.style.display='block';
+  if(!document.getElementById('portal-line-items').children.length){
+    portalLineId=0;addPortalLine(sku);
+  } else {
+    const firstSel=document.querySelector('[id^="pl-coffee-"]');
+    if(firstSel) for(let o of firstSel.options) if(o.value===sku){firstSel.value=sku;break;}
+  }
+}
+
+function addPortalLine(preselect) {
+  const id=portalLineId++;
+  const role=currentProfile?.role;
+  const container=document.getElementById('portal-line-items');
+  const div=document.createElement('div');
+  div.className='line-item-row'; div.id=`pl-${id}`;
+  const opts=coffeeOpts(c=>c.customer_facing&&(role==='wholesale'||['retail','both'].includes(c.visibility)));
+  div.innerHTML=`
+    <div class="form-group">${id===0?'<label>Coffee</label>':''}<select id="pl-coffee-${id}">${opts}</select></div>
+    <div class="form-group">${id===0?'<label>Size</label>':''}
+      <select id="pl-size-${id}">
+        <option value="2lb" selected>2 lb</option><option value="1lb">1 lb</option>
+        <option value="5lb">5 lb</option><option value="12oz">12 oz</option>
+      </select>
+    </div>
+    <div class="form-group">${id===0?'<label>Grind</label>':''}
+      <select id="pl-grind-${id}">
+        <option value="wb">Whole Bean</option><option value="drip">Drip</option>
+        <option value="coarse">Coarse</option><option value="fine">Fine</option>
+      </select>
+    </div>
+    <div class="form-group">${id===0?'<label>Qty</label>':''}<input type="number" id="pl-qty-${id}" value="1" min="1"></div>
+    <button class="remove-btn" onclick="document.getElementById('pl-${id}').remove()" ${id===0?'style="visibility:hidden;"':''}>×</button>`;
+  container.appendChild(div);
+  if(preselect){const sel=document.getElementById(`pl-coffee-${id}`);if(sel)for(let o of sel.options)if(o.value===preselect){sel.value=preselect;break;}}
+}
+
+async function placePortalOrder() {
+  if(!currentCycleId){toast('No open cycle — please contact us','warn');return;}
+  const rows=document.querySelectorAll('[id^="pl-"]');
+  const toInsert=[];
+  rows.forEach(row=>{
+    const id=row.id.replace('pl-','');
+    const sku=document.getElementById(`pl-coffee-${id}`)?.value;
+    if(!sku) return;
+    const coffee=getCoffee(sku);
+    toInsert.push({
+      cycle_id:currentCycleId,profile_id:currentUser.id,
+      customer_name:currentProfile?.full_name||currentUser.email,
+      customer_email:currentUser.email,
+      order_type:currentProfile?.role==='wholesale'?'wholesale':'subscription',
+      region:'ship',coffee_sku:sku,coffee_name:coffee.name,
+      qty:parseInt(document.getElementById(`pl-qty-${id}`)?.value)||1,
+      size:document.getElementById(`pl-size-${id}`)?.value,
+      grind:document.getElementById(`pl-grind-${id}`)?.value,
+      notes:document.getElementById('portal-notes').value,
+      source_order_id:'portal-'+Date.now(),
+    });
+  });
+  const {error}=await sb.from('orders').insert(toInsert);
+  if(error){toast('Error: '+error.message,'error');return;}
+  toast('Order placed — thank you!','success');
+  document.getElementById('portal-notes').value='';
+  document.getElementById('portal-line-items').innerHTML='';
+  document.getElementById('portal-order-card').style.display='none';
+  document.querySelectorAll('.coffee-card').forEach(c=>c.classList.remove('selected'));
+  portalLineId=0;
+  await loadPortalHistory();
+}
+
+async function loadPortalHistory() {
+  const {data}=await sb.from('orders').select('*').eq('profile_id',currentUser.id).order('created_at',{ascending:false}).limit(20);
+  const el=document.getElementById('portal-history');
+  if(!data?.length){el.innerHTML='<div class="empty">No orders yet.</div>';return;}
+  el.innerHTML=data.map(o=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule);">
+      <div>
+        <div style="font-weight:600;">${o.coffee_name} · ${o.size} · ${GRIND_L[o.grind]||o.grind} · qty ${o.qty}</div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:2px;">${new Date(o.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+      </div>
+      <span class="badge ${o.fulfilled?'badge-green':'badge-rust'}">${o.fulfilled?'Fulfilled':'Pending'}</span>
+    </div>`).join('');
+}
+
+// ── INFO POPUP ─────────────────────────────────────
+function showPopup(sku) {
+  const c=getCoffee(sku);
+  document.getElementById('popup-name').textContent=c.name;
+  document.getElementById('popup-origin').textContent=c.origin_region||'';
+  document.getElementById('popup-desc').textContent=c.description||'';
+  document.getElementById('popup-notes').textContent=c.tasting_notes?`Tasting notes: ${c.tasting_notes}`:'';
+  document.getElementById('popup-tags').innerHTML=[
+    c.roast_level?`<span class="badge badge-rust">${c.roast_level}</span>`:'',
+    c.origin_region?`<span class="badge badge-gray">${c.origin_region}</span>`:'',
+  ].join('');
+  document.getElementById('info-popup').style.display='flex';
+}
+
+function closePopup(){document.getElementById('info-popup').style.display='none';}
+
+// ── ADMIN ──────────────────────────────────────────
 async function loadAdminUsers() {
-  const { data } = await sb.from('profiles').select('*').order('created_at');
-  const tbody = document.getElementById('admin-users-tbody');
-  if (!data?.length) { tbody.innerHTML='<tr><td colspan="5" class="empty">No users.</td></tr>'; return; }
-  tbody.innerHTML = data.map(u => `<tr>
-    <td>${u.full_name||'—'}</td><td style="color:var(--muted)">${u.email}</td>
-    <td><span class="badge ${u.role==='owner'?'badge-amber':u.role==='staff'?'badge-green':u.role==='wholesale'?'badge-blue':'badge-gray'}">${u.role}</span></td>
-    <td style="color:var(--muted);font-size:12px;">${new Date(u.created_at).toLocaleDateString()}</td>
-    <td><select style="width:120px;padding:4px;" onchange="updateUserRole('${u.id}',this.value)">
+  const {data}=await sb.from('profiles').select('*').order('created_at');
+  const tbody=document.getElementById('admin-tbody');
+  if(!data?.length){tbody.innerHTML='<tr><td colspan="7" class="empty">No users.</td></tr>';return;}
+  tbody.innerHTML=data.map(u=>`<tr>
+    <td style="font-weight:600;">${u.full_name||'—'}</td>
+    <td style="color:var(--ink3);font-size:12px;">${u.email}</td>
+    <td><select style="width:110px;" onchange="updateRole('${u.id}',this.value)">
       <option ${u.role==='owner'?'selected':''} value="owner">Owner</option>
       <option ${u.role==='staff'?'selected':''} value="staff">Staff</option>
       <option ${u.role==='wholesale'?'selected':''} value="wholesale">Wholesale</option>
       <option ${u.role==='subscriber'?'selected':''} value="subscriber">Subscriber</option>
     </select></td>
+    <td><span class="badge badge-gray">${u.account_type||'retail'}</span></td>
+    <td><span class="badge ${u.pending_approval?'badge-gold':u.approved!==false?'badge-green':'badge-rust'}">${u.pending_approval?'Pending':u.approved!==false?'Active':'Inactive'}</span></td>
+    <td style="color:var(--ink3);font-size:12px;">${new Date(u.created_at).toLocaleDateString()}</td>
+    <td>${u.pending_approval?`<button class="btn btn-ghost btn-sm" onclick="approveUser('${u.id}')">Approve</button>`:''}</td>
   </tr>`).join('');
 }
 
-async function updateUserRole(userId, role) {
-  const { error } = await sb.from('profiles').update({ role }).eq('id', userId);
-  if (error) toast('Error updating role','error');
-  else toast('Role updated','success');
+async function updateRole(id,role){await sb.from('profiles').update({role}).eq('id',id);toast('Role updated','success');}
+async function approveUser(id){await sb.from('profiles').update({pending_approval:false,approved:true}).eq('id',id);toast('Approved','success');await loadAdminUsers();}
+
+// ── CATALOG ────────────────────────────────────────
+async function loadCatalog() {
+  const {data}=await sb.from('coffees').select('*').order('sort_order');
+  const tbody=document.getElementById('catalog-tbody');
+  if(!data?.length){tbody.innerHTML='<tr><td colspan="7" class="empty">No coffees.</td></tr>';return;}
+  tbody.innerHTML=data.map(c=>`<tr>
+    <td><span class="sku">${c.sku}</span></td>
+    <td style="font-weight:600;">${c.name}</td>
+    <td><span class="badge badge-gray">${c.roast_level||'—'}</span></td>
+    <td><select style="width:110px;" onchange="updateCoffeeField('${c.sku}','visibility',this.value)">
+      <option ${c.visibility==='both'?'selected':''} value="both">Both</option>
+      <option ${c.visibility==='retail'?'selected':''} value="retail">Retail only</option>
+      <option ${c.visibility==='wholesale'?'selected':''} value="wholesale">Wholesale only</option>
+      <option ${c.visibility==='internal'?'selected':''} value="internal">Internal</option>
+    </select></td>
+    <td><select style="width:80px;" onchange="updateCoffeeField('${c.sku}','customer_facing',this.value==='true')">
+      <option ${c.customer_facing?'selected':''} value="true">Yes</option>
+      <option ${!c.customer_facing?'selected':''} value="false">No</option>
+    </select></td>
+    <td><select style="width:80px;" onchange="updateCoffeeField('${c.sku}','active',this.value==='true')">
+      <option ${c.active?'selected':''} value="true">Active</option>
+      <option ${!c.active?'selected':''} value="false">Inactive</option>
+    </select></td>
+    <td><input class="inline-num" type="number" value="${c.sort_order||99}" style="width:50px;" onchange="updateCoffeeField('${c.sku}','sort_order',parseInt(this.value))"></td>
+  </tr>`).join('');
 }
 
-// ═══════════════════════════════════════════════════════════
-// TABS
-// ═══════════════════════════════════════════════════════════
-function showTab(name, el) {
+async function updateCoffeeField(sku,field,value){await sb.from('coffees').update({[field]:value}).eq('sku',sku);toast('Saved','success');await loadCoffees();}
+
+// ── TABS ───────────────────────────────────────────
+function showTab(name,el) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('panel-'+name).classList.add('active');
-  if (el) el.classList.add('active');
-  if (name==='roast') generateRoastSchedule();
-  if (name==='bags') renderBagsTable();
-  if (name==='green') { if (!roastSchedule.length) generateRoastSchedule(); else renderGreenTable(); }
-  if (name==='inventory') loadInventory();
-  if (name==='portal') loadPortalOrders();
-  if (name==='admin') loadAdminUsers();
+  if(el) el.classList.add('active');
+  if(name==='roast'||name==='output') generateSchedule();
+  if(name==='admin') loadAdminUsers();
+  if(name==='catalog') loadCatalog();
+  if(name==='portal'){loadPortalCoffees();loadPortalHistory();}
 }
 
-// ═══════════════════════════════════════════════════════════
-// EXPORT
-// ═══════════════════════════════════════════════════════════
-function exportCSV() {
-  let csv = `Conduit Coffee — Roast Schedule Export\nGenerated: ${new Date().toLocaleString()}\n\nORDERS\nCustomer,Type,Coffee,SKU,Size,Qty,Grind,Region,Notes\n`;
-  orders.forEach(o => { csv += `"${o.customer_name}","${o.order_type}","${o.coffee_name}","${o.coffee_sku}","${o.size}","${o.qty}","${o.grind}","${o.region}","${o.notes||''}"\n`; });
-  csv += `\nROAST SCHEDULE\nCoffee,SKU,On Hand,Total Need,Net Roast,Green Needed,Batches,Day\n`;
-  roastSchedule.forEach(r => { csv += `"${r.name}","${r.sku}","${r.onHand.toFixed(2)}","${r.totalNeed.toFixed(2)}","${r.netToRoast.toFixed(2)}","${r.greenNeeded.toFixed(2)}","${r.batches}","${r.day}"\n`; });
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=`conduit-roast-${new Date().toISOString().split('T')[0]}.csv`; a.click();
-  toast('CSV exported','success');
+// ── TOAST ──────────────────────────────────────────
+function toast(msg,type='info') {
+  const c=document.getElementById('toasts');
+  const t=document.createElement('div');t.className='toast';
+  const colors={success:'var(--green)',warn:'var(--gold)',error:'#c0392b',info:'var(--rust)'};
+  t.style.borderLeftColor=colors[type]||colors.info;
+  t.textContent=msg;c.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
 }
 
-// ═══════════════════════════════════════════════════════════
-// TOAST
-// ═══════════════════════════════════════════════════════════
-function toast(msg, type='info') {
-  const c = document.getElementById('toasts');
-  const t = document.createElement('div'); t.className='toast';
-  const colors = {success:'var(--green)',warn:'var(--amber)',error:'var(--red)',info:'var(--blue)'};
-  t.style.borderLeft = `3px solid ${colors[type]||colors.info}`;
-  t.textContent = msg; c.appendChild(t);
-  setTimeout(()=>t.remove(), 3200);
-}
-
-// ═══════════════════════════════════════════════════════════
-// BOOT
-// ═══════════════════════════════════════════════════════════
-sb.auth.onAuthStateChange(async (event, session) => {
-  if (session?.user) await initApp(session.user);
-  else {
-    document.getElementById('auth-screen').style.display='flex';
-    document.getElementById('main-app').style.display='none';
-  }
+// ── BOOT ───────────────────────────────────────────
+sb.auth.onAuthStateChange(async(event,session)=>{
+  if(session?.user) await initApp(session.user);
+  else{document.getElementById('auth-screen').style.display='flex';document.getElementById('main-app').style.display='none';}
 });
 </script>
 </body>
