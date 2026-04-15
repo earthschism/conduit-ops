@@ -225,6 +225,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <select id="cycle-select" onchange="onCycleChange()"></select>
     <div style="flex:1;"></div>
     <button class="btn btn-ghost btn-sm" id="btn-new-cycle" onclick="createNewCycle()" style="display:none;">+ New Cycle</button>
+<button class="btn btn-danger btn-sm" id="btn-close-cycle" onclick="closeCycle()" style="display:none;">Close Cycle</button>
   </div>
   <div class="stats-row">
     <div class="stat"><div class="stat-label">Orders</div><div class="stat-value" id="stat-orders">0</div></div>
@@ -628,6 +629,7 @@ async function initApp(user) {
   document.querySelector('[data-tab="admin"]').classList.toggle('hidden',role!=='owner');
   document.querySelector('[data-tab="catalog"]').classList.toggle('hidden',role!=='owner');
   document.getElementById('btn-new-cycle').style.display = isStaff ? 'block' : 'none';
+  document.getElementById('btn-close-cycle').style.display = isStaff ? 'block' : 'none';
   document.getElementById('btn-add-order').style.display = isStaff ? 'inline-block' : 'none';
   document.getElementById('csv-card').style.display = isStaff ? 'block' : 'none';
   await loadCoffees();
@@ -771,6 +773,14 @@ function onCycleChange() {
   const c = cycles.find(c => c.id===currentCycleId);
   if (c) document.getElementById('cycle-pill').textContent = c.name;
   loadOrders();
+}
+
+async function closeCycle() {
+  if (!confirm('Close this cycle? New orders will route to the next open cycle.')) return;
+  await sb.from('cycles').update({status:'closed'}).eq('id',currentCycleId);
+  toast('Cycle closed','success');
+  await loadCycles();
+  await loadOrders();
 }
 
 // ── ORDERS ──
