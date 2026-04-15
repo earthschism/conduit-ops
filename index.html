@@ -1499,6 +1499,8 @@ function toast(msg, type) {
 
 // ── BOOT ──
 setLogos();
+// Wake up Supabase immediately on page load
+sb.from('coffees').select('sku').limit(1).then(function(){});
 sb.auth.onAuthStateChange(async function(event, session) {
   if (session && session.user) await initApp(session.user);
   else {
