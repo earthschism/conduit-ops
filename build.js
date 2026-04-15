@@ -18,8 +18,10 @@ if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
 let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 
 // Inject keys
-html = html.replace("'YOUR_SUPABASE_URL'", `'${env.SUPABASE_URL}'`);
-html = html.replace("'YOUR_SUPABASE_ANON_KEY'", `'${env.SUPABASE_ANON_KEY}'`);
+const url = process.env.SUPABASE_URL || env.SUPABASE_URL;
+const key = process.env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
+html = html.replace("'YOUR_SUPABASE_URL'", `'${url}'`);
+html = html.replace("'YOUR_SUPABASE_ANON_KEY'", `'${key}'`);
 
 // Inject build timestamp for cache busting
 const ts = new Date().toISOString();
