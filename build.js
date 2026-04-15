@@ -2,16 +2,20 @@
 const fs   = require('fs');
 const path = require('path');
 
-// Read .env
-const envPath = path.join(__dirname, '.env');
-if (!fs.existsSync(envPath)) { console.error('ERROR: .env file not found'); process.exit(1); }
+// Read .env if it exists (local dev), otherwise use process.env (Netlify)
 const env = {};
-fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
-  const [key, ...val] = line.split('=');
-  if (key && val.length) env[key.trim()] = val.join('=').trim();
-});
-if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
-  console.error('ERROR: SUPABASE_URL or SUPABASE_ANON_KEY missing from .env');
+const envPath = path.join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const [key, ...val] = line.split('=');
+    if (key && val.length) env[key.trim()] = val.join('=').trim();
+  });
+}
+// Merge with process.env (Netlify env vars take priority)
+const SUPABASE_URL = process.env.SUPABASE_URL || env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('ERROR: SUPABASE_URL or SUPABASE_ANON_KEY not found in .env or environment');
   process.exit(1);
 }
 
@@ -20,8 +24,8 @@ let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 // Inject keys
 const url = process.env.SUPABASE_URL || env.SUPABASE_URL;
 const key = process.env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
-html = html.replace("'YOUR_SUPABASE_URL'", `'${url}'`);
-html = html.replace("'YOUR_SUPABASE_ANON_KEY'", `'${key}'`);
+html = html.replace("'YOUR_SUPABASE_URL'", `'${SUPABASE_URL}'`);
+html = html.replace("'YOUR_SUPABASE_ANON_KEY'", `'${SUPABASE_ANON_KEY}'`);
 
 // Inject build timestamp for cache busting
 const ts = new Date().toISOString();
