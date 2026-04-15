@@ -31,7 +31,7 @@ html = html.replace("'YOUR_SUPABASE_URL'", `'${env.SUPABASE_URL}'`);
 html = html.replace("'YOUR_SUPABASE_ANON_KEY'", `'${env.SUPABASE_ANON_KEY}'`);
 
 // Write to dist/index.html
-const distDir = path.join(__dirname, 'dist');
+const distDir = path.join(__dirname, 'docs');
 if (!fs.existsSync(distDir)) fs.mkdirSync(distDir);
 fs.writeFileSync(path.join(distDir, 'index.html'), html);
 
