@@ -47,5 +47,5 @@ if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir);
 fs.writeFileSync(path.join(docsDir, 'index.html'), html);
 
 console.log('✓ Built docs/index.html — version: ' + ts);
-console.log('  URL: ' + env.SUPABASE_URL);
-console.log('  Key: ' + env.SUPABASE_ANON_KEY.substring(0, 20) + '...');
+console.log('  URL: ' + SUPABASE_URL);
+console.log('  Key: ' + SUPABASE_ANON_KEY.substring(0, 20) + '...');
