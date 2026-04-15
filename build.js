@@ -45,6 +45,12 @@ if (fs.existsSync(logoPath)) {
 const docsDir = path.join(__dirname, 'docs');
 if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir);
 fs.writeFileSync(path.join(docsDir, 'index.html'), html);
+// Copy Supabase library to docs/
+const supaSrc = path.join(__dirname, 'supabase.min.js');
+if (fs.existsSync(supaSrc)) {
+  fs.copyFileSync(supaSrc, path.join(docsDir, 'supabase.min.js'));
+  console.log('✓ Supabase library bundled locally');
+}
 
 console.log('✓ Built docs/index.html — version: ' + ts);
 console.log('  URL: ' + SUPABASE_URL);
