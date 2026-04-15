@@ -1496,6 +1496,13 @@ sb.auth.onAuthStateChange(async function(event, session) {
     document.getElementById('main-app').style.display='none';
   }
 });
+
+// Also check for existing session on load
+sb.auth.getSession().then(async function(res) {
+  if (res.data && res.data.session && res.data.session.user) {
+    await initApp(res.data.session.user);
+  }
+});
 </script>
 </body>
 </html>
