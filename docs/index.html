@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-04-15T04:33:43.673Z">
+<meta name="app-version" content="2026-04-15T13:36:14.037Z">
 <title>Conduit Coffee — Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -411,6 +411,11 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <div><div class="section-title">Place an Order</div><div class="section-sub" id="portal-sub">Welcome back</div></div>
   </div>
   <div id="portal-pending" class="pending-notice" style="display:none;">Your wholesale account is pending approval.<br>You'll hear from us at <strong>hello@conduitcoffee.com</strong> once activated.</div>
+  <div id="portal-cutoff" class="pending-notice" style="display:none;background:rgba(33,33,212,0.06);border-color:rgba(33,33,212,0.2);color:#1a1a8a;">
+    <strong>Orders for this week are closed.</strong><br>
+    Your order will be placed into next week's cycle.<br>
+    <span id="portal-cutoff-detail" style="font-size:12px;opacity:0.8;"></span>
+  </div>
   <div id="portal-form-wrap">
     <div class="coffee-grid" id="portal-coffee-grid"><div class="loading"><div class="spinner"></div></div></div>
     <div class="card" id="portal-order-card" style="display:none;">
@@ -493,6 +498,46 @@ const ROAST_GROUPS = {
   'SOD':  ['CRSC'],                // Decaf Lighter base: Cross Current Decaf
 };
 const CHILD_OF = {};
+
+// ── CYCLE CUTOFF ──
+// Cutoff: Monday 5pm Pacific Time
+// After cutoff, current cycle is locked and next week's cycle opens
+const PACIFIC_OFFSET = -8; // PST (adjust to -7 during PDT — handled below)
+
+function getPacificNow() {
+  const now = new Date();
+  // Get Pacific time accounting for DST
+  const pacificStr = now.toLocaleString('en-US', {timeZone: 'America/Los_Angeles'});
+  return new Date(pacificStr);
+}
+
+function getCutoffForCycle(cycleDate) {
+  // Returns the Monday 5pm Pacific cutoff for a given cycle week
+  const d = new Date(cycleDate);
+  // Find Monday of that week
+  const day = d.getDay();
+  const diff = day === 1 ? 0 : (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  d.setHours(17, 0, 0, 0); // 5pm
+  return d;
+}
+
+function isCycleClosed() {
+  const pacific = getPacificNow();
+  const dayOfWeek = pacific.getDay(); // 0=Sun, 1=Mon
+  const hours = pacific.getHours();
+  // Closed if: Monday after 5pm, or Tuesday/Wed (waiting for new cycle)
+  return (dayOfWeek === 1 && hours >= 17);
+}
+
+function getNextMondayDate() {
+  const pacific = getPacificNow();
+  const day = pacific.getDay();
+  const daysUntilMonday = day === 1 ? 7 : (8 - day) % 7 || 7;
+  const next = new Date(pacific);
+  next.setDate(pacific.getDate() + daysUntilMonday);
+  return next;
+}
 Object.entries(ROAST_GROUPS).forEach(([parent, children]) => {
   children.forEach(child => { CHILD_OF[child] = parent; });
 });
@@ -619,13 +664,35 @@ async function loadCycles() {
   cycles = data || [];
   const sel = document.getElementById('cycle-select');
   sel.innerHTML = '';
+
   if (!cycles.length) { await createNewCycle(true); return; }
+
+  // Check if current cycle is past cutoff and we need to auto-create next week
+  const isStaff = currentProfile && ['owner','staff'].includes(currentProfile.role);
+  if (isCycleClosed() && isStaff) {
+    // Check if next week's cycle already exists
+    const nextMon = getNextMondayDate();
+    const nextName = 'Week of ' + nextMon.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const alreadyExists = cycles.some(function(c){ return c.name === nextName; });
+    if (!alreadyExists) {
+      toast('Cycle cutoff passed — creating next week's cycle...', 'info');
+      await _doCreateCycle(nextName);
+      return; // loadCycles will be called again after creation
+    }
+  }
+
   cycles.forEach(c => {
     const o = document.createElement('option');
-    o.value = c.id; o.textContent = c.name; sel.appendChild(o);
+    o.value = c.id; o.textContent = c.name;
+    if (c.status === 'closed') o.textContent += ' (closed)';
+    sel.appendChild(o);
   });
-  currentCycleId = cycles[0].id;
-  document.getElementById('cycle-pill').textContent = cycles[0].name;
+
+  // Default to most recent open cycle
+  const openCycle = cycles.find(function(c){ return c.status !== 'closed'; }) || cycles[0];
+  currentCycleId = openCycle.id;
+  sel.value = currentCycleId;
+  document.getElementById('cycle-pill').textContent = openCycle.name;
 }
 
 async function createNewCycle(silent=false) {
@@ -1185,8 +1252,37 @@ function downloadCSV(type) {
 // ── CUSTOMER PORTAL ──
 async function loadPortalCoffees() {
   var role = currentProfile && currentProfile.role;
+
+  // Show cutoff notice if applicable
+  var cutoffEl = document.getElementById('portal-cutoff');
+  if (isCycleClosed()) {
+    var nextMon = getNextMondayDate();
+    var nextName = 'Week of ' + nextMon.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    document.getElementById('portal-cutoff-detail').textContent = 'Next cycle: ' + nextName;
+    cutoffEl.style.display = 'block';
+  } else {
+    cutoffEl.style.display = 'none';
+    // Show time remaining until cutoff
+    var pacific = getPacificNow();
+    var day = pacific.getDay();
+    if (day === 1) { // Monday
+      var hoursLeft = 17 - pacific.getHours();
+      if (hoursLeft > 0) {
+        document.getElementById('portal-sub').textContent =
+          'Order by 5pm Pacific today · ' + hoursLeft + ' hour' + (hoursLeft===1?'':'s') + ' remaining';
+      }
+    } else if (day === 0) { // Sunday
+      document.getElementById('portal-sub').textContent = 'Order by Monday 5pm Pacific';
+    }
+  }
+
+  // Filter coffees by role
   var query = sb.from('coffees').select('*').eq('active',true).eq('customer_facing',true).order('sort_order');
-  if (role !== 'wholesale') query = query.in('visibility',['retail','both']);
+  if (role === 'wholesale') {
+    query = query.in('visibility',['wholesale','both']);
+  } else {
+    query = query.in('visibility',['retail','both']);
+  }
   var res = await query;
   var data = res.data || [];
   var grid = document.getElementById('portal-coffee-grid');
@@ -1239,6 +1335,10 @@ function addPortalLine(preselect) {
 
 async function placePortalOrder() {
   if (!currentCycleId) { toast('No open cycle — please contact us','warn'); return; }
+  // Always route to most recent open cycle
+  const targetCycle = cycles.find(function(c){ return c.status !== 'closed'; });
+  if (!targetCycle) { toast('No open cycle — please contact us','warn'); return; }
+  const orderCycleId = targetCycle.id;
   var rows = document.querySelectorAll('[id^="pl-"]');
   var toInsert = [];
   rows.forEach(function(row) {
@@ -1247,7 +1347,7 @@ async function placePortalOrder() {
     if (!sku) return;
     var coffee = getCoffee(sku);
     toInsert.push({
-      cycle_id:currentCycleId, profile_id:currentUser.id,
+      cycle_id:orderCycleId, profile_id:currentUser.id,
       customer_name:(currentProfile&&currentProfile.full_name)||currentUser.email,
       customer_email:currentUser.email,
       order_type:(currentProfile&&currentProfile.role)==='wholesale'?'wholesale':'subscription',
