@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="app-version" content="BUILD_TIMESTAMP">
 <title>Conduit Coffee — Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -467,7 +471,7 @@ const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── CONSTANTS ──
-const BAG_W = {'4oz':0.256,'6oz':0.384,'12oz':0.769,'1lb':1.02,'2lb':2.04,'5lb':5.1,'20lb':20.4};
+const BAG_W = {'4oz':0.256,'12oz':0.769,'1lb':1.02,'2lb':2.04,'5lb':5.1,'20lb':20.4}; // 4oz=Sample, 20lb=Bulk
 const GRIND_L = {wb:'Whole Bean',drip:'Drip',coarse:'Coarse',fine:'Fine'};
 const REGION_L = {seattle:'Seattle',pt:'Port Townsend',ship:'Ship',pickup:'Pickup'};
 const TYPE_L = {subscription:'Subscription',wholesale:'Wholesale',manual:'Manual',walkin:'Walk-in',online:'Online'};
@@ -618,8 +622,64 @@ async function loadCycles() {
 }
 
 async function createNewCycle(silent=false) {
-  const d = new Date();
-  const name = 'Week of ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  let name;
+  if (silent) {
+    // Auto-create on first load
+    const d = new Date();
+    name = 'Week of ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  } else {
+    // Show date picker dialog
+    showNewCycleDialog();
+    return;
+  }
+  await _doCreateCycle(name);
+}
+
+function showNewCycleDialog() {
+  // Get next Monday as default
+  const today = new Date();
+  const day = today.getDay();
+  const diff = day === 0 ? 1 : 8 - day;
+  const nextMon = new Date(today);
+  nextMon.setDate(today.getDate() + (day === 1 ? 0 : diff));
+  const defaultDate = nextMon.toISOString().split('T')[0];
+
+  const existing = document.getElementById('cycle-dialog');
+  if (existing) existing.remove();
+
+  const dialog = document.createElement('div');
+  dialog.id = 'cycle-dialog';
+  dialog.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+  dialog.innerHTML = `
+    <div style="background:white;border-radius:12px;padding:32px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(28,23,20,0.3);">
+      <div style="font-family:'Libre Baskerville',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:6px;">New Roasting Cycle</div>
+      <div style="font-size:13px;color:var(--ink3);margin-bottom:20px;">Choose the week start date for this cycle.</div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:6px;">Week Starting</label>
+        <input type="date" id="new-cycle-date" value="${defaultDate}" style="width:100%;">
+      </div>
+      <div style="margin-bottom:20px;">
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:6px;">Cycle Name (optional)</label>
+        <input type="text" id="new-cycle-name" placeholder="Leave blank to auto-generate" style="width:100%;">
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="confirmNewCycle()">Create Cycle</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('cycle-dialog').remove()">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(dialog);
+}
+
+async function confirmNewCycle() {
+  const dateVal = document.getElementById('new-cycle-date').value;
+  const nameVal = document.getElementById('new-cycle-name').value.trim();
+  const d = dateVal ? new Date(dateVal + 'T12:00:00') : new Date();
+  const name = nameVal || 'Week of ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  document.getElementById('cycle-dialog').remove();
+  await _doCreateCycle(name);
+}
+
+async function _doCreateCycle(name) {
   const {data,error} = await sb.from('cycles').insert({name, created_by:currentUser.id}).select().single();
   if (error) { toast('Error creating cycle','error'); return; }
   cycles.unshift(data); currentCycleId = data.id;
@@ -627,7 +687,8 @@ async function createNewCycle(silent=false) {
   const o = document.createElement('option'); o.value = data.id; o.textContent = data.name;
   sel.insertBefore(o, sel.firstChild); sel.value = data.id;
   document.getElementById('cycle-pill').textContent = data.name;
-  if (!silent) { toast('New cycle created','success'); await loadOrders(); }
+  toast('Cycle created: '+name,'success');
+  await loadOrders();
 }
 
 function onCycleChange() {
@@ -691,7 +752,7 @@ function addLineItem() {
   div.className = 'line-item-row'; div.id = 'li-'+id;
   div.innerHTML =
     '<div class="form-group">'+(id===0?'<label>Coffee</label>':'')+'<select id="li-coffee-'+id+'">'+coffeeOpts()+'</select></div>' +
-    '<div class="form-group">'+(id===0?'<label>Size</label>':'')+'<select id="li-size-'+id+'"><option value="5lb">5 lb</option><option value="2lb" selected>2 lb</option><option value="1lb">1 lb</option><option value="12oz">12 oz</option><option value="6oz">6 oz</option><option value="4oz">4 oz</option><option value="20lb">20 lb bulk</option></select></div>' +
+    '<div class="form-group">'+(id===0?'<label>Size</label>':'')+'<select id="li-size-'+id+'"><option value="2lb" selected>2 lb</option><option value="1lb">1 lb</option><option value="5lb">5 lb</option><option value="12oz">12 oz</option><option value="4oz">4oz Sample</option><option value="20lb">Bulk</option></select></div>' +
     '<div class="form-group">'+(id===0?'<label>Grind</label>':'')+'<select id="li-grind-'+id+'"><option value="wb">Whole Bean</option><option value="drip">Drip</option><option value="coarse">Coarse</option><option value="fine">Fine</option></select></div>' +
     '<div class="form-group">'+(id===0?'<label>Qty</label>':'')+'<input type="number" id="li-qty-'+id+'" value="1" min="1"></div>' +
     '<button class="remove-btn" onclick="document.getElementById(\'li-'+id+'\').remove()"'+(id===0?' style="visibility:hidden;"':'')+'>×</button>';
@@ -1102,7 +1163,7 @@ function addPortalLine(preselect) {
   var opts = coffeeOpts(function(c){return c.customer_facing&&(role==='wholesale'||['retail','both'].indexOf(c.visibility)>-1);});
   div.innerHTML =
     '<div class="form-group">'+(id===0?'<label>Coffee</label>':'')+'<select id="pl-coffee-'+id+'">'+opts+'</select></div>' +
-    '<div class="form-group">'+(id===0?'<label>Size</label>':'')+'<select id="pl-size-'+id+'"><option value="2lb" selected>2 lb</option><option value="1lb">1 lb</option><option value="5lb">5 lb</option><option value="12oz">12 oz</option></select></div>' +
+    '<div class="form-group">'+(id===0?'<label>Size</label>':'')+'<select id="pl-size-'+id+'"><option value="2lb" selected>2 lb</option><option value="1lb">1 lb</option><option value="5lb">5 lb</option><option value="12oz">12 oz</option><option value="4oz">4oz Sample</option><option value="20lb">Bulk</option></select></div>' +
     '<div class="form-group">'+(id===0?'<label>Grind</label>':'')+'<select id="pl-grind-'+id+'"><option value="wb">Whole Bean</option><option value="drip">Drip</option><option value="coarse">Coarse</option><option value="fine">Fine</option></select></div>' +
     '<div class="form-group">'+(id===0?'<label>Qty</label>':'')+'<input type="number" id="pl-qty-'+id+'" value="1" min="1"></div>' +
     '<button class="remove-btn" onclick="document.getElementById(\'pl-'+id+'\').remove()"'+(id===0?' style="visibility:hidden;"':'')+'>×</button>';
