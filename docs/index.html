@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-04-15T04:10:10.578Z">
+<meta name="app-version" content="2026-04-15T04:33:43.673Z">
 <title>Conduit Coffee — Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -378,10 +378,17 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       </div>
     </div>
     <div class="print-section">
-      <div class="print-section-title">Bags by Coffee</div>
+      <div class="print-section-title">Bags by Coffee — Seal &amp; Stage</div>
       <table>
-        <thead><tr><th>Coffee</th><th>SKU</th><th style="text-align:right;">5 lb</th><th style="text-align:right;">2 lb</th><th style="text-align:right;">1lb/12oz</th><th style="text-align:right;">6oz</th><th style="text-align:right;">4oz</th><th style="text-align:right;">Total</th><th style="text-align:right;">Whole Bean</th><th style="text-align:right;">Drip</th><th style="text-align:right;">Coarse</th><th style="text-align:right;">Fine</th><th>Notes</th></tr></thead>
-        <tbody id="bag-print-tbody"><tr><td colspan="13" class="empty">Calculate schedule first.</td></tr></tbody>
+        <thead><tr><th>Coffee</th><th>SKU</th><th>Sizes</th><th style="text-align:right;">Total Bags</th><th style="text-align:right;">Whole Bean</th><th style="text-align:right;">To Grind</th><th>Notes</th></tr></thead>
+        <tbody id="bag-print-tbody"><tr><td colspan="7" class="empty">Calculate schedule first.</td></tr></tbody>
+      </table>
+    </div>
+    <div class="print-section" style="margin-top:20px;">
+      <div class="print-section-title" style="color:#2121d4;">☕ Grinding Tasks — Grind &amp; Seal Before Shipping</div>
+      <table>
+        <thead><tr><th style="width:24px;"></th><th>Coffee</th><th>SKU</th><th style="text-align:right;">Qty</th><th>Size</th><th>Grind</th></tr></thead>
+        <tbody id="grind-task-tbody"><tr><td colspan="6" class="empty">Calculate schedule first.</td></tr></tbody>
       </table>
     </div>
     <div class="print-section">
@@ -1026,34 +1033,90 @@ function buildPrintSheets(rows, originTotals) {
       '<td style="font-size:12px;color:var(--ink3);">'+e.data.usedIn.join(', ')+'</td></tr>';
   }).join('');
 
-  // Bagging sheet
+  // Bagging sheet — aggregate per coffee/size/grind combo
   var bagAgg = {};
+  var grindTasks = []; // individual grinding tasks
+
   orders.forEach(function(o) {
-    if (!bagAgg[o.coffee_sku]) bagAgg[o.coffee_sku] = {name:o.coffee_name, sku:o.coffee_sku, sizes:{}, grinds:{}, notes:[]};
-    bagAgg[o.coffee_sku].sizes[o.size] = (bagAgg[o.coffee_sku].sizes[o.size]||0)+o.qty;
-    bagAgg[o.coffee_sku].grinds[o.grind] = (bagAgg[o.coffee_sku].grinds[o.grind]||0)+o.qty;
+    // Aggregate totals per SKU
+    if (!bagAgg[o.coffee_sku]) bagAgg[o.coffee_sku] = {
+      name:o.coffee_name, sku:o.coffee_sku,
+      sizes:{}, wb:{}, grind:{}, notes:[]
+    };
+    var key = o.size + '|' + o.grind;
+    bagAgg[o.coffee_sku].sizes[key] = (bagAgg[o.coffee_sku].sizes[key]||0) + o.qty;
+    if (o.grind === 'wb' || o.size === '4oz') {
+      bagAgg[o.coffee_sku].wb[o.size] = (bagAgg[o.coffee_sku].wb[o.size]||0) + o.qty;
+    } else {
+      // It needs grinding
+      var taskKey = o.coffee_name + '|' + o.size + '|' + o.grind;
+      var existing = grindTasks.find(function(t){return t.key===taskKey;});
+      if (existing) { existing.qty += o.qty; }
+      else { grindTasks.push({key:taskKey, name:o.coffee_name, sku:o.coffee_sku, size:o.size, grind:o.grind, qty:o.qty}); }
+    }
     if (o.notes) bagAgg[o.coffee_sku].notes.push(o.notes);
   });
 
+  // Sort grind tasks: by coffee name, then size, then grind
+  grindTasks.sort(function(a,b){
+    if (a.name !== b.name) return a.name.localeCompare(b.name);
+    return a.size.localeCompare(b.size);
+  });
+
+  var SIZE_ORDER = ['5lb','2lb','1lb','12oz','4oz','20lb'];
   var grandTotal = 0;
+
   document.getElementById('bag-print-tbody').innerHTML = Object.values(bagAgg).map(function(r,i) {
-    var s5=r.sizes['5lb']||0, s2=r.sizes['2lb']||0, s1=(r.sizes['1lb']||0)+(r.sizes['12oz']||0);
-    var s6=r.sizes['6oz']||0, s4=r.sizes['4oz']||0, tot=s5+s2+s1+s6+s4;
+    // Build size totals
+    var totals = {};
+    Object.keys(r.sizes).forEach(function(k){
+      var parts = k.split('|');
+      var sz = parts[0];
+      totals[sz] = (totals[sz]||0) + r.sizes[k];
+    });
+    var tot = Object.values(totals).reduce(function(s,v){return s+v;},0);
     grandTotal += tot;
     var bg = i%2===0 ? 'background:var(--paper2);' : '';
     var n = Array.from(new Set(r.notes.filter(Boolean))).join('; ');
+
+    // Size breakdown string
+    var sizeStr = SIZE_ORDER.filter(function(s){return totals[s];}).map(function(s){
+      return '<span style="margin-right:8px;"><b>'+totals[s]+'</b>× '+s+'</span>';
+    }).join('');
+
+    // Whole bean vs grind split
+    var wbTotal = Object.values(r.wb).reduce(function(s,v){return s+v;},0);
+    var grindTotal = tot - wbTotal;
+
     return '<tr style="'+bg+'">' +
-      '<td style="font-weight:700;">'+r.name+'</td><td><span class="sku">'+r.sku+'</span></td>' +
-      '<td class="num mono">'+(s5||'—')+'</td><td class="num mono">'+(s2||'—')+'</td>' +
-      '<td class="num mono">'+(s1||'—')+'</td><td class="num mono">'+(s6||'—')+'</td>' +
-      '<td class="num mono">'+(s4||'—')+'</td>' +
+      '<td style="font-weight:700;">'+r.name+'</td>' +
+      '<td><span class="sku">'+r.sku+'</span></td>' +
+      '<td style="font-size:12px;">'+sizeStr+'</td>' +
       '<td class="num mono" style="font-weight:700;">'+tot+'</td>' +
-      '<td class="num mono">'+(r.grinds['wb']||'—')+'</td>' +
-      '<td class="num mono">'+(r.grinds['drip']||'—')+'</td>' +
-      '<td class="num mono">'+(r.grinds['coarse']||'—')+'</td>' +
-      '<td class="num mono">'+(r.grinds['fine']||'—')+'</td>' +
-      '<td style="font-size:11px;color:var(--ink3);">'+(n||'—')+'</td></tr>';
+      '<td class="num mono" style="color:var(--ink3);">'+(wbTotal||'—')+'</td>' +
+      '<td class="num mono" style="color:var(--blue);font-weight:600;">'+(grindTotal||'—')+'</td>' +
+      '<td style="font-size:11px;color:var(--ink3);">'+(n||'—')+'</td>' +
+      '</tr>';
   }).join('');
+
+  // Grinding task list
+  var grindHtml = '';
+  if (grindTasks.length) {
+    var GRIND_LABEL = {drip:'Drip',coarse:'Coarse',fine:'Fine'};
+    grindHtml = grindTasks.map(function(t) {
+      return '<tr>' +
+        '<td style="width:24px;text-align:center;font-size:16px;">☐</td>' +
+        '<td style="font-weight:600;">'+t.name+'</td>' +
+        '<td><span class="sku">'+t.sku+'</span></td>' +
+        '<td class="num mono" style="font-weight:700;">'+t.qty+'×</td>' +
+        '<td class="mono">'+t.size+'</td>' +
+        '<td><span class="badge badge-blue">'+(GRIND_LABEL[t.grind]||t.grind)+'</span></td>' +
+        '</tr>';
+    }).join('');
+  } else {
+    grindHtml = '<tr><td colspan="6" style="color:var(--ink3);padding:12px;text-align:center;font-size:13px;">No ground orders this cycle — all whole bean.</td></tr>';
+  }
+  document.getElementById('grind-task-tbody').innerHTML = grindHtml;
 
   document.getElementById('bag-sheet-meta').textContent = cycleName+' · Generated '+dateStr;
   document.getElementById('bag-sheet-total').textContent = grandTotal;
