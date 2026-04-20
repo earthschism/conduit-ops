@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-04-20T15:48:30.512Z">
+<meta name="app-version" content="2026-04-20T15:56:45.871Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -1488,9 +1488,17 @@ function toast(msg, type) {
 
 // ── BOOT ──
 setLogos();
+
+document.getElementById('auth-screen').style.display='flex';
+document.getElementById('main-app').style.display='none';
+
 sb.auth.onAuthStateChange(async function(event, session) {
-  if (session && session.user) await initApp(session.user);
-  else {
+  if (event === 'SIGNED_IN' && session && session.user) {
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('main-app').style.display='block';
+    if (!window._appReady) { window._appReady = true; await initApp(session.user); }
+  } else if (event === 'SIGNED_OUT') {
+    window._appReady = false;
     document.getElementById('auth-screen').style.display='flex';
     document.getElementById('main-app').style.display='none';
   }

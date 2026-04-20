@@ -1488,9 +1488,17 @@ function toast(msg, type) {
 
 // ── BOOT ──
 setLogos();
+
+document.getElementById('auth-screen').style.display='flex';
+document.getElementById('main-app').style.display='none';
+
 sb.auth.onAuthStateChange(async function(event, session) {
-  if (session && session.user) await initApp(session.user);
-  else {
+  if (event === 'SIGNED_IN' && session && session.user) {
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('main-app').style.display='block';
+    if (!window._appReady) { window._appReady = true; await initApp(session.user); }
+  } else if (event === 'SIGNED_OUT') {
+    window._appReady = false;
     document.getElementById('auth-screen').style.display='flex';
     document.getElementById('main-app').style.display='none';
   }
