@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-04-20T15:23:41.102Z">
+<meta name="app-version" content="2026-04-20T15:48:30.512Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -484,7 +484,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── CONSTANTS ──
 const BAG_W = {'4oz':0.256,'12oz':0.769,'1lb':1.02,'2lb':2.04,'5lb':5.1,'20lb':20.4}; // 4oz=Sample, 20lb=Bulk
 const GRIND_L = {wb:'Whole Bean',drip:'Drip',coarse:'Coarse',fine:'Fine'};
-const REGION_L = {ship:'Ship',local:'Local Delivery',pickup:'Café Pickup'};
+const REGION_L = {ship:'Ship',local:'Local Delivery',pickup:'Café Pickup',seattle:'Local Delivery',pt:'Local Delivery'};
 const TYPE_L = {subscription:'Subscription',wholesale:'Wholesale',manual:'Manual',walkin:'Walk-in',online:'Online'};
 const SHIP_BOXES = [{type:'First Class',rate:6},{type:'Padded Flat Rate',rate:9},{type:'Medium Flat Rate',rate:14}];
 
@@ -787,7 +787,7 @@ function renderOrdersTable() {
   if (!orders.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">No orders yet for this cycle.</td></tr>'; return; }
   tbody.innerHTML = orders.map((o,i) => {
     var typeClass = o.order_type==='wholesale'?'badge-gold':o.order_type==='subscription'?'badge-green':'badge-gray';
-    var regionClass = o.region==='pickup'?'badge-green':o.region==='local'?'badge-gold':'badge-gray';
+    var regionClass = o.region==='pickup'?'badge-green':(o.region==='local'||o.region==='seattle'||o.region==='pt')?'badge-gold':'badge-gray';
     return '<tr>' +
       '<td class="mono" style="color:var(--ink3);font-size:11px;">'+(i+1)+'</td>' +
       '<td><div style="font-weight:600;">'+o.customer_name+'</div><div style="font-size:11px;color:var(--ink3);">'+(o.city||'')+' '+(o.state||'')+'</div></td>' +
@@ -834,13 +834,6 @@ function addLineItem() {
 
 async function saveOrder() {
   if (!currentCycleId) { toast('No active cycle','warn'); return; }
-  // Refresh session before saving
-const {data: sessionData} = await sb.auth.getSession();
-if (!sessionData.session) { 
-  toast('Session expired — please sign in again', 'warn');
-  doLogout();
-  return; 
-}
   var customer = document.getElementById('f-customer').value.trim();
   if (!customer) { toast('Please enter a customer name','warn'); return; }
   var rows = document.querySelectorAll('[id^="li-"]');
@@ -913,7 +906,7 @@ async function handleCSV(file) {
         cycle_id:currentCycleId, profile_id:currentUser.id,
         customer_name:row[C.shipping]||'Shopify Customer',
         order_type:(row[C.tags]||'').includes('subscription')?'subscription':'online',
-        region:notes.toLowerCase().includes('pick up')?'pickup':'ship', // manual imports default to ship
+        region:notes.toLowerCase().includes('pick up')?'pickup':(notes.toLowerCase().includes('local')||notes.toLowerCase().includes('seattle')||notes.toLowerCase().includes('port townsend'))?'local':'ship',
         coffee_sku:parsed.sku, coffee_name:coffee.name,
         qty:parseInt(row[C.lineitemqty])||1,
         size:parsed.size, grind:parsed.grind, notes:notes,
