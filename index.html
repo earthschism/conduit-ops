@@ -1501,20 +1501,34 @@ function toast(msg, type) {
 setLogos();
 // Wake up Supabase immediately on page load
 sb.from('coffees').select('sku').limit(1).then(function(){});
+
+// Show login screen immediately, check for existing session in background
+document.getElementById('auth-screen').style.display='flex';
+document.getElementById('main-app').style.display='none';
+
+// Try to restore session with timeout
+var sessionTimeout = setTimeout(function() {
+  // If session check takes too long, just show login
+  document.getElementById('auth-screen').style.display='flex';
+  document.getElementById('main-app').style.display='none';
+}, 5000);
+
+sb.auth.getSession().then(async function(res) {
+  clearTimeout(sessionTimeout);
+  if (res.data && res.data.session && res.data.session.user) {
+    await initApp(res.data.session.user);
+  }
+});
+
 sb.auth.onAuthStateChange(async function(event, session) {
-  if (session && session.user) await initApp(session.user);
-  else {
+  if (event === 'SIGNED_IN' && session && session.user) {
+    await initApp(session.user);
+  } else if (event === 'SIGNED_OUT') {
     document.getElementById('auth-screen').style.display='flex';
     document.getElementById('main-app').style.display='none';
   }
 });
 
-// Also check for existing session on load
-sb.auth.getSession().then(async function(res) {
-  if (res.data && res.data.session && res.data.session.user) {
-    await initApp(res.data.session.user);
-  }
-});
 </script>
 </body>
 </html>
