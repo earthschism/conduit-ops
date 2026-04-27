@@ -656,23 +656,23 @@ async function initApp(user) {
     }
   }).catch(function(){});
 
-  await loadCoffees();
-  await loadCycles();
+  // Load sequentially to avoid overwhelming nano compute
+  try { await loadCoffees(); } catch(e) { console.log('coffees load error:', e); }
+  try { await loadCycles(); } catch(e) { console.log('cycles load error:', e); }
 
   if (isStaff) {
-    await loadOrders();
+    try { await loadOrders(); } catch(e) { console.log('orders load error:', e); }
     document.querySelector('[data-tab="orders"]').click();
   } else {
     document.getElementById('portal-sub').textContent = 'Welcome back, ' + fullName;
     document.querySelector('[data-tab="portal"]').click();
-    // Check pending approval from profile (loaded in background)
     setTimeout(async function() {
       if (currentProfile && currentProfile.pending_approval) {
         document.getElementById('portal-pending').style.display = 'block';
         document.getElementById('portal-form-wrap').style.display = 'none';
       } else {
-        await loadPortalCoffees();
-        await loadPortalHistory();
+        try { await loadPortalCoffees(); } catch(e) {}
+        try { await loadPortalHistory(); } catch(e) {}
       }
     }, 500);
   }
@@ -690,7 +690,15 @@ function coffeeOpts(filter) {
 
 // ── CYCLES ──
 async function loadCycles() {
-  const {data} = await sb.from('cycles').select('*').order('created_at',{ascending:false});
+  // Retry up to 3 times with delay for nano compute
+  var data = null;
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try {
+      var res = await sb.from('cycles').select('*').order('created_at',{ascending:false});
+      if (res.data) { data = res.data; break; }
+    } catch(e) {}
+    if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
+  }
   cycles = data || [];
   const sel = document.getElementById('cycle-select');
   sel.innerHTML = '';
