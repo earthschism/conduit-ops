@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-04-23T14:05:58.318Z">
+<meta name="app-version" content="2026-04-27T22:17:48.169Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -179,7 +179,9 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <div class="form-group" style="margin-bottom:12px;"><label>Password</label><input type="password" id="signup-password" placeholder="At least 6 characters"></div>
       <div class="form-group" style="margin-bottom:20px;"><label>Account Type</label>
         <select id="signup-role">
+          <option value="subscriber">Retail / Subscriber</option>
           <option value="wholesale">Wholesale Account</option>
+          <option value="staff">Staff</option>
         </select>
       </div>
       <button class="btn btn-primary btn-full" onclick="doSignup()">Create Account</button>
@@ -590,6 +592,9 @@ async function doSignup() {
     const isFirst = (count===null||count===0);
     const assignedRole = isFirst ? 'owner' : role;
     const pending = (!isFirst && role==='wholesale');
+    // Store role in auth metadata - available instantly without DB query
+    await sb.auth.updateUser({data: {full_name: name, role: assignedRole}});
+    // Also update profiles table
     await sb.from('profiles').update({role:assignedRole, full_name:name, account_type:role, pending_approval:pending, approved:!pending}).eq('id', data.user.id);
   }
   toast('Account created! Signing you in...', 'success');
@@ -609,15 +614,24 @@ function showAuthErr(msg) {
 // ── INIT ──
 async function initApp(user) {
   currentUser = user;
-  const {data:profile} = await sb.from('profiles').select('*').eq('id', user.id).single();
-  currentProfile = profile;
+
+  // Show app immediately - don't wait for profile
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
-  document.getElementById('user-display').textContent = profile?.full_name || user.email;
-  const roleColors = {owner:'var(--blue)',staff:'var(--green2)',wholesale:'#c49a2a',subscriber:'#999'};
-  document.getElementById('role-pip').style.background = roleColors[profile?.role] || '#999';
-  const role = profile?.role || 'subscriber';
-  const isStaff = ['owner','staff'].includes(role);
+
+  // Get role from auth metadata first (instant, no DB query)
+  var metaRole = user.user_metadata && user.user_metadata.role;
+  var metaName = user.user_metadata && user.user_metadata.full_name;
+
+  // Apply role immediately from metadata so UI shows right away
+  var role = metaRole || 'wholesale';
+  var fullName = metaName || user.email;
+
+  document.getElementById('user-display').textContent = fullName;
+  var roleColors = {owner:'var(--blue)',staff:'var(--green2)',wholesale:'#c49a2a',subscriber:'#999'};
+  document.getElementById('role-pip').style.background = roleColors[role] || '#999';
+
+  var isStaff = ['owner','staff'].includes(role);
   document.querySelector('[data-tab="orders"]').classList.toggle('hidden',!isStaff);
   document.querySelector('[data-tab="roast"]').classList.toggle('hidden',!isStaff);
   document.querySelector('[data-tab="output"]').classList.toggle('hidden',!isStaff);
@@ -627,21 +641,40 @@ async function initApp(user) {
   document.getElementById('btn-new-cycle').style.display = isStaff ? 'block' : 'none';
   document.getElementById('btn-add-order').style.display = isStaff ? 'inline-block' : 'none';
   document.getElementById('csv-card').style.display = isStaff ? 'block' : 'none';
+
+  // Load profile in background to get pending_approval etc
+  currentProfile = {role: role, full_name: fullName};
+  sb.from('profiles').select('*').eq('id', user.id).single().then(function(res) {
+    if (res.data) {
+      currentProfile = res.data;
+      // Update role if different from metadata
+      var dbRole = res.data.role;
+      if (dbRole && dbRole !== role) {
+        // Role changed in DB, refresh UI
+        window.location.reload();
+      }
+    }
+  }).catch(function(){});
+
   await loadCoffees();
   await loadCycles();
+
   if (isStaff) {
     await loadOrders();
     document.querySelector('[data-tab="orders"]').click();
   } else {
-    document.getElementById('portal-sub').textContent = 'Welcome back, ' + (profile?.full_name||'');
+    document.getElementById('portal-sub').textContent = 'Welcome back, ' + fullName;
     document.querySelector('[data-tab="portal"]').click();
-    if (profile?.pending_approval) {
-      document.getElementById('portal-pending').style.display = 'block';
-      document.getElementById('portal-form-wrap').style.display = 'none';
-    } else {
-      await loadPortalCoffees();
-      await loadPortalHistory();
-    }
+    // Check pending approval from profile (loaded in background)
+    setTimeout(async function() {
+      if (currentProfile && currentProfile.pending_approval) {
+        document.getElementById('portal-pending').style.display = 'block';
+        document.getElementById('portal-form-wrap').style.display = 'none';
+      } else {
+        await loadPortalCoffees();
+        await loadPortalHistory();
+      }
+    }, 500);
   }
 }
 
@@ -1427,7 +1460,10 @@ async function loadAdminUsers() {
   }).join('');
 }
 
-async function updateRole(id,role) { await sb.from('profiles').update({role:role}).eq('id',id); toast('Role updated','success'); }
+async function updateRole(id, role) {
+  await sb.from('profiles').update({role:role}).eq('id',id);
+  toast('Role updated - user must sign out and back in to see changes','success');
+}
 async function approveUser(id) { await sb.from('profiles').update({pending_approval:false,approved:true}).eq('id',id); toast('Approved','success'); await loadAdminUsers(); }
 
 // ── CATALOG ──
