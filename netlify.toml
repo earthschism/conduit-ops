@@ -1,0 +1,10 @@
+[[redirects]]
+  from = "/supabase/*"
+  to = "https://dbbefcbsgltamzwidgyu.supabase.co/:splat"
+  status = 200
+  force = true
+  headers = {X-Forwarded-Host = "dbbefcbsgltamzwidgyu.supabase.co"}
+
+[build]
+  command = "node build.js"
+  publish = "docs"

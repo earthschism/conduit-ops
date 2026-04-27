@@ -23,8 +23,11 @@ let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 
 // Inject keys
 const url = process.env.SUPABASE_URL || env.SUPABASE_URL;
+const proxyUrl = 'https://conduitorders.com/supabase';
 const key = process.env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
-html = html.replace("'YOUR_SUPABASE_URL'", `'${SUPABASE_URL}'`);
+// Use Netlify proxy to avoid tracking prevention blocks
+const proxyUrl = 'https://conduitorders.com/supabase';
+html = html.replace("'YOUR_SUPABASE_URL'", `'${proxyUrl}'`);
 html = html.replace("'YOUR_SUPABASE_ANON_KEY'", `'${SUPABASE_ANON_KEY}'`);
 
 // Inject build timestamp for cache busting
