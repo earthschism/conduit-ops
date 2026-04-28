@@ -731,6 +731,8 @@ async function loadCycles() {
   try {
     var data = await dbFetch('cycles?select=*&order=created_at.desc');
     cycles = data || [];
+  } catch(e) { cycles = []; }
+
   const sel = document.getElementById('cycle-select');
   sel.innerHTML = '';
 
@@ -739,14 +741,13 @@ async function loadCycles() {
   // Check if current cycle is past cutoff and we need to auto-create next week
   const isStaff = currentProfile && ['owner','staff'].includes(currentProfile.role);
   if (isCycleClosed() && isStaff) {
-    // Check if next week's cycle already exists
     const nextMon = getNextMondayDate();
     const nextName = 'Week of ' + nextMon.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     const alreadyExists = cycles.some(function(c){ return c.name === nextName; });
     if (!alreadyExists) {
       toast("Cycle cutoff passed - creating next week's cycle...", 'info');
       await _doCreateCycle(nextName);
-      return; // loadCycles will be called again after creation
+      return;
     }
   }
 
@@ -757,7 +758,6 @@ async function loadCycles() {
     sel.appendChild(o);
   });
 
-  // Default to most recent open cycle
   const openCycle = cycles.find(function(c){ return c.status !== 'closed'; }) || cycles[0];
   currentCycleId = openCycle.id;
   sel.value = currentCycleId;
