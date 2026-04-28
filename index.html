@@ -505,7 +505,7 @@ async function dbFetch(path, options) {
     'apikey': SUPABASE_KEY,
     'Authorization': 'Bearer ' + token,
     'Content-Type': 'application/json',
-    'Prefer': options.prefer || 'return=representation'
+    'Prefer': options.prefer || 'return=minimal'
   }, extra);
 
   var url = '/supabase/rest/v1/' + path;

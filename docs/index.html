@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-04-28T00:31:41.906Z">
+<meta name="app-version" content="2026-04-28T21:46:41.585Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -505,7 +505,7 @@ async function dbFetch(path, options) {
     'apikey': SUPABASE_KEY,
     'Authorization': 'Bearer ' + token,
     'Content-Type': 'application/json',
-    'Prefer': options.prefer || 'return=representation'
+    'Prefer': options.prefer || 'return=minimal'
   }, extra);
 
   var url = '/supabase/rest/v1/' + path;
