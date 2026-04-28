@@ -24,6 +24,7 @@ body{background:var(--paper);color:var(--ink);font-family:'DM Sans',sans-serif;f
 .serif{font-family:'Libre Baskerville',serif;}
 .mono{font-family:'DM Mono',monospace;}
 
+/* ── AUTH ── */
 #auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--paper2);}
 .auth-card{background:var(--paper);border:1px solid var(--rule2);border-radius:12px;padding:44px 40px;width:100%;max-width:420px;box-shadow:var(--shadow);}
 .auth-sub{font-size:11px;color:var(--ink3);margin-bottom:28px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;}
@@ -32,18 +33,21 @@ body{background:var(--paper);color:var(--ink);font-family:'DM Sans',sans-serif;f
 .auth-tab.active{background:var(--paper);color:var(--ink);box-shadow:0 1px 3px rgba(28,23,20,0.1);}
 .auth-info{background:var(--paper2);border:1px solid var(--rule);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--ink3);line-height:1.6;margin-bottom:16px;}
 
+/* ── HEADER ── */
 .header{background:var(--ink);padding:0 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;border-bottom:3px solid var(--blue);}
 .header-left{display:flex;align-items:center;gap:20px;padding:12px 0;}
 .cycle-pill{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:4px 12px;font-size:12px;color:rgba(255,255,255,0.7);font-family:'DM Mono',monospace;}
 .user-pill{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,0.65);}
 .role-pip{width:7px;height:7px;border-radius:50%;}
 
+/* ── TABS ── */
 .tabs{background:var(--ink2);display:flex;padding:0 28px;overflow-x:auto;border-bottom:1px solid rgba(255,255,255,0.08);}
 .tab{padding:11px 18px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.4);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all 0.15s;}
 .tab:hover{color:rgba(255,255,255,0.75);}
 .tab.active{color:#8888ff;border-bottom-color:var(--blue);}
 .tab.hidden{display:none;}
 
+/* ── LAYOUT ── */
 .content{padding:28px;max-width:1300px;margin:0 auto;}
 .panel{display:none;}.panel.active{display:block;}
 
@@ -55,12 +59,14 @@ body{background:var(--paper);color:var(--ink);font-family:'DM Sans',sans-serif;f
 .card-title{font-family:'Libre Baskerville',serif;font-size:15px;color:var(--ink);margin-bottom:14px;display:flex;align-items:center;gap:8px;font-weight:700;}
 .card-title::before{content:'';display:block;width:3px;height:16px;background:var(--blue);border-radius:2px;flex-shrink:0;}
 
+/* ── STATS ── */
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;}
 .stat{background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);}
 .stat-label{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;font-weight:600;}
 .stat-value{font-size:28px;font-weight:700;color:var(--blue);font-family:'DM Mono',monospace;line-height:1;}
 .stat-sub{font-size:11px;color:var(--ink3);margin-top:4px;}
 
+/* ── TABLE ── */
 .tbl-wrap{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;font-size:13px;}
 th{background:var(--paper2);color:var(--ink3);font-weight:600;text-align:left;padding:9px 10px;border-bottom:2px solid var(--rule2);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;white-space:nowrap;}
@@ -69,6 +75,15 @@ tr:last-child td{border-bottom:none;}
 tr:hover td{background:var(--paper2);}
 .num{font-family:'DM Mono',monospace;text-align:right;}
 
+/* ── GROUPED ORDER ROWS ── */
+.order-customer-row td{background:var(--paper2);font-weight:600;border-top:2px solid var(--rule2);border-bottom:1px solid var(--rule2);}
+.order-customer-row:first-child td{border-top:none;}
+.order-customer-row td:first-child{padding-left:12px;}
+.order-line-row td{background:white;}
+.order-line-row:hover td{background:rgba(33,33,212,0.03);}
+.order-line-row td:first-child{padding-left:28px;color:var(--ink3);font-size:11px;font-family:'DM Mono',monospace;}
+
+/* ── BADGES ── */
 .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
 .badge-blue{background:rgba(33,33,212,0.08);color:var(--blue);border:1px solid rgba(33,33,212,0.2);}
 .badge-gold{background:rgba(232,200,48,0.15);color:#8a7010;border:1px solid rgba(232,200,48,0.3);}
@@ -76,6 +91,7 @@ tr:hover td{background:var(--paper2);}
 .badge-gray{background:var(--paper2);color:var(--ink3);border:1px solid var(--rule);}
 .sku{font-family:'DM Mono',monospace;font-size:11px;color:var(--blue);background:rgba(33,33,212,0.06);padding:2px 7px;border-radius:4px;border:1px solid rgba(33,33,212,0.18);}
 
+/* ── FORMS ── */
 input,select,textarea{background:white;border:1px solid var(--rule2);border-radius:var(--radius);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 11px;outline:none;transition:border-color 0.15s,box-shadow 0.15s;width:100%;}
 input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(33,33,212,0.1);}
 label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px;letter-spacing:0.03em;text-transform:uppercase;}
@@ -85,6 +101,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 .form-row.c4{grid-template-columns:1fr 1fr 1fr 1fr;}
 .form-group{display:flex;flex-direction:column;}
 
+/* ── BUTTONS ── */
 .btn{padding:9px 18px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;font-family:'DM Sans',sans-serif;}
 .btn-primary{background:var(--blue);color:white;}.btn-primary:hover{background:var(--blue2);}
 .btn-secondary{background:var(--ink);color:white;}.btn-secondary:hover{background:var(--ink2);}
@@ -93,19 +110,23 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 .btn-sm{padding:5px 11px;font-size:12px;}
 .btn-full{width:100%;padding:12px;font-size:14px;}
 
+/* ── CYCLE BAR ── */
 .cycle-bar{display:flex;align-items:center;gap:12px;background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:11px 16px;margin-bottom:20px;box-shadow:var(--shadow);}
 .cycle-bar-label{font-size:11px;color:var(--ink3);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;}
 .cycle-bar select{border:none;background:transparent;padding:0;color:var(--blue);font-weight:600;font-size:14px;width:auto;box-shadow:none;}
 .cycle-bar select:focus{box-shadow:none;border:none;}
 
+/* ── UPLOAD ── */
 .upload-zone{border:2px dashed var(--rule2);border-radius:var(--radius);padding:28px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--paper2);}
 .upload-zone:hover,.upload-zone.drag{border-color:var(--blue);background:rgba(33,33,212,0.03);}
 
+/* ── LINE ITEMS ── */
 .line-item-row{display:grid;grid-template-columns:2fr 1fr 1fr 80px 32px;gap:10px;align-items:end;padding:10px 0;border-bottom:1px solid var(--rule);}
 .line-item-row:last-of-type{border-bottom:none;}
 .remove-btn{width:28px;height:28px;background:none;border:1px solid var(--rule2);border-radius:4px;color:var(--ink3);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
 .remove-btn:hover{border-color:#c0392b;color:#c0392b;background:rgba(192,57,43,0.06);}
 
+/* ── PRINT SHEETS ── */
 .print-sheet{background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:32px;margin-bottom:20px;box-shadow:var(--shadow);}
 .print-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;padding-bottom:16px;border-bottom:3px solid var(--ink);}
 .print-title{font-family:'Libre Baskerville',serif;font-size:22px;font-weight:700;color:var(--ink);}
@@ -114,6 +135,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 .print-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink3);margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--rule);}
 .sheet-actions{display:flex;gap:8px;margin-bottom:14px;align-items:center;}
 
+/* ── COFFEE GRID ── */
 .coffee-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-bottom:20px;}
 .coffee-card{background:white;border:2px solid var(--rule);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all 0.15s;}
 .coffee-card:hover{border-color:var(--blue);transform:translateY(-1px);box-shadow:var(--shadow);}
@@ -121,10 +143,12 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 .coffee-card-name{font-family:'Libre Baskerville',serif;font-size:15px;font-weight:700;color:var(--ink);margin-bottom:5px;}
 .coffee-card-notes{font-size:12px;color:var(--ink3);line-height:1.5;margin-bottom:10px;}
 
+/* ── POPUP ── */
 .popup-overlay{position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;}
 .popup{background:white;border-radius:12px;padding:30px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(28,23,20,0.3);}
 .popup-title{font-family:'Libre Baskerville',serif;font-size:22px;font-weight:700;color:var(--ink);margin-bottom:4px;}
 
+/* ── MISC ── */
 .alert{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;line-height:1.5;}
 .alert-error{background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);color:#c0392b;}
 .pending-notice{background:rgba(232,200,48,0.08);border:1px solid rgba(232,200,48,0.25);border-radius:var(--radius);padding:20px;text-align:center;font-size:14px;color:#7a6010;line-height:1.7;}
@@ -141,6 +165,72 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 ::-webkit-scrollbar-track{background:var(--paper2);}
 ::-webkit-scrollbar-thumb{background:var(--paper3);border-radius:3px;}
 
+/* ── MOBILE ORDER CARDS (hidden on desktop) ── */
+.order-cards{display:none;}
+.order-card{background:white;border:1px solid var(--rule);border-radius:var(--radius);margin-bottom:12px;box-shadow:var(--shadow);overflow:hidden;}
+.order-card-header{background:var(--paper2);padding:11px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--rule);}
+.order-card-name{font-weight:700;font-size:14px;color:var(--ink);}
+.order-card-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px;}
+.order-card-line{padding:10px 14px;border-bottom:1px solid var(--rule);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+.order-card-line:last-child{border-bottom:none;}
+.order-card-coffee{font-weight:600;font-size:13px;color:var(--ink);}
+.order-card-detail{font-size:12px;color:var(--ink3);margin-top:2px;}
+
+/* ── MOBILE RESPONSIVE ── */
+@media (max-width:640px){
+  /* header */
+  .header{padding:0 14px;}
+  .header-left{gap:10px;}
+  .cycle-pill{display:none;}
+  #header-logo{height:26px !important;}
+  .user-pill span{display:none;}
+
+  /* tabs */
+  .tabs{padding:0 14px;}
+  .tab{padding:10px 12px;font-size:12px;}
+
+  /* content */
+  .content{padding:14px;}
+
+  /* section header */
+  .section-header{flex-direction:column;gap:10px;margin-bottom:14px;}
+  .section-header > div:last-child{display:flex;gap:8px;width:100%;}
+  .section-header .btn{flex:1;text-align:center;}
+
+  /* stats: 2 cols on mobile */
+  .stats-row{grid-template-columns:1fr 1fr;gap:10px;}
+  .stat-value{font-size:22px;}
+
+  /* cycle bar */
+  .cycle-bar{padding:9px 12px;gap:8px;}
+  .cycle-bar select{font-size:13px;}
+  #btn-new-cycle{padding:4px 8px;font-size:11px;}
+
+  /* upload zone */
+  .upload-zone{padding:18px 14px;}
+
+  /* manual entry form - stack all cols */
+  .form-row.c2,.form-row.c3,.form-row.c4{grid-template-columns:1fr;}
+  .line-item-row{grid-template-columns:1fr 1fr;gap:8px;}
+  .line-item-row .remove-btn{grid-column:span 2;justify-self:end;}
+
+  /* hide desktop table, show mobile cards */
+  .orders-desktop-table{display:none;}
+  .order-cards{display:block;}
+
+  /* print sheet - hide on mobile, useless */
+  .print-sheet{padding:16px;}
+  .sheet-actions{flex-wrap:wrap;}
+
+  /* popup */
+  .popup{padding:20px;}
+  .popup-title{font-size:18px;}
+
+  /* auth card */
+  .auth-card{padding:28px 20px;}
+}
+
+/* ── PRINT ── */
 @media print{
   .header,.tabs,.sheet-actions,.cycle-bar,.btn,#btn-add-order,#csv-card,#add-order-card{display:none!important;}
   body{background:white;font-size:12px;}
@@ -212,6 +302,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 
 <div class="content">
 
+<!-- ── ORDERS PANEL ── -->
 <div class="panel active" id="panel-orders">
   <div class="section-header">
     <div><div class="section-title">Orders</div><div class="section-sub">Current cycle · shared in real time</div></div>
@@ -268,17 +359,35 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <button class="btn btn-ghost" onclick="toggleAddOrder()">Cancel</button>
     </div>
   </div>
-  <div class="card">
+
+  <!-- Desktop grouped table -->
+  <div class="card orders-desktop-table">
     <div class="card-title">Current Cycle Orders</div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>#</th><th>Customer</th><th>Type</th><th>Coffee</th><th>SKU</th><th>Size</th><th>Qty</th><th>Grind</th><th>Region</th><th>Notes</th><th></th></tr></thead>
+        <thead><tr>
+          <th style="width:28px;"></th>
+          <th>Customer</th>
+          <th>Type</th>
+          <th>Coffee</th>
+          <th>SKU</th>
+          <th>Size</th>
+          <th class="num">Qty</th>
+          <th>Grind</th>
+          <th>Region</th>
+          <th>Notes</th>
+          <th></th>
+        </tr></thead>
         <tbody id="orders-tbody"><tr><td colspan="11" class="loading"><div class="spinner"></div></td></tr></tbody>
       </table>
     </div>
   </div>
+
+  <!-- Mobile order cards -->
+  <div class="order-cards" id="order-cards-mobile"></div>
 </div>
 
+<!-- ── ROAST PANEL ── -->
 <div class="panel" id="panel-roast">
   <div class="section-header">
     <div><div class="section-title">Roast Schedule</div><div class="section-sub">Always 10 lb batches · you decide partials on the day</div></div>
@@ -323,6 +432,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   </div>
 </div>
 
+<!-- ── OUTPUT PANEL ── -->
 <div class="panel" id="panel-output">
   <div class="section-header">
     <div><div class="section-title">Print &amp; Export</div><div class="section-sub">Roasting sheet and bagging sheet - formatted for the floor</div></div>
@@ -405,6 +515,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   </div>
 </div>
 
+<!-- ── PORTAL PANEL ── -->
 <div class="panel" id="panel-portal">
   <div class="section-header">
     <div><div class="section-title">Place an Order</div><div class="section-sub" id="portal-sub">Welcome back</div></div>
@@ -431,6 +542,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   </div>
 </div>
 
+<!-- ── ADMIN PANEL ── -->
 <div class="panel" id="panel-admin">
   <div class="section-header">
     <div><div class="section-title">Admin</div><div class="section-sub">Users · approvals · account management</div></div>
@@ -446,6 +558,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   </div>
 </div>
 
+<!-- ── CATALOG PANEL ── -->
 <div class="panel" id="panel-catalog">
   <div class="section-header">
     <div><div class="section-title">Coffee Catalog</div><div class="section-sub">SKUs · visibility · descriptions · sort order</div></div>
@@ -460,8 +573,8 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   </div>
 </div>
 
-</div>
-</div>
+</div><!-- /content -->
+</div><!-- /main-app -->
 
 <div id="info-popup" class="popup-overlay" style="display:none;" onclick="if(event.target===this)closePopup()">
   <div class="popup">
@@ -482,87 +595,69 @@ const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── ROBUST DB FETCH ──
-// Uses plain fetch through Netlify proxy - never hangs, works in all browsers
 async function dbFetch(path, options) {
   options = options || {};
   var method = options.method || 'GET';
   var body = options.body;
   var extra = options.headers || {};
-
-  // Get auth token if available - don't wait if not ready
-  var token = SUPABASE_KEY; // default to anon
+  var token = SUPABASE_KEY;
   try {
     var sess = sb.auth.currentSession || (await Promise.race([
       sb.auth.getSession(),
       new Promise(function(r){ setTimeout(function(){ r({data:{session:null}}); }, 1000); })
     ]));
-    if (sess && sess.data && sess.data.session) {
-      token = sess.data.session.access_token;
-    }
+    if (sess && sess.data && sess.data.session) token = sess.data.session.access_token;
   } catch(e) {}
-
   var headers = Object.assign({
     'apikey': SUPABASE_KEY,
     'Authorization': 'Bearer ' + token,
     'Content-Type': 'application/json',
     'Prefer': options.prefer || 'return=minimal'
   }, extra);
-
   var url = '/supabase/rest/v1/' + path;
   var res = await fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined });
-  if (!res.ok) {
-    var err = await res.text();
-    throw new Error('DB error ' + res.status + ': ' + err);
-  }
+  if (!res.ok) { var err = await res.text(); throw new Error('DB error ' + res.status + ': ' + err); }
   if (res.status === 204) return [];
   return await res.json();
 }
 
 // ── CONSTANTS ──
-const BAG_W = {'4oz':0.256,'12oz':0.769,'1lb':1.02,'2lb':2.04,'5lb':5.1,'20lb':1.0}; // 4oz=Sample, 20lb=Bulk (1lb per unit, qty=lbs)
+const BAG_W = {'4oz':0.256,'12oz':0.769,'1lb':1.02,'2lb':2.04,'5lb':5.1,'20lb':1.0};
 const GRIND_L = {wb:'Whole Bean',drip:'Drip',coarse:'Coarse',fine:'Fine'};
 const REGION_L = {ship:'Ship',local:'Local Delivery',pickup:'Café Pickup',seattle:'Local Delivery',pt:'Local Delivery'};
 const TYPE_L = {subscription:'Subscription',wholesale:'Wholesale',manual:'Manual',walkin:'Walk-in',online:'Online'};
 const SHIP_BOXES = [{type:'First Class',rate:6},{type:'Padded Flat Rate',rate:9},{type:'Medium Flat Rate',rate:14}];
 
-// Roast groups - base SKU: [child SKUs that pull from same roast, just bagged differently]
 const ROAST_GROUPS = {
-  '9to5': ['1895','QUST','DSIG'],  // Nove alle Cinque base: Aldrich's 1895, Cottage/Quest, Dord Signature
-  'SHIP': ['COTU','DOSD'],         // Ship Canal base: Center of Universe, Dord Special Dark
-  'SEBD': ['BSKT'],                // Seasonal Blend base: Baskette Fall
-  'LOCO': ['OTIS'],                // Locofocos base: Dord Otis
-  'SOD':  ['CRSC'],                // Decaf Lighter base: Cross Current Decaf
+  '9to5': ['1895','QUST','DSIG'],
+  'SHIP': ['COTU','DOSD'],
+  'SEBD': ['BSKT'],
+  'LOCO': ['OTIS'],
+  'SOD':  ['CRSC'],
 };
 const CHILD_OF = {};
 
-// ── CYCLE CUTOFF ──
-// Cutoff: Monday 5pm Pacific Time
-// After cutoff, current cycle is locked and next week's cycle opens
-const PACIFIC_OFFSET = -8; // PST (adjust to -7 during PDT - handled below)
+const PACIFIC_OFFSET = -8;
 
 function getPacificNow() {
   const now = new Date();
-  // Get Pacific time accounting for DST
   const pacificStr = now.toLocaleString('en-US', {timeZone: 'America/Los_Angeles'});
   return new Date(pacificStr);
 }
 
 function getCutoffForCycle(cycleDate) {
-  // Returns the Monday 5pm Pacific cutoff for a given cycle week
   const d = new Date(cycleDate);
-  // Find Monday of that week
   const day = d.getDay();
   const diff = day === 1 ? 0 : (day === 0 ? -6 : 1 - day);
   d.setDate(d.getDate() + diff);
-  d.setHours(17, 0, 0, 0); // 5pm
+  d.setHours(17, 0, 0, 0);
   return d;
 }
 
 function isCycleClosed() {
   const pacific = getPacificNow();
-  const dayOfWeek = pacific.getDay(); // 0=Sun, 1=Mon
+  const dayOfWeek = pacific.getDay();
   const hours = pacific.getHours();
-  // Closed if: Monday after 5pm, or Tuesday/Wed (waiting for new cycle)
   return (dayOfWeek === 1 && hours >= 17);
 }
 
@@ -585,7 +680,6 @@ let orders=[], coffees=[], roastSchedule=[];
 let lineItemCount=0, portalLineId=0;
 
 // ── LOGO ──
-// Base64 logo embedded at runtime by build.js - placeholder replaced on build
 const LOGO_B64 = 'YOUR_LOGO_B64';
 function setLogos() {
   const src = LOGO_B64.startsWith('YOUR_') ? '' : 'data:image/png;base64,' + LOGO_B64;
@@ -593,7 +687,6 @@ function setLogos() {
   const headerLogo = document.getElementById('header-logo');
   if (src) { authLogo.src = src; headerLogo.src = src; }
   else {
-    // Fallback text wordmark
     authLogo.outerHTML = '<div style="font-family:\'Libre Baskerville\',serif;font-size:28px;font-weight:700;color:var(--blue);margin-bottom:8px;text-align:center;">Conduit <span style="color:var(--ink);">Coffee</span></div>';
     headerLogo.outerHTML = '<div style="font-family:\'Libre Baskerville\',serif;font-size:18px;font-weight:700;color:white;">Conduit <span style="color:#8888ff;">Coffee</span></div>';
   }
@@ -629,9 +722,7 @@ async function doSignup() {
     const isFirst = (count===null||count===0);
     const assignedRole = isFirst ? 'owner' : role;
     const pending = (!isFirst && role==='wholesale');
-    // Store role in auth metadata - available instantly without DB query
     await sb.auth.updateUser({data: {full_name: name, role: assignedRole}});
-    // Also update profiles table
     await sb.from('profiles').update({role:assignedRole, full_name:name, account_type:role, pending_approval:pending, approved:!pending}).eq('id', data.user.id);
   }
   toast('Account created! Signing you in...', 'success');
@@ -651,16 +742,11 @@ function showAuthErr(msg) {
 // ── INIT ──
 async function initApp(user) {
   currentUser = user;
-
-  // Show app immediately - don't wait for profile
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
 
-  // Get role from auth metadata first (instant, no DB query)
   var metaRole = user.user_metadata && user.user_metadata.role;
   var metaName = user.user_metadata && user.user_metadata.full_name;
-
-  // Apply role immediately from metadata so UI shows right away
   var role = metaRole || 'wholesale';
   var fullName = metaName || user.email;
 
@@ -679,21 +765,15 @@ async function initApp(user) {
   document.getElementById('btn-add-order').style.display = isStaff ? 'inline-block' : 'none';
   document.getElementById('csv-card').style.display = isStaff ? 'block' : 'none';
 
-  // Load profile in background to get pending_approval etc
   currentProfile = {role: role, full_name: fullName};
   sb.from('profiles').select('*').eq('id', user.id).single().then(function(res) {
     if (res.data) {
       currentProfile = res.data;
-      // Update role if different from metadata
       var dbRole = res.data.role;
-      if (dbRole && dbRole !== role) {
-        // Role changed in DB, refresh UI
-        window.location.reload();
-      }
+      if (dbRole && dbRole !== role) window.location.reload();
     }
   }).catch(function(){});
 
-  // Load sequentially to avoid overwhelming nano compute
   try { await loadCoffees(); } catch(e) { console.log('coffees load error:', e); }
   try { await loadCycles(); } catch(e) { console.log('cycles load error:', e); }
 
@@ -717,9 +797,8 @@ async function initApp(user) {
 
 // ── COFFEES ──
 async function loadCoffees() {
-  try {
-    coffees = await dbFetch('coffees?select=*&active=eq.true&order=sort_order');
-  } catch(e) { console.log('loadCoffees error:', e); coffees = []; }
+  try { coffees = await dbFetch('coffees?select=*&active=eq.true&order=sort_order'); }
+  catch(e) { console.log('loadCoffees error:', e); coffees = []; }
 }
 function getCoffee(sku) { return coffees.find(c => c.sku===sku) || {sku, name:sku, water_loss:0.15, blend_recipe:{}}; }
 function coffeeOpts(filter) {
@@ -728,17 +807,13 @@ function coffeeOpts(filter) {
 
 // ── CYCLES ──
 async function loadCycles() {
-  try {
-    var data = await dbFetch('cycles?select=*&order=created_at.desc');
-    cycles = data || [];
-  } catch(e) { cycles = []; }
+  try { var data = await dbFetch('cycles?select=*&order=created_at.desc'); cycles = data || []; }
+  catch(e) { cycles = []; }
 
   const sel = document.getElementById('cycle-select');
   sel.innerHTML = '';
-
   if (!cycles.length) { await createNewCycle(true); return; }
 
-  // Check if current cycle is past cutoff and we need to auto-create next week
   const isStaff = currentProfile && ['owner','staff'].includes(currentProfile.role);
   if (isCycleClosed() && isStaff) {
     const nextMon = getNextMondayDate();
@@ -767,29 +842,21 @@ async function loadCycles() {
 async function createNewCycle(silent=false) {
   let name;
   if (silent) {
-    // Auto-create on first load
     const d = new Date();
     name = 'Week of ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  } else {
-    // Show date picker dialog
-    showNewCycleDialog();
-    return;
-  }
+  } else { showNewCycleDialog(); return; }
   await _doCreateCycle(name);
 }
 
 function showNewCycleDialog() {
-  // Get next Monday as default
   const today = new Date();
   const day = today.getDay();
   const diff = day === 0 ? 1 : 8 - day;
   const nextMon = new Date(today);
   nextMon.setDate(today.getDate() + (day === 1 ? 0 : diff));
   const defaultDate = nextMon.toISOString().split('T')[0];
-
   const existing = document.getElementById('cycle-dialog');
   if (existing) existing.remove();
-
   const dialog = document.createElement('div');
   dialog.id = 'cycle-dialog';
   dialog.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -824,11 +891,9 @@ async function confirmNewCycle() {
 
 async function _doCreateCycle(name) {
   var newCycles;
-  try {
-    newCycles = await dbFetch('cycles', {method:'POST', body:{name:name, created_by:currentUser.id}});
-  } catch(e) { toast('Error creating cycle','error'); return; }
+  try { newCycles = await dbFetch('cycles', {method:'POST', body:{name:name, created_by:currentUser.id}}); }
+  catch(e) { toast('Error creating cycle','error'); return; }
   var data = Array.isArray(newCycles) ? newCycles[0] : newCycles;
-  var error = null;
   cycles.unshift(data); currentCycleId = data.id;
   const sel = document.getElementById('cycle-select');
   const o = document.createElement('option'); o.value = data.id; o.textContent = data.name;
@@ -850,33 +915,141 @@ function onCycleChange() {
 async function loadOrders() {
   if (!currentCycleId) return;
   document.getElementById('orders-tbody').innerHTML = '<tr><td colspan="11" class="loading"><div class="spinner"></div></td></tr>';
-  try {
-    orders = await dbFetch('orders?select=*&cycle_id=eq.' + currentCycleId + '&order=created_at');
-  } catch(e) { orders = []; }
+  document.getElementById('order-cards-mobile').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try { orders = await dbFetch('orders?select=*&cycle_id=eq.' + currentCycleId + '&order=created_at'); }
+  catch(e) { orders = []; }
   renderOrdersTable();
+  renderOrderCardsMobile();
   updateStats();
 }
 
+// ── GROUPED ORDERS TABLE (desktop) ──
 function renderOrdersTable() {
   const tbody = document.getElementById('orders-tbody');
-  if (!orders.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">No orders yet for this cycle.</td></tr>'; return; }
-  tbody.innerHTML = orders.map((o,i) => {
-    var typeClass = o.order_type==='wholesale'?'badge-gold':o.order_type==='subscription'?'badge-green':'badge-gray';
-    var regionClass = o.region==='pickup'?'badge-green':(o.region==='local'||o.region==='seattle'||o.region==='pt')?'badge-gold':'badge-gray';
-    return '<tr>' +
-      '<td class="mono" style="color:var(--ink3);font-size:11px;">'+(i+1)+'</td>' +
-      '<td><div style="font-weight:600;">'+o.customer_name+'</div><div style="font-size:11px;color:var(--ink3);">'+(o.city||'')+' '+(o.state||'')+'</div></td>' +
-      '<td><span class="badge '+typeClass+'">'+(TYPE_L[o.order_type]||o.order_type)+'</span></td>' +
-      '<td style="font-weight:500;">'+o.coffee_name+'</td>' +
-      '<td><span class="sku">'+o.coffee_sku+'</span></td>' +
-      '<td class="mono">'+o.size+'</td>' +
-      '<td class="num mono">'+o.qty+'</td>' +
-      '<td style="color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
-      '<td><span class="badge '+regionClass+'">'+(REGION_L[o.region]||o.region)+'</span></td>' +
-      '<td style="color:var(--ink3);font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(o.notes||'-')+'</td>' +
-      '<td><button class="btn btn-danger btn-sm" onclick="deleteOrder(\''+o.id+'\')">✕</button></td>' +
+  if (!orders.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty">No orders yet for this cycle.</td></tr>';
+    return;
+  }
+
+  // Group by customer name, preserving insertion order
+  var groups = {};
+  var groupOrder = [];
+  orders.forEach(function(o) {
+    var key = o.customer_name;
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(o);
+  });
+
+  var html = '';
+  groupOrder.forEach(function(customerName) {
+    var lines = groups[customerName];
+    var firstLine = lines[0];
+    var totalBags = lines.reduce(function(s,o){return s+o.qty;}, 0);
+    var totalLbs  = lines.reduce(function(s,o){return s+(BAG_W[o.size]||0)*o.qty;}, 0);
+
+    var typeClass = firstLine.order_type==='wholesale'?'badge-gold':firstLine.order_type==='subscription'?'badge-green':'badge-gray';
+    var regionClass = firstLine.region==='pickup'?'badge-green':(firstLine.region==='local'||firstLine.region==='seattle'||firstLine.region==='pt')?'badge-gold':'badge-gray';
+
+    // Customer header row
+    html += '<tr class="order-customer-row">' +
+      '<td style="color:var(--ink3);font-size:11px;font-family:\'DM Mono\',monospace;text-align:center;">▾</td>' +
+      '<td><div style="font-weight:700;font-size:14px;">'+escHtml(customerName)+'</div>' +
+        '<div style="font-size:11px;color:var(--ink3);margin-top:2px;">'+(firstLine.city?firstLine.city+' · ':'')+(totalBags)+' bag'+(totalBags!==1?'s':'')+' · '+totalLbs.toFixed(1)+' lb</div></td>' +
+      '<td><span class="badge '+typeClass+'">'+(TYPE_L[firstLine.order_type]||firstLine.order_type)+'</span></td>' +
+      '<td colspan="5"></td>' +
+      '<td><span class="badge '+regionClass+'">'+(REGION_L[firstLine.region]||firstLine.region)+'</span></td>' +
+      '<td></td>' +
+      '<td><button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+JSON.stringify(lines.map(function(o){return o.id;}))+',event)" title="Delete all orders for this customer" style="font-size:11px;">✕ all</button></td>' +
       '</tr>';
-  }).join('');
+
+    // Line item rows
+    lines.forEach(function(o, idx) {
+      html += '<tr class="order-line-row">' +
+        '<td style="text-align:center;color:var(--ink3);font-size:11px;">'+(idx+1)+'</td>' +
+        '<td style="padding-left:28px;color:var(--ink3);font-size:12px;">'+(firstLine.city||'') + (firstLine.state?' · '+firstLine.state:'')+'</td>' +
+        '<td></td>' +
+        '<td style="font-weight:500;">'+escHtml(o.coffee_name)+'</td>' +
+        '<td><span class="sku">'+o.coffee_sku+'</span></td>' +
+        '<td class="mono">'+o.size+'</td>' +
+        '<td class="num mono">'+o.qty+'</td>' +
+        '<td style="color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
+        '<td></td>' +
+        '<td style="color:var(--ink3);font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(o.notes||'-')+'</td>' +
+        '<td><button class="btn btn-danger btn-sm" onclick="deleteOrder(\''+o.id+'\')">✕</button></td>' +
+        '</tr>';
+    });
+  });
+
+  tbody.innerHTML = html;
+}
+
+// ── MOBILE ORDER CARDS ──
+function renderOrderCardsMobile() {
+  var container = document.getElementById('order-cards-mobile');
+  if (!orders.length) {
+    container.innerHTML = '<div class="empty">No orders yet for this cycle.</div>';
+    return;
+  }
+
+  // Group same as desktop
+  var groups = {};
+  var groupOrder = [];
+  orders.forEach(function(o) {
+    var key = o.customer_name;
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(o);
+  });
+
+  var html = '';
+  groupOrder.forEach(function(customerName) {
+    var lines = groups[customerName];
+    var firstLine = lines[0];
+    var totalBags = lines.reduce(function(s,o){return s+o.qty;}, 0);
+    var totalLbs  = lines.reduce(function(s,o){return s+(BAG_W[o.size]||0)*o.qty;}, 0);
+
+    var typeClass = firstLine.order_type==='wholesale'?'badge-gold':firstLine.order_type==='subscription'?'badge-green':'badge-gray';
+    var regionClass = firstLine.region==='pickup'?'badge-green':(firstLine.region==='local'||firstLine.region==='seattle'||firstLine.region==='pt')?'badge-gold':'badge-gray';
+
+    html += '<div class="order-card">' +
+      '<div class="order-card-header">' +
+        '<div>' +
+          '<div class="order-card-name">'+escHtml(customerName)+'</div>' +
+          '<div class="order-card-meta">' +
+            '<span class="badge '+typeClass+'">'+(TYPE_L[firstLine.order_type]||firstLine.order_type)+'</span>' +
+            '<span class="badge '+regionClass+'">'+(REGION_L[firstLine.region]||firstLine.region)+'</span>' +
+            (firstLine.city ? '<span style="font-size:11px;color:var(--ink3);">'+firstLine.city+'</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-family:\'DM Mono\',monospace;font-weight:700;font-size:16px;color:var(--blue);">'+totalBags+' bag'+(totalBags!==1?'s':'')+'</div>' +
+          '<div style="font-size:11px;color:var(--ink3);">'+totalLbs.toFixed(1)+' lb</div>' +
+          '<button class="btn btn-danger btn-sm" style="margin-top:6px;font-size:11px;" onclick="deleteCustomerOrders('+JSON.stringify(lines.map(function(o){return o.id;}))+',event)">✕ all</button>' +
+        '</div>' +
+      '</div>';
+
+    lines.forEach(function(o) {
+      html += '<div class="order-card-line">' +
+        '<div>' +
+          '<div class="order-card-coffee">'+escHtml(o.coffee_name)+'</div>' +
+          '<div class="order-card-detail">' +
+            '<span class="sku">'+o.coffee_sku+'</span> · ' +
+            o.size+' · '+(GRIND_L[o.grind]||o.grind)+' · qty '+o.qty +
+            (o.notes ? ' · <em>'+escHtml(o.notes)+'</em>' : '') +
+          '</div>' +
+        '</div>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteOrder(\''+o.id+'\')">✕</button>' +
+      '</div>';
+    });
+
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function updateStats() {
@@ -905,7 +1078,6 @@ function addLineItem() {
     '<div class="form-group">'+(id===0?'<label>Qty</label>':'')+'<input type="number" id="li-qty-'+id+'" value="1" min="1"></div>' +
     '<button class="remove-btn" onclick="document.getElementById(\'li-'+id+'\').remove()"'+(id===0?' style="visibility:hidden;"':'')+'>×</button>';
   container.appendChild(div);
-  // Auto-focus the coffee dropdown on new lines
   if (id > 0) {
     var newSelect = document.getElementById('li-coffee-'+id);
     if (newSelect) setTimeout(function(){ newSelect.focus(); }, 50);
@@ -936,10 +1108,8 @@ async function saveOrder() {
     });
   });
   if (!toInsert.length) { toast('Add at least one coffee','warn'); return; }
-  try {
-    await dbFetch('orders', {method:'POST', body: toInsert.length === 1 ? toInsert[0] : toInsert, prefer:'return=minimal'});
-  } catch(e) { toast('Error saving: '+e.message,'error'); return; }
-  var res = {error: null};
+  try { await dbFetch('orders', {method:'POST', body: toInsert.length === 1 ? toInsert[0] : toInsert, prefer:'return=minimal'}); }
+  catch(e) { toast('Error saving: '+e.message,'error'); return; }
   toast(toInsert.length+' line'+(toInsert.length>1?'s':'')+' saved','success');
   document.getElementById('f-customer').value = '';
   document.getElementById('f-notes').value = '';
@@ -948,9 +1118,27 @@ async function saveOrder() {
 }
 
 async function deleteOrder(id) {
-  if (!confirm('Delete this order?')) return;
+  if (!confirm('Delete this line?')) return;
   await dbFetch('orders?id=eq.' + id, {method:'DELETE', prefer:'return=minimal'});
   toast('Deleted','success');
+  await loadOrders();
+}
+
+async function deleteCustomerOrders(ids, event) {
+  if (event) event.stopPropagation();
+  if (!confirm('Delete all lines for this customer?')) return;
+  // Delete each id — Supabase REST supports IN filter
+  var filter = ids.map(function(id){return 'id=eq.'+id;}).join(',');
+  // Use OR logic: ?or=(id.eq.X,id.eq.Y)
+  try {
+    await dbFetch('orders?id=in.('+ids.join(',')+')' , {method:'DELETE', prefer:'return=minimal'});
+  } catch(e) {
+    // Fallback: delete one by one
+    for (var i=0; i<ids.length; i++) {
+      await dbFetch('orders?id=eq.' + ids[i], {method:'DELETE', prefer:'return=minimal'});
+    }
+  }
+  toast('Deleted customer orders','success');
   await loadOrders();
 }
 
@@ -997,9 +1185,8 @@ async function handleCSV(file) {
       });
     }
     if (!toInsert.length) { toast('No valid orders found','warn'); return; }
-    try {
-      await dbFetch('orders', {method:'POST', body: toInsert, prefer:'return=minimal'});
-    } catch(e) { toast('Import error: '+e.message,'error'); return; }
+    try { await dbFetch('orders', {method:'POST', body: toInsert, prefer:'return=minimal'}); }
+    catch(e) { toast('Import error: '+e.message,'error'); return; }
     toast('Imported '+toInsert.length+' orders','success');
     await loadOrders();
   };
@@ -1044,13 +1231,11 @@ function parseProductName(name) {
 
 // ── ROAST SCHEDULE ──
 function generateSchedule() {
-  // Sum roasted lbs needed per SKU
   var neededBySku = {};
   orders.forEach(function(o) {
     neededBySku[o.coffee_sku] = (neededBySku[o.coffee_sku]||0) + (BAG_W[o.size]||0)*o.qty;
   });
 
-  // Roll child SKU weights into parent roast
   var roastNeeded = {};
   var childBreakdown = {};
   Object.keys(neededBySku).forEach(function(sku) {
@@ -1074,12 +1259,8 @@ function generateSchedule() {
     var remainder = parseFloat((greenNeeded % 10).toFixed(2));
     var estOutput = parseFloat((actualGreen * (1 - wl)).toFixed(2));
     var surplus = parseFloat((estOutput - totalLbs).toFixed(2));
-
-    // Child SKUs list
     var children = childBreakdown[sku] || {};
     var childSkus = Object.keys(children).filter(function(s){return s!==sku;});
-
-    // Origin totals from blend recipe
     var recipe = coffee.blend_recipe || {};
     Object.keys(recipe).forEach(function(origin) {
       var pct = recipe[origin];
@@ -1088,7 +1269,6 @@ function generateSchedule() {
       if (originTotals[origin].usedIn.indexOf(coffee.name) === -1)
         originTotals[origin].usedIn.push(coffee.name);
     });
-
     rows.push({sku:sku, name:coffee.name, totalLbs:totalLbs, wl:wl, greenNeeded:greenNeeded,
       actualGreen:actualGreen, fullBatches:fullBatches, remainder:remainder,
       estOutput:estOutput, surplus:surplus, childSkus:childSkus, children:children});
@@ -1096,7 +1276,6 @@ function generateSchedule() {
 
   roastSchedule = rows;
 
-  // Render table
   var tbody = document.getElementById('roast-tbody');
   if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10" class="empty">No orders in this cycle.</td></tr>'; return; }
 
@@ -1104,10 +1283,8 @@ function generateSchedule() {
     var childStr = r.childSkus.length ? r.childSkus.map(function(s){
       return '<span class="sku">'+s+'</span> '+getCoffee(s).name;
     }).join(', ') : '<span style="color:var(--ink3);">-</span>';
-
     var surplusColor = r.surplus > 0 ? '#2a8042' : '#888';
     var surplusStr = r.surplus > 0 ? '+'+r.surplus.toFixed(2) : '-';
-
     return '<tr>' +
       '<td><div style="font-weight:700;">'+r.name+'</div></td>' +
       '<td><span class="sku">'+r.sku+'</span></td>' +
@@ -1131,7 +1308,6 @@ function generateSchedule() {
   document.getElementById('rs-skus').textContent    = rows.length;
   document.getElementById('roast-stats').style.display = 'grid';
 
-  // Green origins
   var gtbody = document.getElementById('green-tbody');
   var originEntries = Object.keys(originTotals).map(function(o){return {origin:o, data:originTotals[o]};});
   originEntries.sort(function(a,b){return b.data.total-a.data.total;});
@@ -1182,22 +1358,18 @@ function buildPrintSheets(rows, originTotals) {
       '<td style="font-size:12px;color:var(--ink3);">'+e.data.usedIn.join(', ')+'</td></tr>';
   }).join('');
 
-  // Bagging sheet - aggregate per coffee/size/grind combo
   var bagAgg = {};
-  var grindTasks = []; // individual grinding tasks
+  var grindTasks = [];
 
   orders.forEach(function(o) {
-    // Aggregate totals per SKU
     if (!bagAgg[o.coffee_sku]) bagAgg[o.coffee_sku] = {
-      name:o.coffee_name, sku:o.coffee_sku,
-      sizes:{}, wb:{}, grind:{}, notes:[]
+      name:o.coffee_name, sku:o.coffee_sku, sizes:{}, wb:{}, grind:{}, notes:[]
     };
     var key = o.size + '|' + o.grind;
     bagAgg[o.coffee_sku].sizes[key] = (bagAgg[o.coffee_sku].sizes[key]||0) + o.qty;
     if (o.grind === 'wb' || o.size === '4oz') {
       bagAgg[o.coffee_sku].wb[o.size] = (bagAgg[o.coffee_sku].wb[o.size]||0) + o.qty;
     } else {
-      // It needs grinding
       var taskKey = o.coffee_name + '|' + o.size + '|' + o.grind;
       var existing = grindTasks.find(function(t){return t.key===taskKey;});
       if (existing) { existing.qty += o.qty; }
@@ -1206,7 +1378,6 @@ function buildPrintSheets(rows, originTotals) {
     if (o.notes) bagAgg[o.coffee_sku].notes.push(o.notes);
   });
 
-  // Sort grind tasks: by coffee name, then size, then grind
   grindTasks.sort(function(a,b){
     if (a.name !== b.name) return a.name.localeCompare(b.name);
     return a.size.localeCompare(b.size);
@@ -1216,7 +1387,6 @@ function buildPrintSheets(rows, originTotals) {
   var grandTotal = 0;
 
   document.getElementById('bag-print-tbody').innerHTML = Object.values(bagAgg).map(function(r,i) {
-    // Build size totals
     var totals = {};
     Object.keys(r.sizes).forEach(function(k){
       var parts = k.split('|');
@@ -1227,16 +1397,11 @@ function buildPrintSheets(rows, originTotals) {
     grandTotal += tot;
     var bg = i%2===0 ? 'background:var(--paper2);' : '';
     var n = Array.from(new Set(r.notes.filter(Boolean))).join('; ');
-
-    // Size breakdown string
     var sizeStr = SIZE_ORDER.filter(function(s){return totals[s];}).map(function(s){
       return '<span style="margin-right:8px;"><b>'+totals[s]+'</b>× '+s+'</span>';
     }).join('');
-
-    // Whole bean vs grind split
     var wbTotal = Object.values(r.wb).reduce(function(s,v){return s+v;},0);
     var grindTotal = tot - wbTotal;
-
     return '<tr style="'+bg+'">' +
       '<td style="font-weight:700;">'+r.name+'</td>' +
       '<td><span class="sku">'+r.sku+'</span></td>' +
@@ -1248,7 +1413,6 @@ function buildPrintSheets(rows, originTotals) {
       '</tr>';
   }).join('');
 
-  // Grinding task list
   var grindHtml = '';
   if (grindTasks.length) {
     var GRIND_LABEL = {drip:'Drip',coarse:'Coarse',fine:'Fine'};
@@ -1270,8 +1434,7 @@ function buildPrintSheets(rows, originTotals) {
   document.getElementById('bag-sheet-meta').textContent = cycleName+' · Generated '+dateStr;
   document.getElementById('bag-sheet-total').textContent = grandTotal;
 
-  // Shipping
-  var shipOrders = orders.filter(function(o){return o.region==='ship';}); // local delivery and pickup get no box
+  var shipOrders = orders.filter(function(o){return o.region==='ship';});
   var boxC = {};
   shipOrders.forEach(function(o) {
     var lbs = (BAG_W[o.size]||0)*o.qty;
@@ -1334,8 +1497,6 @@ function downloadCSV(type) {
 // ── CUSTOMER PORTAL ──
 async function loadPortalCoffees() {
   var role = currentProfile && currentProfile.role;
-
-  // Show cutoff notice if applicable
   var cutoffEl = document.getElementById('portal-cutoff');
   if (isCycleClosed()) {
     var nextMon = getNextMondayDate();
@@ -1344,26 +1505,23 @@ async function loadPortalCoffees() {
     cutoffEl.style.display = 'block';
   } else {
     cutoffEl.style.display = 'none';
-    // Show time remaining until cutoff
     var pacific = getPacificNow();
     var day = pacific.getDay();
-    if (day === 1) { // Monday
+    if (day === 1) {
       var hoursLeft = 17 - pacific.getHours();
       if (hoursLeft > 0) {
         document.getElementById('portal-sub').textContent =
           'Order by 5pm Pacific today · ' + hoursLeft + ' hour' + (hoursLeft===1?'':'s') + ' remaining';
       }
-    } else if (day === 0) { // Sunday
+    } else if (day === 0) {
       document.getElementById('portal-sub').textContent = 'Order by Monday 5pm Pacific';
     }
   }
 
-  // Filter coffees by role
   var visFilter = role === 'wholesale' ? '&visibility=in.(wholesale,both)' : '&visibility=in.(retail,both)';
   var data = [];
-  try {
-    data = await dbFetch('coffees?select=*&active=eq.true&customer_facing=eq.true' + visFilter + '&order=sort_order');
-  } catch(e) {}
+  try { data = await dbFetch('coffees?select=*&active=eq.true&customer_facing=eq.true' + visFilter + '&order=sort_order'); }
+  catch(e) {}
   var grid = document.getElementById('portal-coffee-grid');
   if (!data.length) { grid.innerHTML='<div class="empty">No coffees available. Please contact us.</div>'; return; }
   grid.innerHTML = data.map(function(c) {
@@ -1414,7 +1572,6 @@ function addPortalLine(preselect) {
 
 async function placePortalOrder() {
   if (!currentCycleId) { toast('No open cycle - please contact us','warn'); return; }
-  // Always route to most recent open cycle
   const targetCycle = cycles.find(function(c){ return c.status !== 'closed'; });
   if (!targetCycle) { toast('No open cycle - please contact us','warn'); return; }
   const orderCycleId = targetCycle.id;
@@ -1438,10 +1595,8 @@ async function placePortalOrder() {
       source_order_id:'portal-'+Date.now()
     });
   });
-  try {
-    await dbFetch('orders', {method:'POST', body: toInsert.length === 1 ? toInsert[0] : toInsert, prefer:'return=minimal'});
-  } catch(e) { toast('Error saving: '+e.message,'error'); return; }
-  var res = {error: null};
+  try { await dbFetch('orders', {method:'POST', body: toInsert.length === 1 ? toInsert[0] : toInsert, prefer:'return=minimal'}); }
+  catch(e) { toast('Error saving: '+e.message,'error'); return; }
   toast('Order placed - thank you!','success');
   document.getElementById('portal-notes').value='';
   document.getElementById('portal-line-items').innerHTML='';
@@ -1453,9 +1608,8 @@ async function placePortalOrder() {
 
 async function loadPortalHistory() {
   var data = [];
-  try {
-    data = await dbFetch('orders?select=*&profile_id=eq.' + currentUser.id + '&order=created_at.desc&limit=20');
-  } catch(e) {}
+  try { data = await dbFetch('orders?select=*&profile_id=eq.' + currentUser.id + '&order=created_at.desc&limit=20'); }
+  catch(e) {}
   var el = document.getElementById('portal-history');
   if (!data.length) { el.innerHTML='<div class="empty">No orders yet.</div>'; return; }
   el.innerHTML = data.map(function(o) {
@@ -1553,8 +1707,7 @@ async function loadCatalog() {
 
 async function updateCoffeeField(sku, field, value) {
   try {
-    var body = {};
-    body[field] = value;
+    var body = {}; body[field] = value;
     await dbFetch('coffees?sku=eq.' + sku, {method:'PATCH', body:body, prefer:'return=minimal'});
     toast('Saved','success');
     await loadCoffees();
