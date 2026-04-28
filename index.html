@@ -8,7 +8,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="app-version" content="BUILD_TIMESTAMP">
 <title>Conduit Coffee - Orders</title>
-<script src="supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -481,6 +481,43 @@ const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ── ROBUST DB FETCH ──
+// Uses plain fetch through Netlify proxy - never hangs, works in all browsers
+async function dbFetch(path, options) {
+  options = options || {};
+  var method = options.method || 'GET';
+  var body = options.body;
+  var extra = options.headers || {};
+
+  // Get auth token if available - don't wait if not ready
+  var token = SUPABASE_KEY; // default to anon
+  try {
+    var sess = sb.auth.currentSession || (await Promise.race([
+      sb.auth.getSession(),
+      new Promise(function(r){ setTimeout(function(){ r({data:{session:null}}); }, 1000); })
+    ]));
+    if (sess && sess.data && sess.data.session) {
+      token = sess.data.session.access_token;
+    }
+  } catch(e) {}
+
+  var headers = Object.assign({
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + token,
+    'Content-Type': 'application/json',
+    'Prefer': options.prefer || 'return=representation'
+  }, extra);
+
+  var url = '/supabase/rest/v1/' + path;
+  var res = await fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined });
+  if (!res.ok) {
+    var err = await res.text();
+    throw new Error('DB error ' + res.status + ': ' + err);
+  }
+  if (res.status === 204) return [];
+  return await res.json();
+}
+
 // ── CONSTANTS ──
 const BAG_W = {'4oz':0.256,'12oz':0.769,'1lb':1.02,'2lb':2.04,'5lb':5.1,'20lb':1.0}; // 4oz=Sample, 20lb=Bulk (1lb per unit, qty=lbs)
 const GRIND_L = {wb:'Whole Bean',drip:'Drip',coarse:'Coarse',fine:'Fine'};
@@ -680,8 +717,9 @@ async function initApp(user) {
 
 // ── COFFEES ──
 async function loadCoffees() {
-  const {data} = await sb.from('coffees').select('*').eq('active',true).order('sort_order');
-  coffees = data || [];
+  try {
+    coffees = await dbFetch('coffees?select=*&active=eq.true&order=sort_order');
+  } catch(e) { console.log('loadCoffees error:', e); coffees = []; }
 }
 function getCoffee(sku) { return coffees.find(c => c.sku===sku) || {sku, name:sku, water_loss:0.15, blend_recipe:{}}; }
 function coffeeOpts(filter) {
@@ -690,16 +728,9 @@ function coffeeOpts(filter) {
 
 // ── CYCLES ──
 async function loadCycles() {
-  // Retry up to 3 times with delay for nano compute
-  var data = null;
-  for (var attempt = 0; attempt < 3; attempt++) {
-    try {
-      var res = await sb.from('cycles').select('*').order('created_at',{ascending:false});
-      if (res.data) { data = res.data; break; }
-    } catch(e) {}
-    if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
-  }
-  cycles = data || [];
+  try {
+    var data = await dbFetch('cycles?select=*&order=created_at.desc');
+    cycles = data || [];
   const sel = document.getElementById('cycle-select');
   sel.innerHTML = '';
 
@@ -792,8 +823,12 @@ async function confirmNewCycle() {
 }
 
 async function _doCreateCycle(name) {
-  const {data,error} = await sb.from('cycles').insert({name, created_by:currentUser.id}).select().single();
-  if (error) { toast('Error creating cycle','error'); return; }
+  var newCycles;
+  try {
+    newCycles = await dbFetch('cycles', {method:'POST', body:{name:name, created_by:currentUser.id}});
+  } catch(e) { toast('Error creating cycle','error'); return; }
+  var data = Array.isArray(newCycles) ? newCycles[0] : newCycles;
+  var error = null;
   cycles.unshift(data); currentCycleId = data.id;
   const sel = document.getElementById('cycle-select');
   const o = document.createElement('option'); o.value = data.id; o.textContent = data.name;
@@ -815,8 +850,9 @@ function onCycleChange() {
 async function loadOrders() {
   if (!currentCycleId) return;
   document.getElementById('orders-tbody').innerHTML = '<tr><td colspan="11" class="loading"><div class="spinner"></div></td></tr>';
-  const {data} = await sb.from('orders').select('*').eq('cycle_id',currentCycleId).order('created_at');
-  orders = data || [];
+  try {
+    orders = await dbFetch('orders?select=*&cycle_id=eq.' + currentCycleId + '&order=created_at');
+  } catch(e) { orders = []; }
   renderOrdersTable();
   updateStats();
 }
@@ -900,8 +936,10 @@ async function saveOrder() {
     });
   });
   if (!toInsert.length) { toast('Add at least one coffee','warn'); return; }
-  var res = await sb.from('orders').insert(toInsert);
-  if (res.error) { toast('Error: '+res.error.message,'error'); return; }
+  try {
+    await dbFetch('orders', {method:'POST', body: toInsert.length === 1 ? toInsert[0] : toInsert, prefer:'return=minimal'});
+  } catch(e) { toast('Error saving: '+e.message,'error'); return; }
+  var res = {error: null};
   toast(toInsert.length+' line'+(toInsert.length>1?'s':'')+' saved','success');
   document.getElementById('f-customer').value = '';
   document.getElementById('f-notes').value = '';
@@ -911,7 +949,7 @@ async function saveOrder() {
 
 async function deleteOrder(id) {
   if (!confirm('Delete this order?')) return;
-  await sb.from('orders').delete().eq('id',id);
+  await dbFetch('orders?id=eq.' + id, {method:'DELETE', prefer:'return=minimal'});
   toast('Deleted','success');
   await loadOrders();
 }
@@ -959,8 +997,9 @@ async function handleCSV(file) {
       });
     }
     if (!toInsert.length) { toast('No valid orders found','warn'); return; }
-    var res = await sb.from('orders').insert(toInsert);
-    if (res.error) { toast('Import error: '+res.error.message,'error'); return; }
+    try {
+      await dbFetch('orders', {method:'POST', body: toInsert, prefer:'return=minimal'});
+    } catch(e) { toast('Import error: '+e.message,'error'); return; }
     toast('Imported '+toInsert.length+' orders','success');
     await loadOrders();
   };
@@ -1320,14 +1359,11 @@ async function loadPortalCoffees() {
   }
 
   // Filter coffees by role
-  var query = sb.from('coffees').select('*').eq('active',true).eq('customer_facing',true).order('sort_order');
-  if (role === 'wholesale') {
-    query = query.in('visibility',['wholesale','both']);
-  } else {
-    query = query.in('visibility',['retail','both']);
-  }
-  var res = await query;
-  var data = res.data || [];
+  var visFilter = role === 'wholesale' ? '&visibility=in.(wholesale,both)' : '&visibility=in.(retail,both)';
+  var data = [];
+  try {
+    data = await dbFetch('coffees?select=*&active=eq.true&customer_facing=eq.true' + visFilter + '&order=sort_order');
+  } catch(e) {}
   var grid = document.getElementById('portal-coffee-grid');
   if (!data.length) { grid.innerHTML='<div class="empty">No coffees available. Please contact us.</div>'; return; }
   grid.innerHTML = data.map(function(c) {
@@ -1402,8 +1438,10 @@ async function placePortalOrder() {
       source_order_id:'portal-'+Date.now()
     });
   });
-  var res = await sb.from('orders').insert(toInsert);
-  if (res.error) { toast('Error: '+res.error.message,'error'); return; }
+  try {
+    await dbFetch('orders', {method:'POST', body: toInsert.length === 1 ? toInsert[0] : toInsert, prefer:'return=minimal'});
+  } catch(e) { toast('Error saving: '+e.message,'error'); return; }
+  var res = {error: null};
   toast('Order placed - thank you!','success');
   document.getElementById('portal-notes').value='';
   document.getElementById('portal-line-items').innerHTML='';
@@ -1414,8 +1452,10 @@ async function placePortalOrder() {
 }
 
 async function loadPortalHistory() {
-  var res = await sb.from('orders').select('*').eq('profile_id',currentUser.id).order('created_at',{ascending:false}).limit(20);
-  var data = res.data || [];
+  var data = [];
+  try {
+    data = await dbFetch('orders?select=*&profile_id=eq.' + currentUser.id + '&order=created_at.desc&limit=20');
+  } catch(e) {}
   var el = document.getElementById('portal-history');
   if (!data.length) { el.innerHTML='<div class="empty">No orders yet.</div>'; return; }
   el.innerHTML = data.map(function(o) {
@@ -1444,8 +1484,8 @@ function closePopup() { document.getElementById('info-popup').style.display='non
 
 // ── ADMIN ──
 async function loadAdminUsers() {
-  var res = await sb.from('profiles').select('*').order('created_at');
-  var data = res.data || [];
+  var data = [];
+  try { data = await dbFetch('profiles?select=*&order=created_at'); } catch(e) {}
   var tbody = document.getElementById('admin-tbody');
   if (!data.length) { tbody.innerHTML='<tr><td colspan="7" class="empty">No users.</td></tr>'; return; }
   tbody.innerHTML = data.map(function(u) {
@@ -1469,15 +1509,22 @@ async function loadAdminUsers() {
 }
 
 async function updateRole(id, role) {
-  await sb.from('profiles').update({role:role}).eq('id',id);
-  toast('Role updated - user must sign out and back in to see changes','success');
+  try {
+    await dbFetch('profiles?id=eq.' + id, {method:'PATCH', body:{role:role}, prefer:'return=minimal'});
+    toast('Role updated - user must sign out and back in','success');
+  } catch(e) { toast('Error updating role','error'); }
 }
-async function approveUser(id) { await sb.from('profiles').update({pending_approval:false,approved:true}).eq('id',id); toast('Approved','success'); await loadAdminUsers(); }
+async function approveUser(id) {
+  try {
+    await dbFetch('profiles?id=eq.' + id, {method:'PATCH', body:{pending_approval:false, approved:true}, prefer:'return=minimal'});
+    toast('Approved','success'); await loadAdminUsers();
+  } catch(e) { toast('Error approving','error'); }
+}
 
 // ── CATALOG ──
 async function loadCatalog() {
-  var res = await sb.from('coffees').select('*').order('sort_order');
-  var data = res.data || [];
+  var data = [];
+  try { data = await dbFetch('coffees?select=*&order=sort_order'); } catch(e) {}
   var tbody = document.getElementById('catalog-tbody');
   if (!data.length) { tbody.innerHTML='<tr><td colspan="7" class="empty">No coffees.</td></tr>'; return; }
   tbody.innerHTML = data.map(function(c) {
@@ -1504,10 +1551,14 @@ async function loadCatalog() {
   }).join('');
 }
 
-async function updateCoffeeField(sku,field,value) {
-  await sb.from('coffees').update({[field]:value}).eq('sku',sku);
-  toast('Saved','success');
-  await loadCoffees();
+async function updateCoffeeField(sku, field, value) {
+  try {
+    var body = {};
+    body[field] = value;
+    await dbFetch('coffees?sku=eq.' + sku, {method:'PATCH', body:body, prefer:'return=minimal'});
+    toast('Saved','success');
+    await loadCoffees();
+  } catch(e) { toast('Error saving','error'); }
 }
 
 // ── TABS ──
@@ -1535,21 +1586,9 @@ function toast(msg, type) {
 
 // ── BOOT ──
 setLogos();
-
-document.getElementById('auth-screen').style.display='flex';
-document.getElementById('main-app').style.display='none';
-
-var appStarted = false;
-
 sb.auth.onAuthStateChange(async function(event, session) {
-  console.log('Auth event:', event);
-  if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session && session.user) {
-    if (!appStarted) {
-      appStarted = true;
-      await initApp(session.user);
-    }
-  } else if (event === 'SIGNED_OUT') {
-    appStarted = false;
+  if (session && session.user) await initApp(session.user);
+  else {
     document.getElementById('auth-screen').style.display='flex';
     document.getElementById('main-app').style.display='none';
   }
