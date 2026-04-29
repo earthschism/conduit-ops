@@ -743,8 +743,12 @@ async function doSignup() {
   const biz   = document.getElementById('signup-business') ? document.getElementById('signup-business').value.trim() : '';
   if (!name||!email||!pass) { showAuthErr('Please fill in all fields.'); return; }
   if (pass.length < 6) { showAuthErr('Password must be at least 6 characters.'); return; }
+
+  _signingUp = true; // prevent initApp from firing
+
   const {data, error} = await sb.auth.signUp({email, password:pass, options:{data:{full_name:name}}});
-  if (error) { showAuthErr(error.message); return; }
+  if (error) { _signingUp = false; showAuthErr(error.message); return; }
+
   if (data.user) {
     const {count} = await sb.from('profiles').select('*',{count:'exact',head:true});
     const isFirst = (count===null||count===0);
@@ -759,11 +763,18 @@ async function doSignup() {
       pending_approval: pending,
       approved: !pending
     }).eq('id', data.user.id);
+
+    if (isFirst) {
+      // First account = owner, let them in normally
+      _signingUp = false;
+      await initApp(data.user);
+      return;
+    }
   }
-  // Show pending screen instead of loading app
+
+  // Show pending screen for everyone else
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'none';
-  // Show a simple pending message
   var pendingDiv = document.getElementById('signup-pending-screen');
   if (!pendingDiv) {
     pendingDiv = document.createElement('div');
@@ -771,14 +782,16 @@ async function doSignup() {
     pendingDiv.style.cssText = 'min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--paper2);';
     pendingDiv.innerHTML =
       '<div style="background:white;border:1px solid var(--rule2);border-radius:12px;padding:44px 40px;max-width:420px;width:100%;text-align:center;box-shadow:var(--shadow);">' +
+        '<div style="font-size:40px;margin-bottom:12px;">☕</div>' +
         '<div style="font-family:\'Libre Baskerville\',serif;font-size:24px;font-weight:700;color:var(--ink);margin-bottom:12px;">Thanks, '+escHtml(name)+'!</div>' +
         '<div style="font-size:14px;color:var(--ink2);line-height:1.7;margin-bottom:20px;">Your account request has been received. We\'ll review it and email you at <strong>'+escHtml(email)+'</strong> when you\'re approved.</div>' +
-        '<div style="font-size:13px;color:var(--ink3);">Questions? Email us at <a href="mailto:orders@conduitcoffee.com" style="color:var(--blue);">orders@conduitcoffee.com</a></div>' +
+        '<div style="font-size:13px;color:var(--ink3);">Questions? <a href="mailto:orders@conduitcoffee.com" style="color:var(--blue);">orders@conduitcoffee.com</a></div>' +
         '<button class="btn btn-ghost" style="margin-top:24px;" onclick="window.location.reload()">Back to Sign In</button>' +
       '</div>';
     document.body.appendChild(pendingDiv);
   }
   pendingDiv.style.display = 'flex';
+
   // Notify staff
   try {
     await callEdgeFunction('send-email', {
@@ -910,8 +923,13 @@ async function loadCycles() {
 async function createNewCycle(silent=false) {
   let name;
   if (silent) {
-    const d = new Date();
-    name = 'Week of ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    // Auto-create for next Monday, not today
+    const today = new Date();
+    const day = today.getDay();
+    const daysUntilMonday = day === 1 ? 0 : day === 0 ? 1 : 8 - day;
+    const nextMon = new Date(today);
+    nextMon.setDate(today.getDate() + daysUntilMonday);
+    name = 'Week of ' + nextMon.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   } else { showNewCycleDialog(); return; }
   await _doCreateCycle(name);
 }
@@ -1972,8 +1990,11 @@ function toast(msg, type) {
 }
 
 // ── BOOT ──
+let _signingUp = false; // flag to prevent initApp during signup flow
+
 setLogos();
 sb.auth.onAuthStateChange(async function(event, session) {
+  if (_signingUp) return; // don't interfere with signup pending screen
   if (session && session.user) await initApp(session.user);
   else {
     document.getElementById('auth-screen').style.display='flex';
