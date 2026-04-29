@@ -320,8 +320,8 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <button class="btn btn-ghost btn-sm" id="btn-new-cycle" onclick="createNewCycle()" style="display:none;">+ New Cycle</button>
   </div>
   <div class="stats-row">
-    <div class="stat"><div class="stat-label">Orders</div><div class="stat-value" id="stat-orders">0</div></div>
     <div class="stat"><div class="stat-label">Total Bags</div><div class="stat-value" id="stat-bags">0</div></div>
+    <div class="stat"><div class="stat-label">Grind Jobs</div><div class="stat-value" id="stat-grind">0</div><div class="stat-sub">non-whole bean</div></div>
     <div class="stat"><div class="stat-label">Lbs Needed</div><div class="stat-value" id="stat-lbs">0</div></div>
     <div class="stat"><div class="stat-label">Ship / Pickup</div><div class="stat-value" id="stat-ship">-</div></div>
   </div>
@@ -1006,15 +1006,36 @@ function renderOrdersTable() {
 
 async function patchOrder(id, field, value) {
   var body = {}; body[field] = value;
+  // Find the cell that triggered this for flash feedback
+  var activeEl = document.activeElement;
   try {
     await dbFetch('orders?id=eq.'+id, {method:'PATCH', body:body, prefer:'return=minimal'});
-    // Update local state without full reload for snappy feel
+    // Update local state without full reload
     var o = orders.find(function(x){return x.id===id;});
     if (o) o[field] = value;
     updateStats();
-    // Re-render mobile cards to stay in sync
     renderOrderCardsMobile();
-  } catch(e) { toast('Error saving: '+e.message,'error'); }
+    // Flash the cell green
+    if (activeEl) {
+      var cell = activeEl.closest('td');
+      if (cell) {
+        cell.style.transition = 'background 0.15s';
+        cell.style.background = 'rgba(26,94,46,0.12)';
+        setTimeout(function(){ cell.style.background = ''; }, 800);
+      }
+    }
+  } catch(e) {
+    toast('Error saving: '+e.message,'error');
+    // Flash red on error
+    if (activeEl) {
+      var cell = activeEl.closest('td');
+      if (cell) {
+        cell.style.transition = 'background 0.15s';
+        cell.style.background = 'rgba(192,57,43,0.12)';
+        setTimeout(function(){ cell.style.background = ''; }, 1000);
+      }
+    }
+  }
 }
 
 // ── MOBILE ORDER CARDS ──
@@ -1087,8 +1108,8 @@ function escHtml(str) {
 }
 
 function updateStats() {
-  document.getElementById('stat-orders').textContent = orders.length;
   document.getElementById('stat-bags').textContent = orders.reduce((s,o) => s+o.qty, 0);
+  document.getElementById('stat-grind').textContent = orders.filter(o=>o.grind!=='wb').reduce((s,o)=>s+o.qty, 0);
   document.getElementById('stat-lbs').textContent = orders.reduce((s,o) => s+(BAG_W[o.size]||0)*o.qty, 0).toFixed(1);
   document.getElementById('stat-ship').textContent = orders.filter(o=>o.region==='ship').length+' / '+orders.filter(o=>o.region==='local'||o.region==='pickup'||o.region==='seattle'||o.region==='pt').length;
 }
