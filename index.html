@@ -920,6 +920,7 @@ async function loadCycles() {
     sel.appendChild(o);
   });
 
+  // Pick the most recent open cycle (first in list since sorted desc)
   const openCycle = cycles.find(function(c){ return c.status !== 'closed'; }) || cycles[0];
   currentCycleId = openCycle.id;
   sel.value = currentCycleId;
@@ -1918,7 +1919,8 @@ async function confirmApprove(userId, userName, userEmail) {
       });
     } catch(e) { console.log('Approval email failed (non-fatal):', e); }
 
-    document.getElementById('approve-modal').remove();
+    var modal = document.getElementById('approve-modal');
+    if (modal) modal.remove();
     toast('Account approved' + (selectedSkus.length ? ' · '+selectedSkus.length+' coffees assigned' : ' · default catalog'), 'success');
     await loadAdminUsers();
   } catch(e) {
