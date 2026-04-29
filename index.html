@@ -699,19 +699,25 @@ function setLogos() {
 
 // ── EDGE FUNCTION CALLER ──
 async function callEdgeFunction(name, body) {
+  // For new signups there may be no session yet — use anon key directly
   var token = SUPABASE_KEY;
   try {
-    var sess = await Promise.race([
-      sb.auth.getSession(),
-      new Promise(function(r){ setTimeout(function(){ r({data:{session:null}}); }, 1000); })
-    ]);
-    if (sess && sess.data && sess.data.session) token = sess.data.session.access_token;
+    var sess = sb.auth.currentSession;
+    if (!sess) {
+      var result = await Promise.race([
+        sb.auth.getSession(),
+        new Promise(function(r){ setTimeout(function(){ r({data:{session:null}}); }, 800); })
+      ]);
+      sess = result && result.data && result.data.session;
+    }
+    if (sess && sess.access_token) token = sess.access_token;
   } catch(e) {}
   var url = SUPABASE_URL + '/functions/v1/' + name;
   var res = await fetch(url, {
     method: 'POST',
     headers: {
       'Authorization': 'Bearer ' + token,
+      'apikey': SUPABASE_KEY,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
