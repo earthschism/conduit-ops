@@ -1061,8 +1061,9 @@ function renderOrdersTable() {
     // Line item rows — 11 cells, with inline edit on qty/size/grind/notes
     lines.forEach(function(o, idx) {
       var oid = o.id;
+      var SIZE_LABELS = {'4oz':'4oz Sample','12oz':'12 oz','1lb':'1 lb','2lb':'2 lb','5lb':'5 lb','20lb':'Bulk'};
       var sizeOpts = ['4oz','12oz','1lb','2lb','5lb','20lb'].map(function(s){
-        return '<option value="'+s+'"'+(o.size===s?' selected':'')+'>'+s+'</option>';
+        return '<option value="'+s+'"'+(o.size===s?' selected':'')+'>'+SIZE_LABELS[s]+'</option>';
       }).join('');
       var grindOpts = [['wb','Whole Bean'],['drip','Drip'],['coarse','Coarse'],['fine','Fine']].map(function(g){
         return '<option value="'+g[0]+'"'+(o.grind===g[0]?' selected':'')+'>'+g[1]+'</option>';
