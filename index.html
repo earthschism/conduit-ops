@@ -82,6 +82,8 @@ tr:hover td{background:var(--paper2);}
 .order-line-row td{background:white;}
 .order-line-row:hover td{background:rgba(33,33,212,0.03);}
 .order-line-row td:first-child{padding-left:28px;color:var(--ink3);font-size:11px;font-family:'DM Mono',monospace;}
+.order-line-row input:hover,.order-line-row select:hover{background:var(--paper2) !important;border-radius:3px;}
+.order-line-row input:focus,.order-line-row select:focus{background:var(--paper2) !important;outline:1px solid var(--blue);border-radius:3px;}
 
 /* ── BADGES ── */
 .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
@@ -617,8 +619,12 @@ async function dbFetch(path, options) {
   var url = '/supabase/rest/v1/' + path;
   var res = await fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) { var err = await res.text(); throw new Error('DB error ' + res.status + ': ' + err); }
-  if (res.status === 204) return [];
-  return await res.json();
+  if (res.status === 204 || res.status === 201) return [];
+  var ct = res.headers.get('content-type') || '';
+  if (!ct.includes('json')) return [];
+  var text = await res.text();
+  if (!text || !text.trim()) return [];
+  return JSON.parse(text);
 }
 
 // ── CONSTANTS ──
@@ -949,38 +955,66 @@ function renderOrdersTable() {
 
     var typeClass = firstLine.order_type==='wholesale'?'badge-gold':firstLine.order_type==='subscription'?'badge-green':'badge-gray';
     var regionClass = firstLine.region==='pickup'?'badge-green':(firstLine.region==='local'||firstLine.region==='seattle'||firstLine.region==='pt')?'badge-gold':'badge-gray';
+    var locationStr = [firstLine.city, firstLine.state].filter(Boolean).join(', ');
 
-    // Customer header row
+    // Customer header row — exactly 11 cells
     html += '<tr class="order-customer-row">' +
-      '<td style="color:var(--ink3);font-size:11px;font-family:\'DM Mono\',monospace;text-align:center;">▾</td>' +
+      '<td style="color:var(--ink3);font-size:11px;text-align:center;">▾</td>' +
       '<td><div style="font-weight:700;font-size:14px;">'+escHtml(customerName)+'</div>' +
-        '<div style="font-size:11px;color:var(--ink3);margin-top:2px;">'+(firstLine.city?firstLine.city+' · ':'')+(totalBags)+' bag'+(totalBags!==1?'s':'')+' · '+totalLbs.toFixed(1)+' lb</div></td>' +
+        '<div style="font-size:11px;color:var(--ink3);margin-top:2px;">'+(locationStr?locationStr+' · ':'')+totalBags+' bag'+(totalBags!==1?'s':'')+' · '+totalLbs.toFixed(1)+' lb</div></td>' +
       '<td><span class="badge '+typeClass+'">'+(TYPE_L[firstLine.order_type]||firstLine.order_type)+'</span></td>' +
-      '<td colspan="5"></td>' +
+      '<td></td><td></td><td></td><td></td><td></td>' +
       '<td><span class="badge '+regionClass+'">'+(REGION_L[firstLine.region]||firstLine.region)+'</span></td>' +
       '<td></td>' +
-      '<td><button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+JSON.stringify(lines.map(function(o){return o.id;}))+',event)" title="Delete all orders for this customer" style="font-size:11px;">✕ all</button></td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+JSON.stringify(lines.map(function(o){return o.id;}))+',event)" style="font-size:11px;">✕ all</button>' +
+      '</td>' +
       '</tr>';
 
-    // Line item rows
+    // Line item rows — 11 cells, with inline edit on qty/size/grind/notes
     lines.forEach(function(o, idx) {
-      html += '<tr class="order-line-row">' +
+      var oid = o.id;
+      var sizeOpts = ['4oz','12oz','1lb','2lb','5lb','20lb'].map(function(s){
+        return '<option value="'+s+'"'+(o.size===s?' selected':'')+'>'+s+'</option>';
+      }).join('');
+      var grindOpts = [['wb','Whole Bean'],['drip','Drip'],['coarse','Coarse'],['fine','Fine']].map(function(g){
+        return '<option value="'+g[0]+'"'+(o.grind===g[0]?' selected':'')+'>'+g[1]+'</option>';
+      }).join('');
+
+      html += '<tr class="order-line-row" id="row-'+oid+'">' +
         '<td style="text-align:center;color:var(--ink3);font-size:11px;">'+(idx+1)+'</td>' +
-        '<td style="padding-left:28px;color:var(--ink3);font-size:12px;">'+(firstLine.city||'') + (firstLine.state?' · '+firstLine.state:'')+'</td>' +
+        '<td style="padding-left:28px;color:var(--ink3);font-size:12px;">'+(locationStr||'')+'</td>' +
         '<td></td>' +
         '<td style="font-weight:500;">'+escHtml(o.coffee_name)+'</td>' +
         '<td><span class="sku">'+o.coffee_sku+'</span></td>' +
-        '<td class="mono">'+o.size+'</td>' +
-        '<td class="num mono">'+o.qty+'</td>' +
-        '<td style="color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
+        // Size — inline select
+        '<td><select class="inline-edit-select" onchange="patchOrder(\''+oid+'\',\'size\',this.value)" style="border:none;background:transparent;font-family:\'DM Mono\',monospace;font-size:13px;color:var(--ink);padding:2px 0;width:auto;cursor:pointer;">'+sizeOpts+'</select></td>' +
+        // Qty — inline number input
+        '<td class="num"><input type="number" min="1" value="'+o.qty+'" onchange="patchOrder(\''+oid+'\',\'qty\',parseInt(this.value)||1)" style="border:none;background:transparent;font-family:\'DM Mono\',monospace;font-size:13px;color:var(--ink);width:48px;text-align:right;padding:2px 0;cursor:text;" title="Click to edit qty"></td>' +
+        // Grind — inline select
+        '<td><select class="inline-edit-select" onchange="patchOrder(\''+oid+'\',\'grind\',this.value)" style="border:none;background:transparent;font-family:\'DM Sans\',sans-serif;font-size:13px;color:var(--ink3);padding:2px 0;width:auto;cursor:pointer;">'+grindOpts+'</select></td>' +
         '<td></td>' +
-        '<td style="color:var(--ink3);font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(o.notes||'-')+'</td>' +
-        '<td><button class="btn btn-danger btn-sm" onclick="deleteOrder(\''+o.id+'\')">✕</button></td>' +
+        // Notes — inline text input
+        '<td><input type="text" value="'+escHtml(o.notes||'')+'" placeholder="notes..." onchange="patchOrder(\''+oid+'\',\'notes\',this.value)" style="border:none;background:transparent;font-size:12px;color:var(--ink3);width:100%;padding:2px 0;cursor:text;" title="Click to edit notes"></td>' +
+        '<td><button class="btn btn-danger btn-sm" onclick="deleteOrder(\''+oid+'\')">✕</button></td>' +
         '</tr>';
     });
   });
 
   tbody.innerHTML = html;
+}
+
+async function patchOrder(id, field, value) {
+  var body = {}; body[field] = value;
+  try {
+    await dbFetch('orders?id=eq.'+id, {method:'PATCH', body:body, prefer:'return=minimal'});
+    // Update local state without full reload for snappy feel
+    var o = orders.find(function(x){return x.id===id;});
+    if (o) o[field] = value;
+    updateStats();
+    // Re-render mobile cards to stay in sync
+    renderOrderCardsMobile();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
 }
 
 // ── MOBILE ORDER CARDS ──
