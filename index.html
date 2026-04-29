@@ -265,18 +265,12 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <button class="btn btn-primary btn-full" onclick="doLogin()">Sign In</button>
     </div>
     <div id="signup-form" style="display:none;">
-      <div class="auth-info">The first account becomes the owner. Wholesale accounts are reviewed before activation.</div>
+      <div class="auth-info">Create an account to place orders. Your account will be reviewed and activated by our team — we'll email you when you're approved.</div>
       <div class="form-group" style="margin-bottom:12px;"><label>Full Name</label><input type="text" id="signup-name" placeholder="Your name"></div>
       <div class="form-group" style="margin-bottom:12px;"><label>Email</label><input type="email" id="signup-email" placeholder="you@example.com"></div>
-      <div class="form-group" style="margin-bottom:12px;"><label>Password</label><input type="password" id="signup-password" placeholder="At least 6 characters"></div>
-      <div class="form-group" style="margin-bottom:20px;"><label>Account Type</label>
-        <select id="signup-role">
-          <option value="subscriber">Retail / Subscriber</option>
-          <option value="wholesale">Wholesale Account</option>
-          <option value="staff">Staff</option>
-        </select>
-      </div>
-      <button class="btn btn-primary btn-full" onclick="doSignup()">Create Account</button>
+      <div class="form-group" style="margin-bottom:12px;"><label>Business / Account Name</label><input type="text" id="signup-business" placeholder="Your business name (optional)"></div>
+      <div class="form-group" style="margin-bottom:20px;"><label>Password</label><input type="password" id="signup-password" placeholder="At least 6 characters"></div>
+      <button class="btn btn-primary btn-full" onclick="doSignup()">Request Access</button>
     </div>
   </div>
 </div>
@@ -522,7 +516,12 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div class="section-header">
     <div><div class="section-title">Place an Order</div><div class="section-sub" id="portal-sub">Welcome back</div></div>
   </div>
-  <div id="portal-pending" class="pending-notice" style="display:none;">Your wholesale account is pending approval.<br>You'll hear from us at <strong>hello@conduitcoffee.com</strong> once activated.</div>
+  <div id="portal-pending" class="pending-notice" style="display:none;">
+    <div style="font-size:20px;margin-bottom:8px;">☕</div>
+    <strong>Your account is pending approval.</strong><br>
+    We'll review your request and email you at your registered address when you're activated.<br>
+    <span style="font-size:12px;margin-top:8px;display:block;">Questions? <a href="mailto:orders@conduitcoffee.com" style="color:#7a6010;">orders@conduitcoffee.com</a></span>
+  </div>
   <div id="portal-cutoff" class="pending-notice" style="display:none;background:rgba(33,33,212,0.06);border-color:rgba(33,33,212,0.2);color:#1a1a8a;">
     <strong>Orders for this week are closed.</strong><br>
     Your order will be placed into next week's cycle.<br>
@@ -741,7 +740,7 @@ async function doSignup() {
   const name  = document.getElementById('signup-name').value.trim();
   const email = document.getElementById('signup-email').value.trim();
   const pass  = document.getElementById('signup-password').value;
-  const role  = document.getElementById('signup-role').value;
+  const biz   = document.getElementById('signup-business') ? document.getElementById('signup-business').value.trim() : '';
   if (!name||!email||!pass) { showAuthErr('Please fill in all fields.'); return; }
   if (pass.length < 6) { showAuthErr('Password must be at least 6 characters.'); return; }
   const {data, error} = await sb.auth.signUp({email, password:pass, options:{data:{full_name:name}}});
@@ -749,17 +748,42 @@ async function doSignup() {
   if (data.user) {
     const {count} = await sb.from('profiles').select('*',{count:'exact',head:true});
     const isFirst = (count===null||count===0);
-    const assignedRole = isFirst ? 'owner' : role;
-    const pending = !isFirst; // Everyone except first account (owner) is pending
+    const assignedRole = isFirst ? 'owner' : 'wholesale';
+    const pending = !isFirst;
     await sb.auth.updateUser({data: {full_name: name, role: assignedRole}});
-    await sb.from('profiles').update({role:assignedRole, full_name:name, account_type:role, pending_approval:pending, approved:!pending}).eq('id', data.user.id);
+    await sb.from('profiles').update({
+      role: assignedRole,
+      full_name: name,
+      account_type: 'wholesale',
+      business_name: biz || null,
+      pending_approval: pending,
+      approved: !pending
+    }).eq('id', data.user.id);
   }
-  toast('Account created! Your account is pending approval.', 'success');
-  // Notify staff of new signup
+  // Show pending screen instead of loading app
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('main-app').style.display = 'none';
+  // Show a simple pending message
+  var pendingDiv = document.getElementById('signup-pending-screen');
+  if (!pendingDiv) {
+    pendingDiv = document.createElement('div');
+    pendingDiv.id = 'signup-pending-screen';
+    pendingDiv.style.cssText = 'min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--paper2);';
+    pendingDiv.innerHTML =
+      '<div style="background:white;border:1px solid var(--rule2);border-radius:12px;padding:44px 40px;max-width:420px;width:100%;text-align:center;box-shadow:var(--shadow);">' +
+        '<div style="font-family:\'Libre Baskerville\',serif;font-size:24px;font-weight:700;color:var(--ink);margin-bottom:12px;">Thanks, '+escHtml(name)+'!</div>' +
+        '<div style="font-size:14px;color:var(--ink2);line-height:1.7;margin-bottom:20px;">Your account request has been received. We\'ll review it and email you at <strong>'+escHtml(email)+'</strong> when you\'re approved.</div>' +
+        '<div style="font-size:13px;color:var(--ink3);">Questions? Email us at <a href="mailto:orders@conduitcoffee.com" style="color:var(--blue);">orders@conduitcoffee.com</a></div>' +
+        '<button class="btn btn-ghost" style="margin-top:24px;" onclick="window.location.reload()">Back to Sign In</button>' +
+      '</div>';
+    document.body.appendChild(pendingDiv);
+  }
+  pendingDiv.style.display = 'flex';
+  // Notify staff
   try {
     await callEdgeFunction('send-email', {
       type: 'new_signup',
-      data: { name: name, email: email, accountType: role }
+      data: { name: name, email: email, accountType: 'wholesale', business: biz }
     });
   } catch(e) { console.log('Signup notification failed (non-fatal):', e); }
 }
@@ -806,7 +830,10 @@ async function initApp(user) {
     if (res.data) {
       currentProfile = res.data;
       var dbRole = res.data.role;
-      if (dbRole && dbRole !== role) window.location.reload();
+      // Only reload if role changed AND account is approved (avoid loop for pending accounts)
+      if (dbRole && dbRole !== role && res.data.approved && !res.data.pending_approval) {
+        window.location.reload();
+      }
     }
   }).catch(function(){});
 
@@ -819,15 +846,20 @@ async function initApp(user) {
   } else {
     document.getElementById('portal-sub').textContent = 'Welcome back, ' + fullName;
     document.querySelector('[data-tab="portal"]').click();
-    setTimeout(async function() {
-      if (currentProfile && currentProfile.pending_approval) {
-        document.getElementById('portal-pending').style.display = 'block';
-        document.getElementById('portal-form-wrap').style.display = 'none';
-      } else {
-        try { await loadPortalCoffees(); } catch(e) {}
-        try { await loadPortalHistory(); } catch(e) {}
-      }
-    }, 500);
+    // Wait for profile to load from DB before checking pending status
+    var profile = null;
+    try { 
+      var res = await dbFetch('profiles?select=*&id=eq.'+user.id);
+      profile = res && res[0] ? res[0] : null;
+      if (profile) currentProfile = profile;
+    } catch(e) {}
+    if (profile && (profile.pending_approval || profile.approved === false)) {
+      document.getElementById('portal-pending').style.display = 'block';
+      document.getElementById('portal-form-wrap').style.display = 'none';
+    } else {
+      try { await loadPortalCoffees(); } catch(e) {}
+      try { await loadPortalHistory(); } catch(e) {}
+    }
   }
 }
 
