@@ -698,6 +698,29 @@ function setLogos() {
   }
 }
 
+// ── EDGE FUNCTION CALLER ──
+async function callEdgeFunction(name, body) {
+  var token = SUPABASE_KEY;
+  try {
+    var sess = await Promise.race([
+      sb.auth.getSession(),
+      new Promise(function(r){ setTimeout(function(){ r({data:{session:null}}); }, 1000); })
+    ]);
+    if (sess && sess.data && sess.data.session) token = sess.data.session.access_token;
+  } catch(e) {}
+  var url = SUPABASE_URL + '/functions/v1/' + name;
+  var res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) { var err = await res.text(); throw new Error('Edge function error: ' + err); }
+  return await res.json();
+}
+
 // ── AUTH ──
 function switchAuthTab(tab) {
   document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='signup')));
@@ -727,11 +750,18 @@ async function doSignup() {
     const {count} = await sb.from('profiles').select('*',{count:'exact',head:true});
     const isFirst = (count===null||count===0);
     const assignedRole = isFirst ? 'owner' : role;
-    const pending = (!isFirst && role==='wholesale');
+    const pending = !isFirst; // Everyone except first account (owner) is pending
     await sb.auth.updateUser({data: {full_name: name, role: assignedRole}});
     await sb.from('profiles').update({role:assignedRole, full_name:name, account_type:role, pending_approval:pending, approved:!pending}).eq('id', data.user.id);
   }
-  toast('Account created! Signing you in...', 'success');
+  toast('Account created! Your account is pending approval.', 'success');
+  // Notify staff of new signup
+  try {
+    await callEdgeFunction('send-email', {
+      type: 'new_signup',
+      data: { name: name, email: email, accountType: role }
+    });
+  } catch(e) { console.log('Signup notification failed (non-fatal):', e); }
 }
 
 async function doLogout() {
@@ -1573,12 +1603,27 @@ async function loadPortalCoffees() {
     }
   }
 
-  var visFilter = role === 'wholesale' ? '&visibility=in.(wholesale,both)' : '&visibility=in.(retail,both)';
+  // Check for per-account coffee whitelist first
+  var accountSkus = [];
+  try {
+    var acData = await dbFetch('account_coffees?select=coffee_sku&profile_id=eq.' + currentUser.id);
+    accountSkus = (acData || []).map(function(r){ return r.coffee_sku; });
+  } catch(e) {}
+
   var data = [];
-  try { data = await dbFetch('coffees?select=*&active=eq.true&customer_facing=eq.true' + visFilter + '&order=sort_order'); }
-  catch(e) {}
+  if (accountSkus.length) {
+    // Whitelist mode — only show assigned coffees
+    try { data = await dbFetch('coffees?select=*&active=eq.true&sku=in.('+accountSkus.join(',')+')'+'&order=sort_order'); }
+    catch(e) {}
+  } else {
+    // Default mode — show by role visibility, but only 12oz and 2lb sizes implied
+    var visFilter = role === 'wholesale' ? '&visibility=in.(wholesale,both)' : '&visibility=in.(retail,both)';
+    try { data = await dbFetch('coffees?select=*&active=eq.true&customer_facing=eq.true' + visFilter + '&order=sort_order'); }
+    catch(e) {}
+  }
+
   var grid = document.getElementById('portal-coffee-grid');
-  if (!data.length) { grid.innerHTML='<div class="empty">No coffees available. Please contact us.</div>'; return; }
+  if (!data.length) { grid.innerHTML='<div class="empty">No coffees available. Please contact us at orders@conduitcoffee.com</div>'; return; }
   grid.innerHTML = data.map(function(c) {
     return '<div class="coffee-card" onclick="selectPortalCoffee(\''+c.sku+'\')">' +
       '<div class="coffee-card-name">'+c.name+'</div>' +
@@ -1653,6 +1698,24 @@ async function placePortalOrder() {
   try { await dbFetch('orders', {method:'POST', body: toInsert.length === 1 ? toInsert[0] : toInsert, prefer:'return=minimal'}); }
   catch(e) { toast('Error saving: '+e.message,'error'); return; }
   toast('Order placed - thank you!','success');
+
+  // Send email notifications
+  var cycle = cycles.find(function(c){ return c.id===orderCycleId; });
+  var cycleName = cycle ? cycle.name : 'Current cycle';
+  var emailLines = toInsert.map(function(o){
+    return {coffee:o.coffee_name, sku:o.coffee_sku, size:o.size, qty:o.qty, grind:GRIND_L[o.grind]||o.grind};
+  });
+  var emailData = {
+    customerName: (currentProfile&&currentProfile.full_name)||currentUser.email,
+    customerEmail: currentUser.email,
+    lines: emailLines,
+    cycle: cycleName,
+    notes: document.getElementById('portal-notes').value
+  };
+  try {
+    await callEdgeFunction('send-email', {type:'new_order_staff', data:emailData});
+    await callEdgeFunction('send-email', {type:'new_order_customer', data:emailData});
+  } catch(e) { console.log('Email send failed (non-fatal):', e); }
   document.getElementById('portal-notes').value='';
   document.getElementById('portal-line-items').innerHTML='';
   document.getElementById('portal-order-card').style.display='none';
@@ -1700,6 +1763,9 @@ async function loadAdminUsers() {
   tbody.innerHTML = data.map(function(u) {
     var statusClass = u.pending_approval?'badge-gold':(u.approved!==false?'badge-green':'badge-gray');
     var statusText  = u.pending_approval?'Pending':(u.approved!==false?'Active':'Inactive');
+    var approveBtn = (u.pending_approval || u.approved === false)
+      ? '<button class="btn btn-ghost btn-sm" onclick="showApproveModal(\''+u.id+'\',\''+escHtml(u.full_name||'')+'\',\''+u.email+'\')">Approve</button>'
+      : '<button class="btn btn-ghost btn-sm" onclick="showApproveModal(\''+u.id+'\',\''+escHtml(u.full_name||'')+'\',\''+u.email+'\')">Edit Access</button>';
     return '<tr>' +
       '<td style="font-weight:600;">'+(u.full_name||'-')+'</td>' +
       '<td style="color:var(--ink3);font-size:12px;">'+u.email+'</td>' +
@@ -1712,9 +1778,96 @@ async function loadAdminUsers() {
       '<td><span class="badge badge-gray">'+(u.account_type||'retail')+'</span></td>' +
       '<td><span class="badge '+statusClass+'">'+statusText+'</span></td>' +
       '<td style="color:var(--ink3);font-size:12px;">'+new Date(u.created_at).toLocaleDateString()+'</td>' +
-      '<td>'+(u.pending_approval?'<button class="btn btn-ghost btn-sm" onclick="approveUser(\''+u.id+'\')">Approve</button>':'')+'</td>' +
+      '<td>'+approveBtn+'</td>' +
       '</tr>';
   }).join('');
+}
+
+async function showApproveModal(userId, userName, userEmail) {
+  // Load coffees and current assignments in parallel
+  var [allCoffees, assigned] = await Promise.all([
+    dbFetch('coffees?select=sku,name&active=eq.true&order=sort_order').catch(function(){return [];}),
+    dbFetch('account_coffees?select=coffee_sku&profile_id=eq.'+userId).catch(function(){return [];})
+  ]);
+  var assignedSkus = assigned.map(function(r){ return r.coffee_sku; });
+
+  var existing = document.getElementById('approve-modal');
+  if (existing) existing.remove();
+
+  var coffeeChecks = allCoffees.map(function(c) {
+    var checked = assignedSkus.includes(c.sku) ? 'checked' : '';
+    return '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--rule);cursor:pointer;">' +
+      '<input type="checkbox" value="'+c.sku+'" '+checked+' style="width:auto;accent-color:var(--blue);">' +
+      '<span style="font-weight:500;">'+c.name+'</span>' +
+      '<span class="sku" style="margin-left:auto;">'+c.sku+'</span>' +
+      '</label>';
+  }).join('');
+
+  var modal = document.createElement('div');
+  modal.id = 'approve-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML =
+    '<div style="background:white;border-radius:12px;padding:32px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">' +
+      '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:4px;">Approve Account</div>' +
+      '<div style="font-size:13px;color:var(--ink3);margin-bottom:20px;">'+userName+' · '+userEmail+'</div>' +
+      '<div style="margin-bottom:20px;">' +
+        '<label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:6px;">Account Type</label>' +
+        '<select id="approve-role" style="width:100%;">' +
+          '<option value="wholesale">Wholesale</option>' +
+          '<option value="subscriber">Retail / Subscriber</option>' +
+          '<option value="staff">Staff</option>' +
+        '</select>' +
+      '</div>' +
+      '<div style="margin-bottom:20px;">' +
+        '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);margin-bottom:8px;">Assign Coffees</div>' +
+        '<div style="font-size:12px;color:var(--ink3);margin-bottom:10px;">Leave all unchecked to show default catalog. Check specific coffees to restrict this account to a whitelist.</div>' +
+        '<div id="coffee-checks" style="max-height:240px;overflow-y:auto;padding-right:4px;">'+coffeeChecks+'</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;margin-top:8px;">' +
+        '<button class="btn btn-primary" style="flex:1;" onclick="confirmApprove(\''+userId+'\',\''+escHtml(userName)+'\',\''+userEmail+'\')">Approve &amp; Save</button>' +
+        '<button class="btn btn-ghost" onclick="document.getElementById(\'approve-modal\').remove()">Cancel</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+async function confirmApprove(userId, userName, userEmail) {
+  var role = document.getElementById('approve-role').value;
+  var checks = document.querySelectorAll('#coffee-checks input[type=checkbox]');
+  var selectedSkus = Array.from(checks).filter(function(c){return c.checked;}).map(function(c){return c.value;});
+
+  try {
+    // 1. Approve the profile
+    await dbFetch('profiles?id=eq.'+userId, {
+      method:'PATCH',
+      body:{pending_approval:false, approved:true, role:role},
+      prefer:'return=minimal'
+    });
+
+    // 2. Replace coffee whitelist — delete existing then insert new
+    await dbFetch('account_coffees?profile_id=eq.'+userId, {method:'DELETE', prefer:'return=minimal'});
+    if (selectedSkus.length) {
+      var inserts = selectedSkus.map(function(sku){ return {profile_id:userId, coffee_sku:sku}; });
+      await dbFetch('account_coffees', {method:'POST', body:inserts, prefer:'return=minimal'});
+    }
+
+    // 3. Send approval email
+    var assignedCoffeeNames = selectedSkus.length
+      ? coffees.filter(function(c){ return selectedSkus.includes(c.sku); }).map(function(c){ return c.name; })
+      : [];
+    try {
+      await callEdgeFunction('send-email', {
+        type: 'account_approved',
+        data: { name: userName, email: userEmail, coffees: assignedCoffeeNames }
+      });
+    } catch(e) { console.log('Approval email failed (non-fatal):', e); }
+
+    document.getElementById('approve-modal').remove();
+    toast('Account approved' + (selectedSkus.length ? ' · '+selectedSkus.length+' coffees assigned' : ' · default catalog'), 'success');
+    await loadAdminUsers();
+  } catch(e) {
+    toast('Error approving: '+e.message, 'error');
+  }
 }
 
 async function updateRole(id, role) {
@@ -1722,12 +1875,6 @@ async function updateRole(id, role) {
     await dbFetch('profiles?id=eq.' + id, {method:'PATCH', body:{role:role}, prefer:'return=minimal'});
     toast('Role updated - user must sign out and back in','success');
   } catch(e) { toast('Error updating role','error'); }
-}
-async function approveUser(id) {
-  try {
-    await dbFetch('profiles?id=eq.' + id, {method:'PATCH', body:{pending_approval:false, approved:true}, prefer:'return=minimal'});
-    toast('Approved','success'); await loadAdminUsers();
-  } catch(e) { toast('Error approving','error'); }
 }
 
 // ── CATALOG ──
