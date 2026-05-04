@@ -893,8 +893,11 @@ async function initApp(user) {
     if (res.data) {
       currentProfile = res.data;
       var dbRole = res.data.role;
-      // Only reload if role changed AND account is approved (avoid loop for pending accounts)
-      if (dbRole && dbRole !== role && res.data.approved && !res.data.pending_approval) {
+      // Only reload if: role genuinely changed AND account is active AND we haven't reloaded recently
+      var lastReload = parseInt(sessionStorage.getItem('last_role_reload')||'0');
+      var now = Date.now();
+      if (dbRole && dbRole !== role && res.data.approved && !res.data.pending_approval && (now - lastReload) > 10000) {
+        sessionStorage.setItem('last_role_reload', now);
         window.location.reload();
       }
     }
@@ -1791,17 +1794,23 @@ function buildPrintSheets(rows, originTotals) {
 }
 
 function printSheet(type) {
-  // Hide all sheets then show only the target
-  var allSheets = ['roast-sheet','green-sheet','bag-sheet','fulfillment-sheet','shipping-sheet'];
+  var sheetMap = {
+    'roast': 'roast-sheet',
+    'green': 'green-sheet',
+    'bags': 'bag-sheet',
+    'fulfillment': 'fulfillment-sheet',
+    'shipping': 'shipping-sheet'
+  };
+  var targetId = sheetMap[type];
+  var allIds = Object.values(sheetMap);
   var allActions = document.querySelectorAll('.sheet-actions');
 
-  allSheets.forEach(function(id){
+  allIds.forEach(function(id){
     var el = document.getElementById(id);
-    if (el) el.style.display = (id === type+'-sheet') ? 'block' : 'none';
+    if (el) el.style.display = (id === targetId) ? 'block' : 'none';
   });
   allActions.forEach(function(el){ el.style.display='none'; });
 
-  // For bags, force landscape
   if (type === 'bags') {
     var style = document.createElement('style');
     style.id = 'print-landscape';
@@ -1811,8 +1820,7 @@ function printSheet(type) {
 
   window.print();
 
-  // Restore
-  allSheets.forEach(function(id){
+  allIds.forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = '';
   });
