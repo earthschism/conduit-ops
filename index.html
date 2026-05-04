@@ -243,6 +243,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   .panel{display:block!important;}
   #panel-orders,#panel-roast,#panel-portal,#panel-admin,#panel-catalog{display:none!important;}
   #panel-output{display:block!important;}
+  .section-header{display:none!important;}
 }
 </style>
 </head>
@@ -358,11 +359,17 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 
   <!-- Desktop grouped table -->
   <div class="card orders-desktop-table">
-    <div class="card-title">Current Cycle Orders</div>
+    <div class="card-title" style="justify-content:space-between;">
+      <span style="display:flex;align-items:center;gap:8px;"><span style="content:'';display:block;width:3px;height:16px;background:var(--blue);border-radius:2px;flex-shrink:0;"></span>Current Cycle Orders</span>
+      <div id="bulk-actions" style="display:none;gap:8px;align-items:center;">
+        <span id="bulk-count" style="font-size:12px;color:var(--ink3);font-family:'DM Sans',sans-serif;font-weight:400;"></span>
+        <button class="btn btn-danger btn-sm" onclick="bulkDelete()">✕ Delete Selected</button>
+      </div>
+    </div>
     <div class="tbl-wrap">
       <table>
         <thead><tr>
-          <th style="width:28px;"></th>
+          <th style="width:32px;"><input type="checkbox" id="select-all-orders" onchange="toggleSelectAll(this)" style="width:auto;accent-color:var(--blue);cursor:pointer;"></th>
           <th>Customer</th>
           <th>Type</th>
           <th>Coffee</th>
@@ -431,18 +438,19 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 <!-- ── OUTPUT PANEL ── -->
 <div class="panel" id="panel-output">
   <div class="section-header">
-    <div><div class="section-title">Print &amp; Export</div><div class="section-sub">Roasting sheet and bagging sheet - formatted for the floor</div></div>
+    <div><div class="section-title">Print &amp; Export</div><div class="section-sub">All sheets formatted for the floor</div></div>
     <button class="btn btn-ghost btn-sm" onclick="generateSchedule()">↻ Recalculate</button>
   </div>
 
+  <!-- ROASTING SHEET -->
   <div class="sheet-actions">
-    <strong style="font-size:13px;color:var(--ink2);">Roasting Sheet</strong>
+    <strong style="font-size:13px;color:var(--ink2);">① Roasting Sheet</strong>
     <button class="btn btn-secondary btn-sm" onclick="printSheet('roast')">🖨 Print</button>
     <button class="btn btn-ghost btn-sm" onclick="downloadCSV('roast')">↓ CSV</button>
   </div>
   <div class="print-sheet" id="roast-sheet">
     <div class="print-header">
-      <div><div class="print-title">Conduit Coffee - Roasting Sheet</div><div class="print-meta" id="roast-sheet-meta">-</div></div>
+      <div><div class="print-title">Conduit Coffee — Roasting Sheet</div><div class="print-meta" id="roast-sheet-meta">-</div></div>
       <div style="text-align:right;">
         <div style="font-family:'DM Mono',monospace;font-size:28px;font-weight:700;color:var(--blue);" id="roast-sheet-batches">-</div>
         <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;">Total Batches</div>
@@ -455,13 +463,6 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
         <tbody id="roast-print-tbody"><tr><td colspan="11" class="empty">Calculate schedule first.</td></tr></tbody>
       </table>
     </div>
-    <div class="print-section">
-      <div class="print-section-title">Green Bean Pull List</div>
-      <table>
-        <thead><tr><th>Origin</th><th style="text-align:right;">Lbs to Pull</th><th>Used In</th></tr></thead>
-        <tbody id="green-print-tbody"></tbody>
-      </table>
-    </div>
     <div style="margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;">
       <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Roaster</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
       <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Date Roasted</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
@@ -469,44 +470,87 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     </div>
   </div>
 
+  <!-- GREEN PULL LIST -->
   <div class="sheet-actions" style="margin-top:28px;">
-    <strong style="font-size:13px;color:var(--ink2);">Bagging &amp; Grinding Sheet</strong>
-    <button class="btn btn-secondary btn-sm" onclick="printSheet('bags')">🖨 Print</button>
+    <strong style="font-size:13px;color:var(--ink2);">② Green Bean Pull List</strong>
+    <button class="btn btn-secondary btn-sm" onclick="printSheet('green')">🖨 Print</button>
+  </div>
+  <div class="print-sheet" id="green-sheet">
+    <div class="print-header">
+      <div><div class="print-title">Conduit Coffee — Green Bean Pull List</div><div class="print-meta" id="green-sheet-meta">-</div></div>
+    </div>
+    <div class="print-section">
+      <table>
+        <thead><tr><th>Origin / Green</th><th style="text-align:right;">Lbs to Pull</th><th>Used In</th></tr></thead>
+        <tbody id="green-print-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- BAGGING SHEET — landscape grid -->
+  <div class="sheet-actions" style="margin-top:28px;">
+    <strong style="font-size:13px;color:var(--ink2);">③ Bagging Sheet</strong>
+    <button class="btn btn-secondary btn-sm" onclick="printSheet('bags')">🖨 Print Landscape</button>
     <button class="btn btn-ghost btn-sm" onclick="downloadCSV('bags')">↓ CSV</button>
   </div>
-  <div class="print-sheet" id="bag-sheet">
+  <div class="print-sheet" id="bag-sheet" style="overflow-x:auto;">
     <div class="print-header">
-      <div><div class="print-title">Conduit Coffee - Bagging &amp; Grinding Sheet</div><div class="print-meta" id="bag-sheet-meta">-</div></div>
+      <div><div class="print-title">Conduit Coffee — Bagging Sheet</div><div class="print-meta" id="bag-sheet-meta">-</div></div>
       <div style="text-align:right;">
         <div style="font-family:'DM Mono',monospace;font-size:28px;font-weight:700;color:var(--blue);" id="bag-sheet-total">-</div>
         <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;">Total Bags</div>
       </div>
     </div>
     <div class="print-section">
-      <div class="print-section-title">Bags by Coffee - Seal &amp; Stage</div>
-      <table>
-        <thead><tr><th>Coffee</th><th>SKU</th><th>Sizes</th><th style="text-align:right;">Total Bags</th><th style="text-align:right;">Whole Bean</th><th style="text-align:right;">To Grind</th><th>Notes</th></tr></thead>
-        <tbody id="bag-print-tbody"><tr><td colspan="7" class="empty">Calculate schedule first.</td></tr></tbody>
+      <div class="print-section-title">Bags by Coffee — Seal &amp; Stage</div>
+      <!-- Grid table: coffees as rows, sizes as columns (Bulk→4oz), totals both ways -->
+      <table id="bag-grid-table" style="font-size:15px;">
+        <thead id="bag-grid-head"></thead>
+        <tbody id="bag-grid-tbody"></tbody>
       </table>
     </div>
-    <div class="print-section" style="margin-top:20px;">
-      <div class="print-section-title" style="color:#2121d4;">☕ Grinding Tasks - Grind &amp; Seal Before Shipping</div>
-      <table>
-        <thead><tr><th style="width:24px;"></th><th>Coffee</th><th>SKU</th><th style="text-align:right;">Qty</th><th>Size</th><th>Grind</th></tr></thead>
+    <div class="print-section" style="margin-top:28px;">
+      <div class="print-section-title" style="color:#2121d4;">Grinding Tasks — By Account</div>
+      <table style="font-size:14px;">
+        <thead><tr><th style="width:28px;"></th><th>Account</th><th>Coffee</th><th>Grind</th><th style="text-align:right;">Qty</th><th>Size</th></tr></thead>
         <tbody id="grind-task-tbody"><tr><td colspan="6" class="empty">Calculate schedule first.</td></tr></tbody>
-      </table>
-    </div>
-    <div class="print-section">
-      <div class="print-section-title">Shipping Summary</div>
-      <table>
-        <thead><tr><th>Box Type</th><th style="text-align:right;">Count</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Subtotal</th></tr></thead>
-        <tbody id="shipping-tbody"></tbody>
       </table>
     </div>
     <div style="margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;">
       <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Packed by</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
       <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Date</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
       <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Notes</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
+    </div>
+  </div>
+
+  <!-- FULFILLMENT SHEET -->
+  <div class="sheet-actions" style="margin-top:28px;">
+    <strong style="font-size:13px;color:var(--ink2);">④ Account Fulfillment Sheet</strong>
+    <button class="btn btn-secondary btn-sm" onclick="printSheet('fulfillment')">🖨 Print</button>
+  </div>
+  <div class="print-sheet" id="fulfillment-sheet">
+    <div class="print-header">
+      <div><div class="print-title">Conduit Coffee — Account Fulfillment</div><div class="print-meta" id="fulfillment-sheet-meta">-</div></div>
+    </div>
+    <tbody id="fulfillment-tbody">
+      <div class="empty">Calculate schedule first.</div>
+    </tbody>
+  </div>
+
+  <!-- SHIPPING SHEET -->
+  <div class="sheet-actions" style="margin-top:28px;">
+    <strong style="font-size:13px;color:var(--ink2);">⑤ Shipping Summary</strong>
+    <button class="btn btn-secondary btn-sm" onclick="printSheet('shipping')">🖨 Print</button>
+  </div>
+  <div class="print-sheet" id="shipping-sheet">
+    <div class="print-header">
+      <div><div class="print-title">Conduit Coffee — Shipping Summary</div><div class="print-meta" id="shipping-sheet-meta">-</div></div>
+    </div>
+    <div class="print-section">
+      <table>
+        <thead><tr><th>Box Type</th><th style="text-align:right;">Count</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Subtotal</th></tr></thead>
+        <tbody id="shipping-tbody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -1043,19 +1087,18 @@ function renderOrdersTable() {
     var typeClass = firstLine.order_type==='wholesale'?'badge-gold':firstLine.order_type==='subscription'?'badge-green':'badge-gray';
     var regionClass = firstLine.region==='pickup'?'badge-green':(firstLine.region==='local'||firstLine.region==='seattle'||firstLine.region==='pt')?'badge-gold':'badge-gray';
     var locationStr = [firstLine.city, firstLine.state].filter(Boolean).join(', ');
+    var allIds = lines.map(function(o){return o.id;});
 
     // Customer header row — exactly 11 cells
     html += '<tr class="order-customer-row">' +
-      '<td style="color:var(--ink3);font-size:11px;text-align:center;">▾</td>' +
+      '<td style="text-align:center;"><input type="checkbox" class="order-select-group" data-ids="'+escHtml(JSON.stringify(allIds))+'" onchange="onGroupCheck(this)" style="width:auto;accent-color:var(--blue);cursor:pointer;"></td>' +
       '<td><div style="font-weight:700;font-size:14px;">'+escHtml(customerName)+'</div>' +
         '<div style="font-size:11px;color:var(--ink3);margin-top:2px;">'+(locationStr?locationStr+' · ':'')+totalBags+' bag'+(totalBags!==1?'s':'')+' · '+totalLbs.toFixed(1)+' lb</div></td>' +
       '<td><span class="badge '+typeClass+'">'+(TYPE_L[firstLine.order_type]||firstLine.order_type)+'</span></td>' +
       '<td></td><td></td><td></td><td></td><td></td>' +
       '<td><span class="badge '+regionClass+'">'+(REGION_L[firstLine.region]||firstLine.region)+'</span></td>' +
       '<td></td>' +
-      '<td style="white-space:nowrap;">' +
-        '<button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+JSON.stringify(lines.map(function(o){return o.id;}))+',event)" style="font-size:11px;">✕ all</button>' +
-      '</td>' +
+      '<td style="white-space:nowrap;"><button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+JSON.stringify(allIds)+',event)" style="font-size:11px;">✕ all</button></td>' +
       '</tr>';
 
     // Line item rows — 11 cells, with inline edit on qty/size/grind/notes
@@ -1086,10 +1129,71 @@ function renderOrdersTable() {
         '<td><input type="text" value="'+escHtml(o.notes||'')+'" placeholder="notes..." onchange="patchOrder(\''+oid+'\',\'notes\',this.value)" style="border:none;background:transparent;font-size:12px;color:var(--ink3);width:100%;padding:2px 0;cursor:text;" title="Click to edit notes"></td>' +
         '<td><button class="btn btn-danger btn-sm" onclick="deleteOrder(\''+oid+'\')">✕</button></td>' +
         '</tr>';
+
+      // Add checkbox to first cell of line row
+      html = html.replace(
+        '<td style="text-align:center;color:var(--ink3);font-size:11px;">'+(idx+1)+'</td>',
+        '<td style="text-align:center;"><input type="checkbox" class="order-select-line" data-id="'+oid+'" onchange="onLineCheck()" style="width:auto;accent-color:var(--blue);cursor:pointer;"></td>'
+      );
     });
   });
 
   tbody.innerHTML = html;
+  updateBulkUI();
+}
+
+function onGroupCheck(cb) {
+  var ids = JSON.parse(cb.dataset.ids);
+  var row = cb.closest('tr');
+  var next = row ? row.nextElementSibling : null;
+  while (next && next.classList.contains('order-line-row')) {
+    var lineCb = next.querySelector('.order-select-line');
+    if (lineCb) lineCb.checked = cb.checked;
+    next = next.nextElementSibling;
+  }
+  updateBulkUI();
+}
+
+function toggleSelectAll(masterCb) {
+  document.querySelectorAll('.order-select-line,.order-select-group').forEach(function(c){ c.checked = masterCb.checked; });
+  updateBulkUI();
+}
+
+function onLineCheck() {
+  document.querySelectorAll('.order-select-group').forEach(function(gcb) {
+    var ids = JSON.parse(gcb.dataset.ids);
+    var allChecked = ids.every(function(id){
+      var cb = document.querySelector('.order-select-line[data-id="'+id+'"]');
+      return cb && cb.checked;
+    });
+    gcb.checked = allChecked;
+  });
+  updateBulkUI();
+}
+
+function updateBulkUI() {
+  var checked = document.querySelectorAll('.order-select-line:checked');
+  var bulkEl = document.getElementById('bulk-actions');
+  var countEl = document.getElementById('bulk-count');
+  if (!bulkEl) return;
+  if (checked.length > 0) {
+    bulkEl.style.display = 'flex';
+    if (countEl) countEl.textContent = checked.length+' line'+(checked.length!==1?'s':'')+' selected';
+  } else {
+    bulkEl.style.display = 'none';
+  }
+}
+
+async function bulkDelete() {
+  var checked = document.querySelectorAll('.order-select-line:checked');
+  if (!checked.length) return;
+  if (!confirm('Delete '+checked.length+' selected line'+(checked.length!==1?'s':'')+' ?')) return;
+  var ids = Array.from(checked).map(function(c){ return c.dataset.id; });
+  try {
+    await dbFetch('orders?id=in.('+ids.join(',')+')', {method:'DELETE', prefer:'return=minimal'});
+    toast('Deleted '+ids.length+' lines','success');
+    await loadOrders();
+  } catch(e) { toast('Error: '+e.message,'error'); }
 }
 
 async function patchOrder(id, field, value) {
@@ -1301,36 +1405,58 @@ async function handleCSV(file) {
     var headers = parseCSVLine(lines[0]);
     function col(n) { return headers.findIndex(function(h){return h.trim().toLowerCase()===n.toLowerCase();}); }
     var C = {
-      lineitemname:col('Lineitem name'), lineitemqty:col('Lineitem quantity'),
+      ordernum:col('Name'), lineitemname:col('Lineitem name'), lineitemqty:col('Lineitem quantity'),
       shipping:col('Shipping Name'), notes:col('Notes'), method:col('Shipping Method'),
-      city:col('Shipping City'), state:col('Shipping Province Name'), tags:col('Tags')
+      city:col('Shipping City'), state:col('Shipping Province Name'), tags:col('Tags'),
+      email:col('Email'), financialstatus:col('Financial Status')
     };
-    var toInsert = [];
+
+    // First pass: aggregate by coffee/size/grind across ALL Shopify orders
+    // This collapses everything into "Online Orders" customer
+    var aggKey = {}; // key: sku|size|grind -> {sku, size, grind, qty, name}
+    var skippedItems = 0;
+
     for (var i=1; i<lines.length; i++) {
       if (!lines[i].trim()) continue;
       var row = parseCSVLine(lines[i]);
-      if (row.length < 20) continue;
+      if (row.length < 10) continue;
       var item = (row[C.lineitemname]||'').trim();
       if (!item) continue;
+      // Skip non-coffee line items (shipping, discount codes, gift cards etc)
+      var litem = item.toLowerCase();
+      if (litem.includes('shipping') || litem.includes('discount') || litem.includes('gift card') ||
+          litem.includes('tip') || litem.includes('donation') || litem === '') {
+        skippedItems++; continue;
+      }
       var parsed = parseProductName(item);
       var coffee = getCoffee(parsed.sku);
-      var notes = (row[C.notes]||'').trim();
-      toInsert.push({
-        cycle_id:currentCycleId, profile_id:currentUser.id,
-        customer_name:row[C.shipping]||'Shopify Customer',
-        order_type:(row[C.tags]||'').includes('subscription')?'subscription':'online',
-        region:notes.toLowerCase().includes('pick up')?'pickup':(notes.toLowerCase().includes('local')||notes.toLowerCase().includes('seattle')||notes.toLowerCase().includes('port townsend'))?'local':'ship',
-        coffee_sku:parsed.sku, coffee_name:coffee.name,
-        qty:parseInt(row[C.lineitemqty])||1,
-        size:parsed.size, grind:parsed.grind, notes:notes,
-        shipping_method:row[C.method]||'', city:row[C.city]||'', state:row[C.state]||'',
-        source_order_id:'shopify-'+i+'-'+Date.now()
-      });
+      var qty = parseInt(row[C.lineitemqty])||1;
+      var key = parsed.sku+'|'+parsed.size+'|'+parsed.grind;
+      if (!aggKey[key]) {
+        aggKey[key] = {sku:parsed.sku, name:coffee.name, size:parsed.size, grind:parsed.grind, qty:0};
+      }
+      aggKey[key].qty += qty;
     }
-    if (!toInsert.length) { toast('No valid orders found','warn'); return; }
+
+    var toInsert = Object.values(aggKey).map(function(a) {
+      return {
+        cycle_id:currentCycleId, profile_id:currentUser.id,
+        customer_name:'Online Orders',
+        order_type:'online',
+        region:'ship',
+        coffee_sku:a.sku, coffee_name:a.name,
+        qty:a.qty, size:a.size, grind:a.grind,
+        notes:'Shopify import',
+        source_order_id:'shopify-agg-'+Date.now()
+      };
+    });
+
+    if (!toInsert.length) { toast('No valid coffee orders found in CSV','warn'); return; }
     try { await dbFetch('orders', {method:'POST', body: toInsert, prefer:'return=minimal'}); }
     catch(e) { toast('Import error: '+e.message,'error'); return; }
-    toast('Imported '+toInsert.length+' orders','success');
+    var msg = 'Imported '+toInsert.length+' line'+(toInsert.length!==1?'s':'')+' as "Online Orders"';
+    if (skippedItems) msg += ' ('+skippedItems+' non-coffee items skipped)';
+    toast(msg,'success');
     await loadOrders();
   };
   reader.readAsText(file);
@@ -1470,10 +1596,11 @@ function buildPrintSheets(rows, originTotals) {
   var cycleName = cycle ? cycle.name : 'Current Cycle';
   var dateStr = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
   var totBatches = rows.reduce(function(s,r){return s+r.fullBatches;},0);
+  var metaStr = cycleName+' · Generated '+dateStr;
 
-  document.getElementById('roast-sheet-meta').textContent = cycleName+' · Generated '+dateStr;
+  // ── Roasting sheet ──
+  document.getElementById('roast-sheet-meta').textContent = metaStr;
   document.getElementById('roast-sheet-batches').textContent = totBatches;
-
   document.getElementById('roast-print-tbody').innerHTML = rows.map(function(r,i) {
     var childStr = r.childSkus.length ? r.childSkus.join(', ') : '-';
     var bg = i%2===0 ? 'background:var(--paper2);' : '';
@@ -1489,94 +1616,165 @@ function buildPrintSheets(rows, originTotals) {
       '<td class="num mono">'+(r.remainder>0.05?r.remainder.toFixed(2):'-')+'</td>' +
       '<td class="num mono">'+r.estOutput.toFixed(2)+'</td>' +
       '<td class="num mono">'+surplusStr+'</td>' +
-      '<td style="border-bottom:1px solid var(--rule);min-width:80px;"></td>' +
+      '<td style="min-width:80px;"></td>' +
       '</tr>';
   }).join('');
 
+  // ── Green pull list ──
+  document.getElementById('green-sheet-meta').textContent = metaStr;
   var originEntries = Object.keys(originTotals).map(function(o){return {origin:o, data:originTotals[o]};});
   originEntries.sort(function(a,b){return b.data.total-a.data.total;});
   document.getElementById('green-print-tbody').innerHTML = originEntries.map(function(e) {
+    return '<tr><td style="font-weight:700;font-size:15px;">'+e.origin+'</td>' +
+      '<td class="num mono" style="font-weight:700;font-size:18px;">'+e.data.total.toFixed(2)+' lb</td>' +
+      '<td style="color:var(--ink3);">'+e.data.usedIn.join(', ')+'</td></tr>';
+  }).join('');
+  // Also update roast schedule green tbody
+  document.getElementById('green-tbody').innerHTML = originEntries.map(function(e) {
     return '<tr><td style="font-weight:600;">'+e.origin+'</td>' +
-      '<td class="num mono" style="font-weight:700;">'+e.data.total.toFixed(2)+'</td>' +
+      '<td class="num mono" style="font-weight:700;color:var(--blue);">'+e.data.total.toFixed(2)+'</td>' +
       '<td style="font-size:12px;color:var(--ink3);">'+e.data.usedIn.join(', ')+'</td></tr>';
   }).join('');
+  document.getElementById('green-card').style.display = 'block';
 
+  // ── Bagging sheet — grid layout ──
+  // SIZE_ORDER: Bulk left → 4oz right
+  var SIZE_COL = ['20lb','5lb','2lb','1lb','12oz','4oz'];
+  var SIZE_LABEL = {'20lb':'Bulk','5lb':'5 lb','2lb':'2 lb','1lb':'1 lb','12oz':'12 oz','4oz':'4oz'};
   var bagAgg = {};
-  var grindTasks = [];
+  var grindTasks = []; // {customer, name, sku, grind, size, qty}
 
   orders.forEach(function(o) {
     if (!bagAgg[o.coffee_sku]) bagAgg[o.coffee_sku] = {
-      name:o.coffee_name, sku:o.coffee_sku, sizes:{}, wb:{}, grind:{}, notes:[]
+      name:o.coffee_name, sku:o.coffee_sku, sizes:{}
     };
-    var key = o.size + '|' + o.grind;
-    bagAgg[o.coffee_sku].sizes[key] = (bagAgg[o.coffee_sku].sizes[key]||0) + o.qty;
-    if (o.grind === 'wb' || o.size === '4oz') {
-      bagAgg[o.coffee_sku].wb[o.size] = (bagAgg[o.coffee_sku].wb[o.size]||0) + o.qty;
-    } else {
-      var taskKey = o.coffee_name + '|' + o.size + '|' + o.grind;
+    bagAgg[o.coffee_sku].sizes[o.size] = (bagAgg[o.coffee_sku].sizes[o.size]||0) + o.qty;
+
+    if (o.grind !== 'wb' && o.size !== '4oz') {
+      var taskKey = o.customer_name+'|'+o.coffee_name+'|'+o.size+'|'+o.grind;
       var existing = grindTasks.find(function(t){return t.key===taskKey;});
       if (existing) { existing.qty += o.qty; }
-      else { grindTasks.push({key:taskKey, name:o.coffee_name, sku:o.coffee_sku, size:o.size, grind:o.grind, qty:o.qty}); }
+      else { grindTasks.push({key:taskKey, customer:o.customer_name, name:o.coffee_name, sku:o.coffee_sku, size:o.size, grind:o.grind, qty:o.qty}); }
     }
-    if (o.notes) bagAgg[o.coffee_sku].notes.push(o.notes);
   });
 
   grindTasks.sort(function(a,b){
-    if (a.name !== b.name) return a.name.localeCompare(b.name);
-    return a.size.localeCompare(b.size);
+    if (a.customer !== b.customer) return a.customer.localeCompare(b.customer);
+    return a.name.localeCompare(b.name);
   });
 
-  var SIZE_ORDER = ['5lb','2lb','1lb','12oz','4oz','20lb'];
+  var bagRows = Object.values(bagAgg);
   var grandTotal = 0;
+  var colTotals = {};
+  SIZE_COL.forEach(function(s){ colTotals[s]=0; });
 
-  document.getElementById('bag-print-tbody').innerHTML = Object.values(bagAgg).map(function(r,i) {
-    var totals = {};
-    Object.keys(r.sizes).forEach(function(k){
-      var parts = k.split('|');
-      var sz = parts[0];
-      totals[sz] = (totals[sz]||0) + r.sizes[k];
+  // Build grid header
+  var headHtml = '<tr style="background:var(--paper2);">' +
+    '<th style="text-align:left;padding:10px 12px;font-size:13px;font-weight:700;">Coffee</th>' +
+    '<th style="text-align:left;padding:10px 8px;font-size:11px;color:var(--ink3);">SKU</th>';
+  SIZE_COL.forEach(function(s){
+    headHtml += '<th style="text-align:center;padding:10px 12px;font-size:13px;font-weight:700;">'+SIZE_LABEL[s]+'</th>';
+  });
+  headHtml += '<th style="text-align:center;padding:10px 12px;font-size:13px;font-weight:700;color:var(--blue);">TOTAL</th></tr>';
+  document.getElementById('bag-grid-head').innerHTML = headHtml;
+
+  var bodyHtml = bagRows.map(function(r, i) {
+    var rowTotal = 0;
+    var bg = i%2===0 ? '' : 'background:var(--paper2);';
+    var html = '<tr style="'+bg+'">' +
+      '<td style="font-weight:700;font-size:15px;padding:10px 12px;">'+r.name+'</td>' +
+      '<td style="padding:10px 8px;"><span class="sku">'+r.sku+'</span></td>';
+    SIZE_COL.forEach(function(s) {
+      var qty = r.sizes[s]||0;
+      rowTotal += qty;
+      colTotals[s] = (colTotals[s]||0) + qty;
+      html += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:'+(qty?'20px':'14px')+';font-weight:'+(qty?'700':'400')+';color:'+(qty?'var(--ink)':'var(--rule2)')+';padding:10px 12px;">'+(qty||'—')+'</td>';
     });
-    var tot = Object.values(totals).reduce(function(s,v){return s+v;},0);
-    grandTotal += tot;
-    var bg = i%2===0 ? 'background:var(--paper2);' : '';
-    var n = Array.from(new Set(r.notes.filter(Boolean))).join('; ');
-    var sizeStr = SIZE_ORDER.filter(function(s){return totals[s];}).map(function(s){
-      return '<span style="margin-right:8px;"><b>'+totals[s]+'</b>× '+s+'</span>';
-    }).join('');
-    var wbTotal = Object.values(r.wb).reduce(function(s,v){return s+v;},0);
-    var grindTotal = tot - wbTotal;
-    return '<tr style="'+bg+'">' +
-      '<td style="font-weight:700;">'+r.name+'</td>' +
-      '<td><span class="sku">'+r.sku+'</span></td>' +
-      '<td style="font-size:12px;">'+sizeStr+'</td>' +
-      '<td class="num mono" style="font-weight:700;">'+tot+'</td>' +
-      '<td class="num mono" style="color:var(--ink3);">'+(wbTotal||'-')+'</td>' +
-      '<td class="num mono" style="color:var(--blue);font-weight:600;">'+(grindTotal||'-')+'</td>' +
-      '<td style="font-size:11px;color:var(--ink3);">'+(n||'-')+'</td>' +
-      '</tr>';
+    grandTotal += rowTotal;
+    html += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;color:var(--blue);padding:10px 12px;">'+rowTotal+'</td></tr>';
+    return html;
   }).join('');
 
-  var grindHtml = '';
-  if (grindTasks.length) {
-    var GRIND_LABEL = {drip:'Drip',coarse:'Coarse',fine:'Fine'};
-    grindHtml = grindTasks.map(function(t) {
-      return '<tr>' +
-        '<td style="width:24px;text-align:center;font-size:16px;">☐</td>' +
-        '<td style="font-weight:600;">'+t.name+'</td>' +
-        '<td><span class="sku">'+t.sku+'</span></td>' +
-        '<td class="num mono" style="font-weight:700;">'+t.qty+'×</td>' +
-        '<td class="mono">'+t.size+'</td>' +
-        '<td><span class="badge badge-blue">'+(GRIND_LABEL[t.grind]||t.grind)+'</span></td>' +
-        '</tr>';
-    }).join('');
-  } else {
-    grindHtml = '<tr><td colspan="6" style="color:var(--ink3);padding:12px;text-align:center;font-size:13px;">No ground orders this cycle - all whole bean.</td></tr>';
-  }
+  // Totals row
+  bodyHtml += '<tr style="border-top:3px solid var(--ink);background:var(--paper2);">' +
+    '<td style="font-weight:700;font-size:14px;padding:10px 12px;text-transform:uppercase;letter-spacing:0.05em;">TOTAL</td>' +
+    '<td></td>';
+  SIZE_COL.forEach(function(s) {
+    bodyHtml += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;padding:10px 12px;">'+(colTotals[s]||'—')+'</td>';
+  });
+  bodyHtml += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:24px;font-weight:700;color:var(--blue);padding:10px 12px;">'+grandTotal+'</td></tr>';
+  document.getElementById('bag-grid-tbody').innerHTML = bodyHtml;
+
+  // Grinding tasks — by account
+  var GRIND_LABEL = {drip:'Drip',coarse:'Coarse',fine:'Fine'};
+  var grindHtml = grindTasks.length ? grindTasks.map(function(t) {
+    return '<tr>' +
+      '<td style="width:28px;text-align:center;font-size:18px;">☐</td>' +
+      '<td style="font-weight:700;font-size:14px;">'+escHtml(t.customer)+'</td>' +
+      '<td style="font-size:14px;">'+escHtml(t.name)+'</td>' +
+      '<td><span class="badge badge-blue" style="font-size:12px;">'+(GRIND_LABEL[t.grind]||t.grind)+'</span></td>' +
+      '<td style="text-align:right;font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;">'+t.qty+'×</td>' +
+      '<td style="font-family:\'DM Mono\',monospace;font-size:14px;">'+t.size+'</td>' +
+      '</tr>';
+  }).join('') : '<tr><td colspan="6" style="color:var(--ink3);padding:16px;text-align:center;">All whole bean this cycle.</td></tr>';
   document.getElementById('grind-task-tbody').innerHTML = grindHtml;
 
-  document.getElementById('bag-sheet-meta').textContent = cycleName+' · Generated '+dateStr;
+  document.getElementById('bag-sheet-meta').textContent = metaStr;
   document.getElementById('bag-sheet-total').textContent = grandTotal;
 
+  // ── Fulfillment sheet ──
+  var groups = {};
+  var groupOrder = [];
+  orders.forEach(function(o) {
+    var key = o.customer_name;
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(o);
+  });
+
+  var fulfillHtml = groupOrder.map(function(customerName) {
+    var lines = groups[customerName];
+    var firstLine = lines[0];
+    var regionLabel = REGION_L[firstLine.region]||firstLine.region;
+    var totalBags = lines.reduce(function(s,o){return s+o.qty;},0);
+    var lineRows = lines.map(function(o) {
+      return '<tr>' +
+        '<td style="padding:8px 12px;font-size:14px;font-weight:600;">'+escHtml(o.coffee_name)+'</td>' +
+        '<td style="padding:8px 12px;font-family:\'DM Mono\',monospace;font-size:13px;"><span class="sku">'+o.coffee_sku+'</span></td>' +
+        '<td style="padding:8px 12px;font-family:\'DM Mono\',monospace;font-size:14px;text-align:center;">'+o.size+'</td>' +
+        '<td style="padding:8px 12px;font-size:14px;color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
+        '<td style="padding:8px 12px;font-family:\'DM Mono\',monospace;font-size:18px;font-weight:700;text-align:center;">'+o.qty+'</td>' +
+        '<td style="padding:8px 12px;font-size:12px;color:var(--ink3);">'+(o.notes||'')+'</td>' +
+        '<td style="padding:8px 12px;text-align:center;font-size:20px;">☐</td>' +
+        '</tr>';
+    }).join('');
+    return '<div style="margin-bottom:20px;border:2px solid var(--ink);border-radius:6px;overflow:hidden;break-inside:avoid;">' +
+      '<div style="background:var(--ink);color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<div style="font-family:\'Libre Baskerville\',serif;font-size:18px;font-weight:700;">'+escHtml(customerName)+'</div>' +
+        '<div style="display:flex;gap:16px;align-items:center;">' +
+          '<span style="font-size:13px;opacity:0.75;">'+regionLabel+'</span>' +
+          '<span style="font-family:\'DM Mono\',monospace;font-size:18px;font-weight:700;">'+totalBags+' bag'+(totalBags!==1?'s':'')+'</span>' +
+        '</div>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;">' +
+        '<thead><tr style="background:var(--paper2);">' +
+          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Coffee</th>' +
+          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">SKU</th>' +
+          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Size</th>' +
+          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Grind</th>' +
+          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qty</th>' +
+          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Notes</th>' +
+          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">✓</th>' +
+        '</tr></thead>' +
+        '<tbody>'+lineRows+'</tbody>' +
+      '</table>' +
+    '</div>';
+  }).join('');
+
+  document.getElementById('fulfillment-sheet-meta').textContent = metaStr;
+  document.getElementById('fulfillment-tbody').innerHTML = fulfillHtml || '<div class="empty">No orders to fulfill.</div>';
+
+  // ── Shipping summary ──
+  document.getElementById('shipping-sheet-meta').textContent = metaStr;
   var shipOrders = orders.filter(function(o){return o.region==='ship';});
   var boxC = {};
   shipOrders.forEach(function(o) {
@@ -1589,19 +1787,38 @@ function buildPrintSheets(rows, originTotals) {
     var c = boxC[b.type]||0; if (!c) return '';
     var sub = c*b.rate; shipTotal += sub;
     return '<tr><td>'+b.type+'</td><td class="num mono">'+c+'</td><td class="num mono">$'+b.rate+'</td><td class="num mono" style="font-weight:700;">$'+sub.toFixed(2)+'</td></tr>';
-  }).join('') + '<tr style="border-top:2px solid var(--rule2);"><td colspan="3" style="font-weight:700;text-align:right;padding-right:10px;">Total Postage</td><td class="num mono" style="font-weight:700;color:var(--blue);">$'+shipTotal.toFixed(2)+'</td></tr>';
+  }).join('') + '<tr style="border-top:2px solid var(--rule2);"><td colspan="3" style="font-weight:700;text-align:right;padding-right:10px;">Total Postage Est.</td><td class="num mono" style="font-weight:700;color:var(--blue);">$'+shipTotal.toFixed(2)+'</td></tr>';
 }
 
 function printSheet(type) {
-  var roastEl = document.getElementById('roast-sheet');
-  var bagEl   = document.getElementById('bag-sheet');
-  var roastAct = roastEl.previousElementSibling;
-  var bagAct  = bagEl.previousElementSibling;
-  if (type==='roast') { bagEl.style.display='none'; bagAct.style.display='none'; }
-  else { roastEl.style.display='none'; roastAct.style.display='none'; }
+  // Hide all sheets then show only the target
+  var allSheets = ['roast-sheet','green-sheet','bag-sheet','fulfillment-sheet','shipping-sheet'];
+  var allActions = document.querySelectorAll('.sheet-actions');
+
+  allSheets.forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = (id === type+'-sheet') ? 'block' : 'none';
+  });
+  allActions.forEach(function(el){ el.style.display='none'; });
+
+  // For bags, force landscape
+  if (type === 'bags') {
+    var style = document.createElement('style');
+    style.id = 'print-landscape';
+    style.textContent = '@media print { @page { size: landscape; } }';
+    document.head.appendChild(style);
+  }
+
   window.print();
-  roastEl.style.display=''; bagEl.style.display='';
-  roastAct.style.display=''; bagAct.style.display='';
+
+  // Restore
+  allSheets.forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = '';
+  });
+  allActions.forEach(function(el){ el.style.display=''; });
+  var ls = document.getElementById('print-landscape');
+  if (ls) ls.remove();
 }
 
 function downloadCSV(type) {
