@@ -235,15 +235,22 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 /* ── PRINT ── */
 @media print{
   .header,.tabs,.sheet-actions,.cycle-bar,.btn,#btn-add-order,#csv-card,#add-order-card{display:none!important;}
-  body{background:white;font-size:12px;}
+  body{background:white;font-size:11px;}
   .content{padding:0;}
-  .print-sheet{box-shadow:none;border:none;padding:0;margin:0;}
+  .print-sheet{box-shadow:none;border:none;padding:8px 0;margin:0;}
   table{font-size:11px;}
-  th,td{padding:6px 8px;}
+  th,td{padding:5px 7px;}
   .panel{display:block!important;}
   #panel-orders,#panel-roast,#panel-portal,#panel-admin,#panel-catalog{display:none!important;}
   #panel-output{display:block!important;}
   .section-header{display:none!important;}
+  /* Keep bagging grid on one page */
+  #bag-grid-table{font-size:13px!important;page-break-inside:avoid;}
+  #bag-grid-table td,#bag-grid-table th{padding:7px 10px!important;font-size:13px!important;}
+  /* Keep fulfillment account blocks together */
+  .fulfillment-block{page-break-inside:avoid;}
+  /* Grinding tasks stay with bagging */
+  #grind-task-tbody tr td{font-size:12px!important;}
 }
 </style>
 </head>
@@ -1502,7 +1509,12 @@ function parseProductName(name) {
 }
 
 // ── ROAST SCHEDULE ──
-function generateSchedule() {
+async function generateSchedule() {
+  // If orders haven't loaded yet, load them first
+  if (!orders.length && currentCycleId) {
+    try { orders = await dbFetch('orders?select=*&cycle_id=eq.' + currentCycleId + '&order=created_at'); }
+    catch(e) { orders = []; }
+  }
   var neededBySku = {};
   orders.forEach(function(o) {
     neededBySku[o.coffee_sku] = (neededBySku[o.coffee_sku]||0) + (BAG_W[o.size]||0)*o.qty;
@@ -1814,7 +1826,7 @@ function printSheet(type) {
   if (type === 'bags') {
     var style = document.createElement('style');
     style.id = 'print-landscape';
-    style.textContent = '@media print { @page { size: landscape; } }';
+    style.textContent = '@media print { @page { size: landscape; margin: 0.5cm; } #bag-grid-table { font-size: 12px !important; } #bag-grid-table td, #bag-grid-table th { padding: 6px 8px !important; } }';
     document.head.appendChild(style);
   }
 
