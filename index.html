@@ -318,6 +318,11 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div class="cycle-bar">
     <span class="cycle-bar-label">Cycle</span>
     <select id="cycle-select" onchange="onCycleChange()"></select>
+    <div style="width:1px;height:20px;background:var(--rule2);margin:0 8px;"></div>
+    <span class="cycle-bar-label">Roaster's Choice</span>
+    <select id="roasters-choice-select" onchange="saveRoastersChoice(this.value)" style="color:var(--blue);font-weight:600;font-size:13px;border:none;background:transparent;padding:0;width:auto;box-shadow:none;">
+      <option value="">— not set —</option>
+    </select>
     <div style="flex:1;"></div>
     <button class="btn btn-ghost btn-sm" id="btn-new-cycle" onclick="createNewCycle()" style="display:none;">+ New Cycle</button>
   </div>
@@ -419,10 +424,10 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
             <th>Base SKU</th>
             <th>Also Bags As</th>
             <th style="text-align:right;">Total Need (lb)</th>
-            <th style="text-align:right;">Water Loss</th>
+            <th style="text-align:right;">On Hand (lb)</th>
+            <th style="text-align:right;">Water Loss %</th>
             <th style="text-align:right;">Green to Pull (lb)</th>
             <th style="text-align:right;">Batches</th>
-            <th style="text-align:right;">Remainder (lb)</th>
             <th style="text-align:right;">Output (lb)</th>
             <th style="text-align:right;">Surplus (lb)</th>
           </tr>
@@ -734,6 +739,7 @@ let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
 let lineItemCount=0, portalLineId=0;
+let roastOverrides={}; // {sku: {onHand: 0, waterLoss: 0.15}} — editable per session
 
 // ── LOGO ──
 const LOGO_B64 = 'YOUR_LOGO_B64';
@@ -979,6 +985,7 @@ async function loadCycles() {
   currentCycleId = openCycle.id;
   sel.value = currentCycleId;
   document.getElementById('cycle-pill').textContent = openCycle.name;
+  updateRoastersChoiceSelector();
 }
 
 async function createNewCycle(silent=false) {
@@ -1050,11 +1057,38 @@ async function _doCreateCycle(name) {
   await loadOrders();
 }
 
+async function saveRoastersChoice(sku) {
+  if (!currentCycleId) return;
+  try {
+    await dbFetch('cycles?id=eq.'+currentCycleId, {method:'PATCH', body:{roasters_choice_sku: sku||null}, prefer:'return=minimal'});
+    // Update local cycles array
+    var c = cycles.find(function(c){return c.id===currentCycleId;});
+    if (c) c.roasters_choice_sku = sku||null;
+    var coffee = sku ? getCoffee(sku) : null;
+    toast("Roaster's Choice set to "+(coffee?coffee.name:'none'),'success');
+  } catch(e) { toast("Error saving Roaster's Choice",'error'); }
+}
+
+function updateRoastersChoiceSelector() {
+  var sel = document.getElementById('roasters-choice-select');
+  if (!sel) return;
+  // Populate with all active coffees
+  sel.innerHTML = '<option value="">— not set —</option>' +
+    coffees.filter(function(c){return c.active;}).map(function(c){
+      return '<option value="'+c.sku+'">'+c.name+'</option>';
+    }).join('');
+  // Set current value
+  var currentCycle = cycles.find(function(c){return c.id===currentCycleId;});
+  sel.value = (currentCycle && currentCycle.roasters_choice_sku) || '';
+}
+
 function onCycleChange() {
   const sel = document.getElementById('cycle-select');
   currentCycleId = sel.value;
   const c = cycles.find(c => c.id===currentCycleId);
   if (c) document.getElementById('cycle-pill').textContent = c.name;
+  roastOverrides = {}; // reset per-session overrides for new cycle
+  updateRoastersChoiceSelector();
   loadOrders();
 }
 
@@ -1426,19 +1460,23 @@ async function handleCSV(file) {
     var aggKey = {}; // key: sku|size|grind -> {sku, size, grind, qty, name}
     var skippedItems = 0;
 
+    // Get current Roaster's Choice SKU for this cycle
+    var rcSku = '';
+    var currentCycleData = cycles.find(function(c){ return c.id === currentCycleId; });
+    if (currentCycleData && currentCycleData.roasters_choice_sku) rcSku = currentCycleData.roasters_choice_sku;
+
     for (var i=1; i<lines.length; i++) {
       if (!lines[i].trim()) continue;
       var row = parseCSVLine(lines[i]);
       if (row.length < 10) continue;
       var item = (row[C.lineitemname]||'').trim();
       if (!item) continue;
-      // Skip non-coffee line items (shipping, discount codes, gift cards etc)
       var litem = item.toLowerCase();
       if (litem.includes('shipping') || litem.includes('discount') || litem.includes('gift card') ||
           litem.includes('tip') || litem.includes('donation') || litem === '') {
         skippedItems++; continue;
       }
-      var parsed = parseProductName(item);
+      var parsed = parseProductName(item, rcSku);
       var coffee = getCoffee(parsed.sku);
       var qty = parseInt(row[C.lineitemqty])||1;
       var key = parsed.sku+'|'+parsed.size+'|'+parsed.grind;
@@ -1482,29 +1520,41 @@ function parseCSVLine(line) {
   r.push(cur); return r;
 }
 
-function parseProductName(name) {
+function parseProductName(name, roastersChoiceSku) {
   var sku='LOCO', size='2lb', grind='wb';
   var l = name.toLowerCase();
-  var map = [
-    ['lakeside','LAKE'],['ship canal','SHIP'],['locofocos','LOCO'],
-    ['decaf lighter','SOD'],['cross current','CRSC'],['seasonal','SEBD'],
-    ['nove','9to5'],['aldrich','1895'],['roaster','SEBD'],
-    ['baskette','BSKT'],['costa rica','CRHS'],['ethiopia','ETTK'],
-    ['peru','PECL'],['dord special','DOSD'],['dord sig','DSIG'],
-    ['dord otis','OTIS'],['dord','DOSD'],['cottage','QUST']
-  ];
-  for (var i=0; i<map.length; i++) { if (l.includes(map[i][0])) { sku=map[i][1]; break; } }
+
+  // Roaster's Choice maps to current cycle selection
+  if (l.includes("roaster's choice") || l.includes("roasters choice") || l.includes("roaster's choice")) {
+    sku = roastersChoiceSku || 'RC';
+    // Size/grind still parsed from the rest of the name below
+  } else {
+    var map = [
+      ['lakeside','LAKE'],['ship canal','SHIP'],['locofocos','LOCO'],
+      ['decaf lighter','SOD'],['cross current','CRSC'],['seasonal','SEBD'],
+      ['nove','9to5'],['aldrich','1895'],
+      ['baskette','BSKT'],['costa rica','CRHS'],['ethiopia','ETTK'],
+      ['peru','PECL'],['dord special','DOSD'],['dord sig','DSIG'],
+      ['dord otis','OTIS'],['dord','DOSD'],['cottage','QUST'],['spring blossom','SEBD']
+    ];
+    for (var i=0; i<map.length; i++) { if (l.includes(map[i][0])) { sku=map[i][1]; break; } }
+  }
+
+  // Size — handle both "oz"/"ounce" and "lb"/"pound" variants
   if (/5\s*(lb|pound)/i.test(name)) size='5lb';
   else if (/2\s*(lb|pound)/i.test(name)) size='2lb';
   else if (/1\s*(lb|pound)/i.test(name)) size='1lb';
-  else if (/12\s*oz/i.test(name)) size='12oz';
-  else if (/6\s*oz/i.test(name)) size='6oz';
-  else if (/4\s*oz/i.test(name)) size='4oz';
+  else if (/12\s*(oz|ounce)/i.test(name)) size='12oz';
+  else if (/6\s*(oz|ounce)/i.test(name)) size='6oz';
+  else if (/4\s*(oz|ounce)/i.test(name)) size='4oz';
   else if (/20\s*lb|bulk/i.test(name)) size='20lb';
+
+  // Grind
   if (/whole\s*bean|wholebean/i.test(name)) grind='wb';
   else if (/drip/i.test(name)) grind='drip';
   else if (/coarse|french/i.test(name)) grind='coarse';
   else if (/fine|espresso/i.test(name)) grind='fine';
+
   return {sku:sku, size:size, grind:grind};
 }
 
@@ -1536,12 +1586,14 @@ async function generateSchedule() {
   Object.keys(roastNeeded).forEach(function(sku) {
     var totalLbs = roastNeeded[sku];
     var coffee = getCoffee(sku);
-    var wl = coffee.water_loss || 0.15;
-    var greenNeeded = totalLbs / (1 - wl);
-    var fullBatches = Math.ceil(greenNeeded / 10);
+    var overrides = roastOverrides[sku] || {};
+    var wl = (overrides.waterLoss !== undefined) ? overrides.waterLoss : (coffee.water_loss || 0.15);
+    var onHand = overrides.onHand || 0;
+    var stillNeeded = Math.max(0, totalLbs - onHand);
+    var greenNeeded = stillNeeded > 0 ? stillNeeded / (1 - wl) : 0;
+    var fullBatches = stillNeeded > 0 ? Math.ceil(greenNeeded / 10) : 0;
     var actualGreen = fullBatches * 10;
-    var remainder = parseFloat((greenNeeded % 10).toFixed(2));
-    var estOutput = parseFloat((actualGreen * (1 - wl)).toFixed(2));
+    var estOutput = parseFloat((actualGreen * (1 - wl) + onHand).toFixed(2));
     var surplus = parseFloat((estOutput - totalLbs).toFixed(2));
     var children = childBreakdown[sku] || {};
     var childSkus = Object.keys(children).filter(function(s){return s!==sku;});
@@ -1553,8 +1605,9 @@ async function generateSchedule() {
       if (originTotals[origin].usedIn.indexOf(coffee.name) === -1)
         originTotals[origin].usedIn.push(coffee.name);
     });
-    rows.push({sku:sku, name:coffee.name, totalLbs:totalLbs, wl:wl, greenNeeded:greenNeeded,
-      actualGreen:actualGreen, fullBatches:fullBatches, remainder:remainder,
+    rows.push({sku:sku, name:coffee.name, totalLbs:totalLbs, onHand:onHand, wl:wl,
+      stillNeeded:stillNeeded, greenNeeded:greenNeeded,
+      actualGreen:actualGreen, fullBatches:fullBatches,
       estOutput:estOutput, surplus:surplus, childSkus:childSkus, children:children});
   });
 
@@ -1569,15 +1622,18 @@ async function generateSchedule() {
     }).join(', ') : '<span style="color:var(--ink3);">-</span>';
     var surplusColor = r.surplus > 0 ? '#2a8042' : '#888';
     var surplusStr = r.surplus > 0 ? '+'+r.surplus.toFixed(2) : '-';
+    var editStyle = 'border:none;background:var(--paper2);font-family:\'DM Mono\',monospace;font-size:13px;text-align:right;border-radius:4px;padding:3px 6px;width:70px;cursor:text;';
     return '<tr>' +
       '<td><div style="font-weight:700;">'+r.name+'</div></td>' +
       '<td><span class="sku">'+r.sku+'</span></td>' +
       '<td style="font-size:12px;">'+childStr+'</td>' +
       '<td class="num mono">'+r.totalLbs.toFixed(2)+'</td>' +
-      '<td class="num" style="color:var(--ink3);">'+(r.wl*100).toFixed(1)+'%</td>' +
+      // On Hand — editable
+      '<td class="num"><input type="number" min="0" step="0.1" value="'+r.onHand.toFixed(1)+'" title="Lbs already roasted on hand" style="'+editStyle+'" onchange="setRoastOverride(\''+r.sku+'\',\'onHand\',parseFloat(this.value)||0)"></td>' +
+      // Water Loss — editable %
+      '<td class="num"><input type="number" min="1" max="30" step="0.5" value="'+(r.wl*100).toFixed(1)+'" title="Water loss %" style="'+editStyle+'width:58px;" onchange="setRoastOverride(\''+r.sku+'\',\'waterLoss\',parseFloat(this.value)/100)"><span style="font-size:11px;color:var(--ink3);">%</span></td>' +
       '<td class="num mono" style="font-weight:700;color:var(--blue);">'+r.actualGreen.toFixed(0)+'</td>' +
       '<td class="num mono" style="font-weight:700;font-size:18px;">'+r.fullBatches+'</td>' +
-      '<td class="num mono" style="color:#c49a2a;">'+(r.remainder>0.05?r.remainder.toFixed(2):'-')+'</td>' +
       '<td class="num mono">'+r.estOutput.toFixed(2)+'</td>' +
       '<td class="num mono" style="font-weight:600;color:'+surplusColor+';">'+surplusStr+'</td>' +
       '</tr>';
@@ -1603,6 +1659,12 @@ async function generateSchedule() {
   document.getElementById('green-card').style.display = 'block';
 
   buildPrintSheets(rows, originTotals);
+}
+
+function setRoastOverride(sku, field, value) {
+  if (!roastOverrides[sku]) roastOverrides[sku] = {};
+  roastOverrides[sku][field] = value;
+  generateSchedule(); // recalculate live
 }
 
 // ── PRINT SHEETS ──
