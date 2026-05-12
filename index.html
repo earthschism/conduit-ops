@@ -312,6 +312,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <div><div class="section-title">Orders</div><div class="section-sub">Current cycle · shared in real time</div></div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-ghost btn-sm" id="btn-add-order" onclick="toggleAddOrder()">+ Add Order</button>
+      <button class="btn btn-ghost btn-sm" onclick="printFulfillmentDirect()">🖨 Fulfillment</button>
       <button class="btn btn-ghost btn-sm" onclick="loadOrders()">↻ Refresh</button>
     </div>
   </div>
@@ -1661,7 +1662,92 @@ async function generateSchedule() {
   buildPrintSheets(rows, originTotals);
 }
 
-function setRoastOverride(sku, field, value) {
+function printFulfillmentDirect() {
+  if (!orders.length) { toast('No orders to print','warn'); return; }
+
+  var cycle = cycles.find(function(c){return c.id===currentCycleId;});
+  var cycleName = cycle ? cycle.name : 'Current Cycle';
+  var dateStr = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+
+  // Group orders by customer
+  var groups = {};
+  var groupOrder = [];
+  orders.forEach(function(o) {
+    var key = o.customer_name;
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(o);
+  });
+
+  var fulfillHtml = groupOrder.map(function(customerName) {
+    var lines = groups[customerName];
+    var firstLine = lines[0];
+    var regionLabel = REGION_L[firstLine.region]||firstLine.region;
+    var totalBags = lines.reduce(function(s,o){return s+o.qty;},0);
+    var lineRows = lines.map(function(o) {
+      return '<tr>' +
+        '<td style="padding:9px 12px;font-size:15px;font-weight:600;">'+escHtml(o.coffee_name)+'</td>' +
+        '<td style="padding:9px 12px;"><span class="sku">'+o.coffee_sku+'</span></td>' +
+        '<td style="padding:9px 12px;font-family:\'DM Mono\',monospace;font-size:14px;text-align:center;">'+o.size+'</td>' +
+        '<td style="padding:9px 12px;font-size:14px;color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
+        '<td style="padding:9px 12px;font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;text-align:center;">'+o.qty+'</td>' +
+        '<td style="padding:9px 12px;font-size:12px;color:var(--ink3);font-style:italic;">'+(o.notes||'')+'</td>' +
+        '<td style="padding:9px 12px;text-align:center;font-size:22px;">☐</td>' +
+        '</tr>';
+    }).join('');
+    return '<div style="margin-bottom:18px;border:2px solid var(--ink);border-radius:6px;overflow:hidden;page-break-inside:avoid;">' +
+      '<div style="background:var(--ink);color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;">'+escHtml(customerName)+'</div>' +
+        '<div style="display:flex;gap:20px;align-items:center;">' +
+          '<span style="font-size:13px;opacity:0.7;">'+regionLabel+'</span>' +
+          '<span style="font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;">'+totalBags+' bag'+(totalBags!==1?'s':'')+'</span>' +
+        '</div>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;">' +
+        '<thead><tr style="background:var(--paper2);">' +
+          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Coffee</th>' +
+          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">SKU</th>' +
+          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Size</th>' +
+          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Grind</th>' +
+          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Qty</th>' +
+          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Notes</th>' +
+          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">✓</th>' +
+        '</tr></thead>' +
+        '<tbody>'+lineRows+'</tbody>' +
+      '</table>' +
+    '</div>';
+  }).join('');
+
+  // Build a print window
+  var win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;600&display=swap" rel="stylesheet">'+
+    '<style>'+
+      ':root{--ink:#1c1714;--ink3:#6b5a50;--paper2:#f2ebe0;--rule:rgba(90,60,30,0.14);}'+
+      '*{box-sizing:border-box;margin:0;padding:0;}'+
+      'body{font-family:\'DM Sans\',sans-serif;color:var(--ink);padding:24px;background:white;}'+
+      '.sku{font-family:\'DM Mono\',monospace;font-size:11px;color:#2121d4;background:rgba(33,33,212,0.06);padding:2px 7px;border-radius:4px;border:1px solid rgba(33,33,212,0.18);}'+
+      'table{width:100%;border-collapse:collapse;}'+
+      'td{border-bottom:1px solid var(--rule);}'+
+      'tr:last-child td{border-bottom:none;}'+
+      '@media print{body{padding:8px;}@page{margin:1cm;}}'+
+    '</style></head><body>'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #1c1714;">'+
+      '<div>'+
+        '<div style="font-family:\'Libre Baskerville\',serif;font-size:24px;font-weight:700;">Conduit Coffee — Fulfillment Sheet</div>'+
+        '<div style="font-size:13px;color:var(--ink3);margin-top:4px;font-family:\'DM Mono\',monospace;">'+cycleName+' · '+dateStr+'</div>'+
+      '</div>'+
+      '<div style="text-align:right;">'+
+        '<div style="font-family:\'DM Mono\',monospace;font-size:28px;font-weight:700;color:#2121d4;">'+orders.reduce(function(s,o){return s+o.qty;},0)+'</div>'+
+        '<div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.06em;">Total Bags</div>'+
+      '</div>'+
+    '</div>'+
+    fulfillHtml+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>');
+  win.document.close();
+}
+
+
   if (!roastOverrides[sku]) roastOverrides[sku] = {};
   roastOverrides[sku][field] = value;
   generateSchedule(); // recalculate live
