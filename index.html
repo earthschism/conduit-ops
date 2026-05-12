@@ -1747,7 +1747,7 @@ function printFulfillmentDirect() {
   win.document.close();
 }
 
-
+function setRoastOverride(sku, field, value) {
   if (!roastOverrides[sku]) roastOverrides[sku] = {};
   roastOverrides[sku][field] = value;
   generateSchedule(); // recalculate live
