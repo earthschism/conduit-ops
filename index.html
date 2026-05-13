@@ -1054,8 +1054,147 @@ async function _doCreateCycle(name) {
   const o = document.createElement('option'); o.value = data.id; o.textContent = data.name;
   sel.insertBefore(o, sel.firstChild); sel.value = data.id;
   document.getElementById('cycle-pill').textContent = data.name;
+  updateRoastersChoiceSelector();
   toast('Cycle created: '+name,'success');
+  // Check for standing orders
+  await checkStandingOrdersPrompt();
   await loadOrders();
+}
+
+async function checkStandingOrdersPrompt() {
+  var standingOrders = [];
+  try { standingOrders = await dbFetch('standing_orders?select=*&order=profile_id'); }
+  catch(e) { return; }
+  if (!standingOrders.length) return;
+
+  // Group by profile
+  var byProfile = {};
+  standingOrders.forEach(function(o) {
+    if (!byProfile[o.profile_id]) byProfile[o.profile_id] = [];
+    byProfile[o.profile_id].push(o);
+  });
+  var accountCount = Object.keys(byProfile).length;
+
+  // Build review modal
+  var modal = document.createElement('div');
+  modal.id = 'standing-populate-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  var accountsHtml = Object.keys(byProfile).map(function(profileId) {
+    var lines = byProfile[profileId];
+    var firstLine = lines[0];
+    var linesHtml = lines.map(function(l, i) {
+      return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;padding-left:28px;">'+
+        '<input type="checkbox" id="so-pop-'+profileId+'-'+i+'" data-profile="'+profileId+'" data-idx="'+i+'" checked style="width:auto;accent-color:var(--blue);">'+
+        '<span style="font-size:13px;">'+escHtml(l.coffee_name)+' · '+l.size+' · '+(GRIND_L[l.grind]||l.grind)+' · qty '+l.qty+'</span>'+
+      '</div>';
+    }).join('');
+    return '<div style="margin-bottom:12px;border:1px solid var(--rule);border-radius:6px;overflow:hidden;">'+
+      '<div style="background:var(--paper2);padding:9px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);">'+
+        '<input type="checkbox" id="so-pop-acct-'+profileId+'" onchange="toggleSOAccount(\''+profileId+'\')" checked style="width:auto;accent-color:var(--blue);">'+
+        '<span style="font-weight:700;font-size:14px;">'+escHtml(firstLine.coffee_name ? (lines[0].profile_id) : profileId)+'</span>'+
+        '<span style="font-size:12px;color:var(--ink3);margin-left:auto;">'+lines.length+' line'+(lines.length!==1?'s':'')+'</span>'+
+      '</div>'+
+      linesHtml+
+    '</div>';
+  }).join('');
+
+  // We need customer names — fetch profiles
+  var profileIds = Object.keys(byProfile);
+  var profiles = [];
+  try { profiles = await dbFetch('profiles?select=id,full_name&id=in.('+profileIds.join(',')+')'); }
+  catch(e) {}
+  var nameMap = {};
+  profiles.forEach(function(p){ nameMap[p.id] = p.full_name || p.id; });
+
+  // Rebuild with names
+  accountsHtml = Object.keys(byProfile).map(function(profileId) {
+    var lines = byProfile[profileId];
+    var customerName = nameMap[profileId] || profileId;
+    var linesHtml = lines.map(function(l, i) {
+      return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0 6px 28px;">'+
+        '<input type="checkbox" class="so-pop-line" id="so-pop-'+profileId+'-'+i+'" data-profile="'+profileId+'" checked style="width:auto;accent-color:var(--blue);">'+
+        '<span style="font-size:13px;">'+escHtml(l.coffee_name)+' · <span class="sku">'+l.coffee_sku+'</span> · '+l.size+' · '+(GRIND_L[l.grind]||l.grind)+' · <strong>qty '+l.qty+'</strong></span>'+
+      '</div>';
+    }).join('');
+    return '<div style="margin-bottom:10px;border:1px solid var(--rule);border-radius:6px;overflow:hidden;">'+
+      '<div style="background:var(--paper2);padding:9px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);">'+
+        '<input type="checkbox" class="so-pop-acct" id="so-pop-acct-'+profileId+'" onchange="toggleSOAccount(\''+profileId+'\')" checked style="width:auto;accent-color:var(--blue);">'+
+        '<span style="font-weight:700;font-size:14px;">'+escHtml(customerName)+'</span>'+
+        '<span style="font-size:12px;color:var(--ink3);margin-left:auto;">'+lines.length+' line'+(lines.length!==1?'s':'')+'</span>'+
+      '</div>'+
+      linesHtml+
+    '</div>';
+  }).join('');
+
+  modal.innerHTML =
+    '<div style="background:white;border-radius:12px;padding:32px;max-width:520px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">'+
+      '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:6px;">Standing Orders</div>'+
+      '<div style="font-size:13px;color:var(--ink3);margin-bottom:20px;">'+accountCount+' account'+(accountCount!==1?'s have':' has')+' standing orders. Uncheck any to skip this cycle.</div>'+
+      '<div id="so-pop-accounts">'+accountsHtml+'</div>'+
+      '<div style="display:flex;gap:10px;margin-top:20px;">'+
+        '<button class="btn btn-primary" style="flex:1;" onclick="populateStandingOrders('+JSON.stringify(byProfile)+')">Populate Orders</button>'+
+        '<button class="btn btn-ghost" onclick="document.getElementById(\'standing-populate-modal\').remove()">Skip</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(modal);
+  // Store data for populate function
+  modal._standingData = byProfile;
+}
+
+function toggleSOAccount(profileId) {
+  var acctCb = document.getElementById('so-pop-acct-'+profileId);
+  var lineCbs = document.querySelectorAll('.so-pop-line[data-profile="'+profileId+'"]');
+  lineCbs.forEach(function(cb){ cb.checked = acctCb.checked; });
+}
+
+async function populateStandingOrders(byProfile) {
+  var toInsert = [];
+  Object.keys(byProfile).forEach(function(profileId) {
+    var lines = byProfile[profileId];
+    lines.forEach(function(l, i) {
+      var cb = document.getElementById('so-pop-'+profileId+'-'+i);
+      if (!cb || !cb.checked) return;
+      toInsert.push({
+        cycle_id: currentCycleId,
+        profile_id: profileId,
+        customer_name: l.coffee_name ? (document.getElementById('so-pop-acct-'+profileId) ?
+          document.getElementById('so-pop-acct-'+profileId).parentElement.querySelector('span[style*="font-weight:700"]').textContent : profileId)
+          : profileId,
+        order_type: l.order_type || 'wholesale',
+        region: l.region || 'ship',
+        coffee_sku: l.coffee_sku,
+        coffee_name: l.coffee_name,
+        qty: l.qty,
+        size: l.size,
+        grind: l.grind,
+        notes: l.notes || '',
+        source_order_id: 'standing-'+profileId+'-'+Date.now()
+      });
+    });
+  });
+
+  if (!toInsert.length) {
+    document.getElementById('standing-populate-modal').remove();
+    toast('No lines selected','warn');
+    return;
+  }
+
+  // Get customer names from DOM
+  toInsert.forEach(function(o) {
+    var acctEl = document.getElementById('so-pop-acct-'+o.profile_id);
+    if (acctEl) {
+      var nameEl = acctEl.closest('div').querySelector('span[style*="font-weight:700"]');
+      if (nameEl) o.customer_name = nameEl.textContent.trim();
+    }
+  });
+
+  try {
+    await dbFetch('orders', {method:'POST', body:toInsert, prefer:'return=minimal'});
+    document.getElementById('standing-populate-modal').remove();
+    toast('Populated '+toInsert.length+' standing order line'+(toInsert.length!==1?'s':''),'success');
+    await loadOrders();
+  } catch(e) { toast('Error: '+e.message,'error'); }
 }
 
 async function saveRoastersChoice(sku) {
@@ -2221,9 +2360,146 @@ async function loadAdminUsers() {
       '<td><span class="badge badge-gray">'+(u.account_type||'retail')+'</span></td>' +
       '<td><span class="badge '+statusClass+'">'+statusText+'</span></td>' +
       '<td style="color:var(--ink3);font-size:12px;">'+new Date(u.created_at).toLocaleDateString()+'</td>' +
-      '<td>'+approveBtn+'</td>' +
+      '<td style="display:flex;gap:6px;flex-wrap:wrap;">'+approveBtn+
+        '<button class="btn btn-ghost btn-sm" onclick="showStandingOrderModal(\''+u.id+'\',\''+escHtml(u.full_name||u.email)+'\')">☕ Standing</button>' +
+      '</td>' +
       '</tr>';
   }).join('');
+}
+
+async function showStandingOrderModal(userId, userName) {
+  // Load existing standing orders for this account
+  var existing = [];
+  try { existing = await dbFetch('standing_orders?select=*&profile_id=eq.'+userId+'&order=created_at'); }
+  catch(e) {}
+
+  var modal = document.createElement('div');
+  modal.id = 'standing-order-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  function buildLineHTML(line, idx) {
+    var sizeOpts = ['4oz','12oz','1lb','2lb','5lb','20lb'].map(function(s){
+      var label = {'4oz':'4oz Sample','12oz':'12 oz','1lb':'1 lb','2lb':'2 lb','5lb':'5 lb','20lb':'Bulk'}[s];
+      return '<option value="'+s+'"'+(line&&line.size===s?' selected':'')+'>'+label+'</option>';
+    }).join('');
+    var grindOpts = [['wb','Whole Bean'],['drip','Drip'],['coarse','Coarse'],['fine','Fine']].map(function(g){
+      return '<option value="'+g[0]+'"'+(line&&line.grind===g[0]?' selected':'')+'>'+g[1]+'</option>';
+    }).join('');
+    var coffeeOptsHtml = coffees.filter(function(c){return c.active;}).map(function(c){
+      return '<option value="'+c.sku+'"'+(line&&line.coffee_sku===c.sku?' selected':'')+'>'+c.name+'</option>';
+    }).join('');
+    return '<div class="so-line" id="so-line-'+idx+'" style="display:grid;grid-template-columns:2fr 1fr 1fr 60px 28px;gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid var(--rule);">'+
+      '<div><'+(idx===0?'label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Coffee</label>':'')+
+        '<select id="so-coffee-'+idx+'" style="width:100%;">'+coffeeOptsHtml+'</select></div>'+
+      '<div><'+(idx===0?'label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Size</label>':'')+
+        '<select id="so-size-'+idx+'">'+sizeOpts+'</select></div>'+
+      '<div><'+(idx===0?'label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Grind</label>':'')+
+        '<select id="so-grind-'+idx+'">'+grindOpts+'</select></div>'+
+      '<div><'+(idx===0?'label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Qty</label>':'')+
+        '<input type="number" id="so-qty-'+idx+'" value="'+(line?line.qty:1)+'" min="1" style="width:100%;"></div>'+
+      '<button onclick="document.getElementById(\'so-line-'+idx+'\').remove()" style="background:none;border:1px solid var(--rule2);border-radius:4px;color:var(--ink3);cursor:pointer;font-size:16px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">×</button>'+
+    '</div>';
+  }
+
+  var linesHtml = existing.length
+    ? existing.map(function(l,i){ return buildLineHTML(l,i); }).join('')
+    : buildLineHTML(null, 0);
+
+  modal.innerHTML =
+    '<div style="background:white;border-radius:12px;padding:32px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">'+
+      '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:4px;">Standing Order</div>'+
+      '<div style="font-size:13px;color:var(--ink3);margin-bottom:20px;">'+escHtml(userName)+' · populates automatically each new cycle</div>'+
+      '<div id="so-lines-container">'+linesHtml+'</div>'+
+      '<button class="btn btn-ghost btn-sm" style="margin-top:12px;" onclick="addStandingOrderLine()">+ Add Line</button>'+
+      '<div style="margin-top:8px;"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Region</label>'+
+        '<select id="so-region" style="width:180px;">'+
+          '<option value="ship"'+(existing[0]&&existing[0].region==='ship'?' selected':'')+'>Ship</option>'+
+          '<option value="local"'+(existing[0]&&existing[0].region==='local'?' selected':'')+'>Local Delivery</option>'+
+          '<option value="pickup"'+(existing[0]&&existing[0].region==='pickup'?' selected':'')+'>Café Pickup</option>'+
+        '</select></div>'+
+      '<div style="margin-top:8px;"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Notes</label>'+
+        '<input type="text" id="so-notes" placeholder="Standing order notes..." value="'+(existing[0]?escHtml(existing[0].notes||''):'')+'" style="width:100%;"></div>'+
+      '<div style="display:flex;gap:10px;margin-top:20px;">'+
+        '<button class="btn btn-primary" style="flex:1;" onclick="saveStandingOrder(\''+userId+'\')">Save Standing Order</button>'+
+        '<button class="btn btn-danger btn-sm" onclick="clearStandingOrder(\''+userId+'\',\''+escHtml(userName)+'\')">Clear</button>'+
+        '<button class="btn btn-ghost" onclick="document.getElementById(\'standing-order-modal\').remove()">Cancel</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(modal);
+  // Store line count for adding more
+  modal._lineCount = existing.length || 1;
+}
+
+function addStandingOrderLine() {
+  var container = document.getElementById('so-lines-container');
+  var modal = document.getElementById('standing-order-modal');
+  var idx = modal._lineCount++;
+  var div = document.createElement('div');
+  div.innerHTML = buildSOLine(null, idx);
+  container.appendChild(div.firstChild);
+}
+
+function buildSOLine(line, idx) {
+  var sizeOpts = ['4oz','12oz','1lb','2lb','5lb','20lb'].map(function(s){
+    var label = {'4oz':'4oz','12oz':'12 oz','1lb':'1 lb','2lb':'2 lb','5lb':'5 lb','20lb':'Bulk'}[s];
+    return '<option value="'+s+'"'+(line&&line.size===s?' selected':s==='2lb'?' selected':'')+'>'+label+'</option>';
+  }).join('');
+  var grindOpts = [['wb','Whole Bean'],['drip','Drip'],['coarse','Coarse'],['fine','Fine']].map(function(g){
+    return '<option value="'+g[0]+'"'+(line&&line.grind===g[0]?' selected':g[0]==='wb'?' selected':'')+'>'+g[1]+'</option>';
+  }).join('');
+  var coffeeOptsHtml = coffees.filter(function(c){return c.active;}).map(function(c){
+    return '<option value="'+c.sku+'"'+(line&&line.coffee_sku===c.sku?' selected':'')+'>'+c.name+'</option>';
+  }).join('');
+  return '<div class="so-line" id="so-line-'+idx+'" style="display:grid;grid-template-columns:2fr 1fr 1fr 60px 28px;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule);">'+
+    '<select id="so-coffee-'+idx+'" style="width:100%;">'+coffeeOptsHtml+'</select>'+
+    '<select id="so-size-'+idx+'">'+sizeOpts+'</select>'+
+    '<select id="so-grind-'+idx+'">'+grindOpts+'</select>'+
+    '<input type="number" id="so-qty-'+idx+'" value="'+(line?line.qty:1)+'" min="1" style="width:100%;">'+
+    '<button onclick="document.getElementById(\'so-line-'+idx+'\').remove()" style="background:none;border:1px solid var(--rule2);border-radius:4px;color:var(--ink3);cursor:pointer;font-size:16px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">×</button>'+
+  '</div>';
+}
+
+async function saveStandingOrder(userId) {
+  var lines = document.querySelectorAll('#so-lines-container .so-line');
+  var region = document.getElementById('so-region').value;
+  var notes = document.getElementById('so-notes').value;
+  var toInsert = [];
+  lines.forEach(function(row) {
+    var idx = row.id.replace('so-line-','');
+    var sku = document.getElementById('so-coffee-'+idx);
+    if (!sku) return;
+    var coffee = getCoffee(sku.value);
+    toInsert.push({
+      profile_id: userId,
+      coffee_sku: sku.value,
+      coffee_name: coffee.name,
+      size: document.getElementById('so-size-'+idx).value,
+      grind: document.getElementById('so-grind-'+idx).value,
+      qty: parseInt(document.getElementById('so-qty-'+idx).value)||1,
+      region: region,
+      notes: notes,
+      order_type: 'wholesale'
+    });
+  });
+  if (!toInsert.length) { toast('Add at least one line','warn'); return; }
+  try {
+    // Replace all standing orders for this account
+    await dbFetch('standing_orders?profile_id=eq.'+userId, {method:'DELETE', prefer:'return=minimal'});
+    await dbFetch('standing_orders', {method:'POST', body:toInsert, prefer:'return=minimal'});
+    var modal = document.getElementById('standing-order-modal');
+    if (modal) modal.remove();
+    toast('Standing order saved · '+toInsert.length+' line'+(toInsert.length!==1?'s':''),'success');
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
+}
+
+async function clearStandingOrder(userId, userName) {
+  if (!confirm('Clear standing order for '+userName+'?')) return;
+  try {
+    await dbFetch('standing_orders?profile_id=eq.'+userId, {method:'DELETE', prefer:'return=minimal'});
+    var modal = document.getElementById('standing-order-modal');
+    if (modal) modal.remove();
+    toast('Standing order cleared','success');
+  } catch(e) { toast('Error: '+e.message,'error'); }
 }
 
 async function showApproveModal(userId, userName, userEmail) {
