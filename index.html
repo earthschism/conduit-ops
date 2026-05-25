@@ -522,7 +522,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
         <tbody id="bag-grid-tbody"></tbody>
       </table>
     </div>
-    <div class="print-section" style="margin-top:28px;">
+    <div class="print-section" style="margin-top:28px;page-break-before:always;">
       <div class="print-section-title" style="color:#2121d4;">Grinding Tasks — By Account</div>
       <table style="font-size:14px;">
         <thead><tr><th style="width:28px;"></th><th>Account</th><th>Coffee</th><th>Grind</th><th style="text-align:right;">Qty</th><th>Size</th></tr></thead>
@@ -691,7 +691,7 @@ const TYPE_L = {subscription:'Subscription',wholesale:'Wholesale',manual:'Manual
 const SHIP_BOXES = [{type:'First Class',rate:6},{type:'Padded Flat Rate',rate:9},{type:'Medium Flat Rate',rate:14}];
 
 const ROAST_GROUPS = {
-  '9to5': ['1895','QUST','DSIG'],
+  '9to5': ['1895','QUST','DSIG','BONT'],  // Nove alle Cinque + Baskette Fraismont
   'SHIP': ['COTU','DOSD'],
   'SEBD': ['BSKT'],
   'LOCO': ['OTIS'],
@@ -1054,147 +1054,8 @@ async function _doCreateCycle(name) {
   const o = document.createElement('option'); o.value = data.id; o.textContent = data.name;
   sel.insertBefore(o, sel.firstChild); sel.value = data.id;
   document.getElementById('cycle-pill').textContent = data.name;
-  updateRoastersChoiceSelector();
   toast('Cycle created: '+name,'success');
-  // Check for standing orders
-  await checkStandingOrdersPrompt();
   await loadOrders();
-}
-
-async function checkStandingOrdersPrompt() {
-  var standingOrders = [];
-  try { standingOrders = await dbFetch('standing_orders?select=*&order=profile_id'); }
-  catch(e) { return; }
-  if (!standingOrders.length) return;
-
-  // Group by profile
-  var byProfile = {};
-  standingOrders.forEach(function(o) {
-    if (!byProfile[o.profile_id]) byProfile[o.profile_id] = [];
-    byProfile[o.profile_id].push(o);
-  });
-  var accountCount = Object.keys(byProfile).length;
-
-  // Build review modal
-  var modal = document.createElement('div');
-  modal.id = 'standing-populate-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  var accountsHtml = Object.keys(byProfile).map(function(profileId) {
-    var lines = byProfile[profileId];
-    var firstLine = lines[0];
-    var linesHtml = lines.map(function(l, i) {
-      return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;padding-left:28px;">'+
-        '<input type="checkbox" id="so-pop-'+profileId+'-'+i+'" data-profile="'+profileId+'" data-idx="'+i+'" checked style="width:auto;accent-color:var(--blue);">'+
-        '<span style="font-size:13px;">'+escHtml(l.coffee_name)+' · '+l.size+' · '+(GRIND_L[l.grind]||l.grind)+' · qty '+l.qty+'</span>'+
-      '</div>';
-    }).join('');
-    return '<div style="margin-bottom:12px;border:1px solid var(--rule);border-radius:6px;overflow:hidden;">'+
-      '<div style="background:var(--paper2);padding:9px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);">'+
-        '<input type="checkbox" id="so-pop-acct-'+profileId+'" onchange="toggleSOAccount(\''+profileId+'\')" checked style="width:auto;accent-color:var(--blue);">'+
-        '<span style="font-weight:700;font-size:14px;">'+escHtml(firstLine.coffee_name ? (lines[0].profile_id) : profileId)+'</span>'+
-        '<span style="font-size:12px;color:var(--ink3);margin-left:auto;">'+lines.length+' line'+(lines.length!==1?'s':'')+'</span>'+
-      '</div>'+
-      linesHtml+
-    '</div>';
-  }).join('');
-
-  // We need customer names — fetch profiles
-  var profileIds = Object.keys(byProfile);
-  var profiles = [];
-  try { profiles = await dbFetch('profiles?select=id,full_name&id=in.('+profileIds.join(',')+')'); }
-  catch(e) {}
-  var nameMap = {};
-  profiles.forEach(function(p){ nameMap[p.id] = p.full_name || p.id; });
-
-  // Rebuild with names
-  accountsHtml = Object.keys(byProfile).map(function(profileId) {
-    var lines = byProfile[profileId];
-    var customerName = nameMap[profileId] || profileId;
-    var linesHtml = lines.map(function(l, i) {
-      return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0 6px 28px;">'+
-        '<input type="checkbox" class="so-pop-line" id="so-pop-'+profileId+'-'+i+'" data-profile="'+profileId+'" checked style="width:auto;accent-color:var(--blue);">'+
-        '<span style="font-size:13px;">'+escHtml(l.coffee_name)+' · <span class="sku">'+l.coffee_sku+'</span> · '+l.size+' · '+(GRIND_L[l.grind]||l.grind)+' · <strong>qty '+l.qty+'</strong></span>'+
-      '</div>';
-    }).join('');
-    return '<div style="margin-bottom:10px;border:1px solid var(--rule);border-radius:6px;overflow:hidden;">'+
-      '<div style="background:var(--paper2);padding:9px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);">'+
-        '<input type="checkbox" class="so-pop-acct" id="so-pop-acct-'+profileId+'" onchange="toggleSOAccount(\''+profileId+'\')" checked style="width:auto;accent-color:var(--blue);">'+
-        '<span style="font-weight:700;font-size:14px;">'+escHtml(customerName)+'</span>'+
-        '<span style="font-size:12px;color:var(--ink3);margin-left:auto;">'+lines.length+' line'+(lines.length!==1?'s':'')+'</span>'+
-      '</div>'+
-      linesHtml+
-    '</div>';
-  }).join('');
-
-  modal.innerHTML =
-    '<div style="background:white;border-radius:12px;padding:32px;max-width:520px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">'+
-      '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:6px;">Standing Orders</div>'+
-      '<div style="font-size:13px;color:var(--ink3);margin-bottom:20px;">'+accountCount+' account'+(accountCount!==1?'s have':' has')+' standing orders. Uncheck any to skip this cycle.</div>'+
-      '<div id="so-pop-accounts">'+accountsHtml+'</div>'+
-      '<div style="display:flex;gap:10px;margin-top:20px;">'+
-        '<button class="btn btn-primary" style="flex:1;" onclick="populateStandingOrders('+JSON.stringify(byProfile)+')">Populate Orders</button>'+
-        '<button class="btn btn-ghost" onclick="document.getElementById(\'standing-populate-modal\').remove()">Skip</button>'+
-      '</div>'+
-    '</div>';
-  document.body.appendChild(modal);
-  // Store data for populate function
-  modal._standingData = byProfile;
-}
-
-function toggleSOAccount(profileId) {
-  var acctCb = document.getElementById('so-pop-acct-'+profileId);
-  var lineCbs = document.querySelectorAll('.so-pop-line[data-profile="'+profileId+'"]');
-  lineCbs.forEach(function(cb){ cb.checked = acctCb.checked; });
-}
-
-async function populateStandingOrders(byProfile) {
-  var toInsert = [];
-  Object.keys(byProfile).forEach(function(profileId) {
-    var lines = byProfile[profileId];
-    lines.forEach(function(l, i) {
-      var cb = document.getElementById('so-pop-'+profileId+'-'+i);
-      if (!cb || !cb.checked) return;
-      toInsert.push({
-        cycle_id: currentCycleId,
-        profile_id: profileId,
-        customer_name: l.coffee_name ? (document.getElementById('so-pop-acct-'+profileId) ?
-          document.getElementById('so-pop-acct-'+profileId).parentElement.querySelector('span[style*="font-weight:700"]').textContent : profileId)
-          : profileId,
-        order_type: l.order_type || 'wholesale',
-        region: l.region || 'ship',
-        coffee_sku: l.coffee_sku,
-        coffee_name: l.coffee_name,
-        qty: l.qty,
-        size: l.size,
-        grind: l.grind,
-        notes: l.notes || '',
-        source_order_id: 'standing-'+profileId+'-'+Date.now()
-      });
-    });
-  });
-
-  if (!toInsert.length) {
-    document.getElementById('standing-populate-modal').remove();
-    toast('No lines selected','warn');
-    return;
-  }
-
-  // Get customer names from DOM
-  toInsert.forEach(function(o) {
-    var acctEl = document.getElementById('so-pop-acct-'+o.profile_id);
-    if (acctEl) {
-      var nameEl = acctEl.closest('div').querySelector('span[style*="font-weight:700"]');
-      if (nameEl) o.customer_name = nameEl.textContent.trim();
-    }
-  });
-
-  try {
-    await dbFetch('orders', {method:'POST', body:toInsert, prefer:'return=minimal'});
-    document.getElementById('standing-populate-modal').remove();
-    toast('Populated '+toInsert.length+' standing order line'+(toInsert.length!==1?'s':''),'success');
-    await loadOrders();
-  } catch(e) { toast('Error: '+e.message,'error'); }
 }
 
 async function saveRoastersChoice(sku) {
@@ -1484,8 +1345,8 @@ function escHtml(str) {
 }
 
 function updateStats() {
-  document.getElementById('stat-bags').textContent = orders.reduce((s,o) => s+o.qty, 0);
-  document.getElementById('stat-grind').textContent = orders.filter(o=>o.grind!=='wb').reduce((s,o)=>s+o.qty, 0);
+  document.getElementById('stat-bags').textContent = orders.filter(o=>o.size!=='20lb').reduce((s,o) => s+o.qty, 0);
+  document.getElementById('stat-grind').textContent = orders.filter(o=>o.grind!=='wb' && o.size!=='20lb').reduce((s,o)=>s+o.qty, 0);
   document.getElementById('stat-lbs').textContent = orders.reduce((s,o) => s+(BAG_W[o.size]||0)*o.qty, 0).toFixed(1);
   document.getElementById('stat-ship').textContent = orders.filter(o=>o.region==='ship').length+' / '+orders.filter(o=>o.region==='local'||o.region==='pickup'||o.region==='seattle'||o.region==='pt').length;
 }
@@ -1665,7 +1526,8 @@ function parseProductName(name, roastersChoiceSku) {
   var l = name.toLowerCase();
 
   // Roaster's Choice maps to current cycle selection
-  if (l.includes("roaster's choice") || l.includes("roasters choice") || l.includes("roaster's choice")) {
+  if (l.includes("roaster's choice") || l.includes("roasters choice") || 
+      l.includes("roaster's choice") || l.includes("single origin")) {
     sku = roastersChoiceSku || 'RC';
     // Size/grind still parsed from the rest of the name below
   } else {
@@ -1821,35 +1683,36 @@ function printFulfillmentDirect() {
     var lines = groups[customerName];
     var firstLine = lines[0];
     var regionLabel = REGION_L[firstLine.region]||firstLine.region;
-    var totalBags = lines.reduce(function(s,o){return s+o.qty;},0);
+    var totalBags = lines.filter(function(o){return o.size!=='20lb';}).reduce(function(s,o){return s+o.qty;},0);
+    var hasBulk = lines.some(function(o){return o.size==='20lb';});
     var lineRows = lines.map(function(o) {
       return '<tr>' +
-        '<td style="padding:9px 12px;font-size:15px;font-weight:600;">'+escHtml(o.coffee_name)+'</td>' +
-        '<td style="padding:9px 12px;"><span class="sku">'+o.coffee_sku+'</span></td>' +
-        '<td style="padding:9px 12px;font-family:\'DM Mono\',monospace;font-size:14px;text-align:center;">'+o.size+'</td>' +
-        '<td style="padding:9px 12px;font-size:14px;color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
-        '<td style="padding:9px 12px;font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;text-align:center;">'+o.qty+'</td>' +
-        '<td style="padding:9px 12px;font-size:12px;color:var(--ink3);font-style:italic;">'+(o.notes||'')+'</td>' +
-        '<td style="padding:9px 12px;text-align:center;font-size:22px;">☐</td>' +
+        '<td style="padding:4px 8px;font-size:12px;font-weight:600;">'+escHtml(o.coffee_name)+'</td>' +
+        '<td style="padding:4px 8px;"><span class="sku">'+o.coffee_sku+'</span></td>' +
+        '<td style="padding:4px 8px;font-family:\'DM Mono\',monospace;font-size:12px;text-align:center;">'+(o.size==='20lb'?'Bulk':o.size)+'</td>' +
+        '<td style="padding:4px 8px;font-size:12px;color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
+        '<td style="padding:4px 8px;font-family:\'DM Mono\',monospace;font-size:14px;font-weight:700;text-align:center;">'+o.qty+'</td>' +
+        '<td style="padding:4px 8px;font-size:11px;color:var(--ink3);font-style:italic;">'+(o.notes||'')+'</td>' +
+        '<td style="padding:4px 8px;text-align:center;font-size:14px;">☐</td>' +
         '</tr>';
     }).join('');
-    return '<div style="margin-bottom:18px;border:2px solid var(--ink);border-radius:6px;overflow:hidden;page-break-inside:avoid;">' +
-      '<div style="background:var(--ink);color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">' +
-        '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;">'+escHtml(customerName)+'</div>' +
-        '<div style="display:flex;gap:20px;align-items:center;">' +
-          '<span style="font-size:13px;opacity:0.7;">'+regionLabel+'</span>' +
-          '<span style="font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;">'+totalBags+' bag'+(totalBags!==1?'s':'')+'</span>' +
+    return '<div style="margin-bottom:8px;border:1px solid var(--ink);border-radius:4px;overflow:hidden;page-break-inside:avoid;">' +
+      '<div style="background:var(--ink);color:white;padding:5px 10px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<div style="font-family:\'Libre Baskerville\',serif;font-size:13px;font-weight:700;">'+escHtml(customerName)+'</div>' +
+        '<div style="display:flex;gap:12px;align-items:center;">' +
+          '<span style="font-size:11px;opacity:0.7;">'+regionLabel+'</span>' +
+          '<span style="font-family:\'DM Mono\',monospace;font-size:13px;font-weight:700;">'+totalBags+' bag'+(totalBags!==1?'s':'')+(hasBulk?' + bulk':'')+'</span>' +
         '</div>' +
       '</div>' +
       '<table style="width:100%;border-collapse:collapse;">' +
-        '<thead><tr style="background:var(--paper2);">' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Coffee</th>' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">SKU</th>' +
-          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Size</th>' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Grind</th>' +
-          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Qty</th>' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Notes</th>' +
-          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">✓</th>' +
+        '<thead><tr style="background:#f2ebe0;">' +
+          '<th style="padding:3px 8px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:#6b5a50;">Coffee</th>' +
+          '<th style="padding:3px 8px;text-align:left;font-size:9px;text-transform:uppercase;color:#6b5a50;">SKU</th>' +
+          '<th style="padding:3px 8px;text-align:center;font-size:9px;text-transform:uppercase;color:#6b5a50;">Size</th>' +
+          '<th style="padding:3px 8px;text-align:left;font-size:9px;text-transform:uppercase;color:#6b5a50;">Grind</th>' +
+          '<th style="padding:3px 8px;text-align:center;font-size:9px;text-transform:uppercase;color:#6b5a50;">Qty</th>' +
+          '<th style="padding:3px 8px;text-align:left;font-size:9px;text-transform:uppercase;color:#6b5a50;">Notes</th>' +
+          '<th style="padding:3px 8px;text-align:center;font-size:9px;text-transform:uppercase;color:#6b5a50;">✓</th>' +
         '</tr></thead>' +
         '<tbody>'+lineRows+'</tbody>' +
       '</table>' +
@@ -1858,26 +1721,27 @@ function printFulfillmentDirect() {
 
   // Build a print window
   var win = window.open('', '_blank', 'width=900,height=700');
+  var totalBagsAll = orders.filter(function(o){return o.size!=='20lb';}).reduce(function(s,o){return s+o.qty;},0);
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'+
     '<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;600&display=swap" rel="stylesheet">'+
     '<style>'+
       ':root{--ink:#1c1714;--ink3:#6b5a50;--paper2:#f2ebe0;--rule:rgba(90,60,30,0.14);}'+
       '*{box-sizing:border-box;margin:0;padding:0;}'+
-      'body{font-family:\'DM Sans\',sans-serif;color:var(--ink);padding:24px;background:white;}'+
-      '.sku{font-family:\'DM Mono\',monospace;font-size:11px;color:#2121d4;background:rgba(33,33,212,0.06);padding:2px 7px;border-radius:4px;border:1px solid rgba(33,33,212,0.18);}'+
+      'body{font-family:\'DM Sans\',sans-serif;color:var(--ink);padding:16px;background:white;font-size:12px;}'+
+      '.sku{font-family:\'DM Mono\',monospace;font-size:10px;color:#2121d4;background:rgba(33,33,212,0.06);padding:1px 5px;border-radius:3px;border:1px solid rgba(33,33,212,0.18);}'+
       'table{width:100%;border-collapse:collapse;}'+
       'td{border-bottom:1px solid var(--rule);}'+
       'tr:last-child td{border-bottom:none;}'+
-      '@media print{body{padding:8px;}@page{margin:1cm;}}'+
+      '@media print{body{padding:6px;}@page{margin:0.7cm;}}'+
     '</style></head><body>'+
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #1c1714;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;padding-bottom:10px;border-bottom:3px solid #1c1714;">'+
       '<div>'+
-        '<div style="font-family:\'Libre Baskerville\',serif;font-size:24px;font-weight:700;">Conduit Coffee — Fulfillment Sheet</div>'+
-        '<div style="font-size:13px;color:var(--ink3);margin-top:4px;font-family:\'DM Mono\',monospace;">'+cycleName+' · '+dateStr+'</div>'+
+        '<div style="font-family:\'Libre Baskerville\',serif;font-size:18px;font-weight:700;">Conduit Coffee — Fulfillment Sheet</div>'+
+        '<div style="font-size:11px;color:#6b5a50;margin-top:2px;font-family:\'DM Mono\',monospace;">'+cycleName+' · '+dateStr+'</div>'+
       '</div>'+
       '<div style="text-align:right;">'+
-        '<div style="font-family:\'DM Mono\',monospace;font-size:28px;font-weight:700;color:#2121d4;">'+orders.reduce(function(s,o){return s+o.qty;},0)+'</div>'+
-        '<div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.06em;">Total Bags</div>'+
+        '<div style="font-family:\'DM Mono\',monospace;font-size:22px;font-weight:700;color:#2121d4;">'+totalBagsAll+'</div>'+
+        '<div style="font-size:10px;color:#6b5a50;text-transform:uppercase;letter-spacing:0.06em;">Total Bags</div>'+
       '</div>'+
     '</div>'+
     fulfillHtml+
@@ -1940,19 +1804,25 @@ function buildPrintSheets(rows, originTotals) {
   document.getElementById('green-card').style.display = 'block';
 
   // ── Bagging sheet — grid layout ──
-  // SIZE_ORDER: Bulk left → 4oz right
-  var SIZE_COL = ['20lb','5lb','2lb','1lb','12oz','4oz'];
-  var SIZE_LABEL = {'20lb':'Bulk','5lb':'5 lb','2lb':'2 lb','1lb':'1 lb','12oz':'12 oz','4oz':'4oz'};
+  // SIZE_ORDER: Bulk separate, then 5lb→4oz for bag count
+  var SIZE_COL = ['5lb','2lb','1lb','12oz','4oz']; // Bulk excluded from bag count grid
+  var SIZE_LABEL = {'5lb':'5 lb','2lb':'2 lb','1lb':'1 lb','12oz':'12 oz','4oz':'4oz'};
   var bagAgg = {};
-  var grindTasks = []; // {customer, name, sku, grind, size, qty}
+  var grindTasks = [];
+  var bulkAgg = {}; // track bulk separately
 
   orders.forEach(function(o) {
     if (!bagAgg[o.coffee_sku]) bagAgg[o.coffee_sku] = {
-      name:o.coffee_name, sku:o.coffee_sku, sizes:{}
+      name:o.coffee_name, sku:o.coffee_sku, sizes:{}, bulkQty:0, bulkLbs:0
     };
-    bagAgg[o.coffee_sku].sizes[o.size] = (bagAgg[o.coffee_sku].sizes[o.size]||0) + o.qty;
+    if (o.size === '20lb') {
+      bagAgg[o.coffee_sku].bulkQty += o.qty;
+      bagAgg[o.coffee_sku].bulkLbs += (BAG_W['20lb']||1) * o.qty;
+    } else {
+      bagAgg[o.coffee_sku].sizes[o.size] = (bagAgg[o.coffee_sku].sizes[o.size]||0) + o.qty;
+    }
 
-    if (o.grind !== 'wb' && o.size !== '4oz') {
+    if (o.grind !== 'wb' && o.size !== '4oz' && o.size !== '20lb') {
       var taskKey = o.customer_name+'|'+o.coffee_name+'|'+o.size+'|'+o.grind;
       var existing = grindTasks.find(function(t){return t.key===taskKey;});
       if (existing) { existing.qty += o.qty; }
@@ -1984,7 +1854,9 @@ function buildPrintSheets(rows, originTotals) {
     var rowTotal = 0;
     var bg = i%2===0 ? '' : 'background:var(--paper2);';
     var html = '<tr style="'+bg+'">' +
-      '<td style="font-weight:700;font-size:15px;padding:10px 12px;">'+r.name+'</td>' +
+      '<td style="font-weight:700;font-size:15px;padding:10px 12px;">'+r.name+
+        (r.bulkQty ? '<div style="font-size:11px;color:var(--ink3);font-weight:400;margin-top:2px;">+'+r.bulkQty+' bulk ('+r.bulkLbs.toFixed(0)+' lb)</div>' : '')+
+      '</td>' +
       '<td style="padding:10px 8px;"><span class="sku">'+r.sku+'</span></td>';
     SIZE_COL.forEach(function(s) {
       var qty = r.sizes[s]||0;
@@ -1999,7 +1871,7 @@ function buildPrintSheets(rows, originTotals) {
 
   // Totals row
   bodyHtml += '<tr style="border-top:3px solid var(--ink);background:var(--paper2);">' +
-    '<td style="font-weight:700;font-size:14px;padding:10px 12px;text-transform:uppercase;letter-spacing:0.05em;">TOTAL</td>' +
+    '<td style="font-weight:700;font-size:14px;padding:10px 12px;text-transform:uppercase;letter-spacing:0.05em;">TOTAL BAGS</td>' +
     '<td></td>';
   SIZE_COL.forEach(function(s) {
     bodyHtml += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;padding:10px 12px;">'+(colTotals[s]||'—')+'</td>';
@@ -2007,7 +1879,7 @@ function buildPrintSheets(rows, originTotals) {
   bodyHtml += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:24px;font-weight:700;color:var(--blue);padding:10px 12px;">'+grandTotal+'</td></tr>';
   document.getElementById('bag-grid-tbody').innerHTML = bodyHtml;
 
-  // Grinding tasks — by account
+  // Grinding tasks — page break before, by account
   var GRIND_LABEL = {drip:'Drip',coarse:'Coarse',fine:'Fine'};
   var grindHtml = grindTasks.length ? grindTasks.map(function(t) {
     return '<tr>' +
@@ -2037,35 +1909,36 @@ function buildPrintSheets(rows, originTotals) {
     var lines = groups[customerName];
     var firstLine = lines[0];
     var regionLabel = REGION_L[firstLine.region]||firstLine.region;
-    var totalBags = lines.reduce(function(s,o){return s+o.qty;},0);
+    var totalBags = lines.filter(function(o){return o.size!=='20lb';}).reduce(function(s,o){return s+o.qty;},0);
+    var bulkLines = lines.filter(function(o){return o.size==='20lb';});
     var lineRows = lines.map(function(o) {
       return '<tr>' +
-        '<td style="padding:8px 12px;font-size:14px;font-weight:600;">'+escHtml(o.coffee_name)+'</td>' +
-        '<td style="padding:8px 12px;font-family:\'DM Mono\',monospace;font-size:13px;"><span class="sku">'+o.coffee_sku+'</span></td>' +
-        '<td style="padding:8px 12px;font-family:\'DM Mono\',monospace;font-size:14px;text-align:center;">'+o.size+'</td>' +
-        '<td style="padding:8px 12px;font-size:14px;color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
-        '<td style="padding:8px 12px;font-family:\'DM Mono\',monospace;font-size:18px;font-weight:700;text-align:center;">'+o.qty+'</td>' +
-        '<td style="padding:8px 12px;font-size:12px;color:var(--ink3);">'+(o.notes||'')+'</td>' +
-        '<td style="padding:8px 12px;text-align:center;font-size:20px;">☐</td>' +
+        '<td style="padding:4px 8px;font-size:12px;font-weight:600;">'+escHtml(o.coffee_name)+'</td>' +
+        '<td style="padding:4px 8px;font-family:\'DM Mono\',monospace;font-size:11px;"><span class="sku">'+o.coffee_sku+'</span></td>' +
+        '<td style="padding:4px 8px;font-family:\'DM Mono\',monospace;font-size:12px;text-align:center;">'+(o.size==='20lb'?'Bulk':o.size)+'</td>' +
+        '<td style="padding:4px 8px;font-size:12px;color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
+        '<td style="padding:4px 8px;font-family:\'DM Mono\',monospace;font-size:14px;font-weight:700;text-align:center;">'+o.qty+'</td>' +
+        '<td style="padding:4px 8px;font-size:11px;color:var(--ink3);">'+(o.notes||'')+'</td>' +
+        '<td style="padding:4px 8px;text-align:center;font-size:14px;">☐</td>' +
         '</tr>';
     }).join('');
-    return '<div style="margin-bottom:20px;border:2px solid var(--ink);border-radius:6px;overflow:hidden;break-inside:avoid;">' +
-      '<div style="background:var(--ink);color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">' +
-        '<div style="font-family:\'Libre Baskerville\',serif;font-size:18px;font-weight:700;">'+escHtml(customerName)+'</div>' +
-        '<div style="display:flex;gap:16px;align-items:center;">' +
-          '<span style="font-size:13px;opacity:0.75;">'+regionLabel+'</span>' +
-          '<span style="font-family:\'DM Mono\',monospace;font-size:18px;font-weight:700;">'+totalBags+' bag'+(totalBags!==1?'s':'')+'</span>' +
+    return '<div style="margin-bottom:10px;border:1px solid var(--ink);border-radius:4px;overflow:hidden;break-inside:avoid;">' +
+      '<div style="background:var(--ink);color:white;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<div style="font-family:\'Libre Baskerville\',serif;font-size:14px;font-weight:700;">'+escHtml(customerName)+'</div>' +
+        '<div style="display:flex;gap:12px;align-items:center;">' +
+          '<span style="font-size:11px;opacity:0.75;">'+regionLabel+'</span>' +
+          '<span style="font-family:\'DM Mono\',monospace;font-size:14px;font-weight:700;">'+totalBags+' bag'+(totalBags!==1?'s':'')+(bulkLines.length?' + bulk':'')+'</span>' +
         '</div>' +
       '</div>' +
       '<table style="width:100%;border-collapse:collapse;">' +
         '<thead><tr style="background:var(--paper2);">' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Coffee</th>' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">SKU</th>' +
-          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Size</th>' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Grind</th>' +
-          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qty</th>' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Notes</th>' +
-          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">✓</th>' +
+          '<th style="padding:4px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Coffee</th>' +
+          '<th style="padding:4px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">SKU</th>' +
+          '<th style="padding:4px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Size</th>' +
+          '<th style="padding:4px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Grind</th>' +
+          '<th style="padding:4px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Qty</th>' +
+          '<th style="padding:4px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Notes</th>' +
+          '<th style="padding:4px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">✓</th>' +
         '</tr></thead>' +
         '<tbody>'+lineRows+'</tbody>' +
       '</table>' +
@@ -2360,146 +2233,9 @@ async function loadAdminUsers() {
       '<td><span class="badge badge-gray">'+(u.account_type||'retail')+'</span></td>' +
       '<td><span class="badge '+statusClass+'">'+statusText+'</span></td>' +
       '<td style="color:var(--ink3);font-size:12px;">'+new Date(u.created_at).toLocaleDateString()+'</td>' +
-      '<td style="display:flex;gap:6px;flex-wrap:wrap;">'+approveBtn+
-        '<button class="btn btn-ghost btn-sm" onclick="showStandingOrderModal(\''+u.id+'\',\''+escHtml(u.full_name||u.email)+'\')">☕ Standing</button>' +
-      '</td>' +
+      '<td>'+approveBtn+'</td>' +
       '</tr>';
   }).join('');
-}
-
-async function showStandingOrderModal(userId, userName) {
-  // Load existing standing orders for this account
-  var existing = [];
-  try { existing = await dbFetch('standing_orders?select=*&profile_id=eq.'+userId+'&order=created_at'); }
-  catch(e) {}
-
-  var modal = document.createElement('div');
-  modal.id = 'standing-order-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  function buildLineHTML(line, idx) {
-    var sizeOpts = ['4oz','12oz','1lb','2lb','5lb','20lb'].map(function(s){
-      var label = {'4oz':'4oz Sample','12oz':'12 oz','1lb':'1 lb','2lb':'2 lb','5lb':'5 lb','20lb':'Bulk'}[s];
-      return '<option value="'+s+'"'+(line&&line.size===s?' selected':'')+'>'+label+'</option>';
-    }).join('');
-    var grindOpts = [['wb','Whole Bean'],['drip','Drip'],['coarse','Coarse'],['fine','Fine']].map(function(g){
-      return '<option value="'+g[0]+'"'+(line&&line.grind===g[0]?' selected':'')+'>'+g[1]+'</option>';
-    }).join('');
-    var coffeeOptsHtml = coffees.filter(function(c){return c.active;}).map(function(c){
-      return '<option value="'+c.sku+'"'+(line&&line.coffee_sku===c.sku?' selected':'')+'>'+c.name+'</option>';
-    }).join('');
-    return '<div class="so-line" id="so-line-'+idx+'" style="display:grid;grid-template-columns:2fr 1fr 1fr 60px 28px;gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid var(--rule);">'+
-      '<div><'+(idx===0?'label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Coffee</label>':'')+
-        '<select id="so-coffee-'+idx+'" style="width:100%;">'+coffeeOptsHtml+'</select></div>'+
-      '<div><'+(idx===0?'label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Size</label>':'')+
-        '<select id="so-size-'+idx+'">'+sizeOpts+'</select></div>'+
-      '<div><'+(idx===0?'label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Grind</label>':'')+
-        '<select id="so-grind-'+idx+'">'+grindOpts+'</select></div>'+
-      '<div><'+(idx===0?'label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Qty</label>':'')+
-        '<input type="number" id="so-qty-'+idx+'" value="'+(line?line.qty:1)+'" min="1" style="width:100%;"></div>'+
-      '<button onclick="document.getElementById(\'so-line-'+idx+'\').remove()" style="background:none;border:1px solid var(--rule2);border-radius:4px;color:var(--ink3);cursor:pointer;font-size:16px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">×</button>'+
-    '</div>';
-  }
-
-  var linesHtml = existing.length
-    ? existing.map(function(l,i){ return buildLineHTML(l,i); }).join('')
-    : buildLineHTML(null, 0);
-
-  modal.innerHTML =
-    '<div style="background:white;border-radius:12px;padding:32px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">'+
-      '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:4px;">Standing Order</div>'+
-      '<div style="font-size:13px;color:var(--ink3);margin-bottom:20px;">'+escHtml(userName)+' · populates automatically each new cycle</div>'+
-      '<div id="so-lines-container">'+linesHtml+'</div>'+
-      '<button class="btn btn-ghost btn-sm" style="margin-top:12px;" onclick="addStandingOrderLine()">+ Add Line</button>'+
-      '<div style="margin-top:8px;"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Region</label>'+
-        '<select id="so-region" style="width:180px;">'+
-          '<option value="ship"'+(existing[0]&&existing[0].region==='ship'?' selected':'')+'>Ship</option>'+
-          '<option value="local"'+(existing[0]&&existing[0].region==='local'?' selected':'')+'>Local Delivery</option>'+
-          '<option value="pickup"'+(existing[0]&&existing[0].region==='pickup'?' selected':'')+'>Café Pickup</option>'+
-        '</select></div>'+
-      '<div style="margin-top:8px;"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:4px;">Notes</label>'+
-        '<input type="text" id="so-notes" placeholder="Standing order notes..." value="'+(existing[0]?escHtml(existing[0].notes||''):'')+'" style="width:100%;"></div>'+
-      '<div style="display:flex;gap:10px;margin-top:20px;">'+
-        '<button class="btn btn-primary" style="flex:1;" onclick="saveStandingOrder(\''+userId+'\')">Save Standing Order</button>'+
-        '<button class="btn btn-danger btn-sm" onclick="clearStandingOrder(\''+userId+'\',\''+escHtml(userName)+'\')">Clear</button>'+
-        '<button class="btn btn-ghost" onclick="document.getElementById(\'standing-order-modal\').remove()">Cancel</button>'+
-      '</div>'+
-    '</div>';
-  document.body.appendChild(modal);
-  // Store line count for adding more
-  modal._lineCount = existing.length || 1;
-}
-
-function addStandingOrderLine() {
-  var container = document.getElementById('so-lines-container');
-  var modal = document.getElementById('standing-order-modal');
-  var idx = modal._lineCount++;
-  var div = document.createElement('div');
-  div.innerHTML = buildSOLine(null, idx);
-  container.appendChild(div.firstChild);
-}
-
-function buildSOLine(line, idx) {
-  var sizeOpts = ['4oz','12oz','1lb','2lb','5lb','20lb'].map(function(s){
-    var label = {'4oz':'4oz','12oz':'12 oz','1lb':'1 lb','2lb':'2 lb','5lb':'5 lb','20lb':'Bulk'}[s];
-    return '<option value="'+s+'"'+(line&&line.size===s?' selected':s==='2lb'?' selected':'')+'>'+label+'</option>';
-  }).join('');
-  var grindOpts = [['wb','Whole Bean'],['drip','Drip'],['coarse','Coarse'],['fine','Fine']].map(function(g){
-    return '<option value="'+g[0]+'"'+(line&&line.grind===g[0]?' selected':g[0]==='wb'?' selected':'')+'>'+g[1]+'</option>';
-  }).join('');
-  var coffeeOptsHtml = coffees.filter(function(c){return c.active;}).map(function(c){
-    return '<option value="'+c.sku+'"'+(line&&line.coffee_sku===c.sku?' selected':'')+'>'+c.name+'</option>';
-  }).join('');
-  return '<div class="so-line" id="so-line-'+idx+'" style="display:grid;grid-template-columns:2fr 1fr 1fr 60px 28px;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule);">'+
-    '<select id="so-coffee-'+idx+'" style="width:100%;">'+coffeeOptsHtml+'</select>'+
-    '<select id="so-size-'+idx+'">'+sizeOpts+'</select>'+
-    '<select id="so-grind-'+idx+'">'+grindOpts+'</select>'+
-    '<input type="number" id="so-qty-'+idx+'" value="'+(line?line.qty:1)+'" min="1" style="width:100%;">'+
-    '<button onclick="document.getElementById(\'so-line-'+idx+'\').remove()" style="background:none;border:1px solid var(--rule2);border-radius:4px;color:var(--ink3);cursor:pointer;font-size:16px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">×</button>'+
-  '</div>';
-}
-
-async function saveStandingOrder(userId) {
-  var lines = document.querySelectorAll('#so-lines-container .so-line');
-  var region = document.getElementById('so-region').value;
-  var notes = document.getElementById('so-notes').value;
-  var toInsert = [];
-  lines.forEach(function(row) {
-    var idx = row.id.replace('so-line-','');
-    var sku = document.getElementById('so-coffee-'+idx);
-    if (!sku) return;
-    var coffee = getCoffee(sku.value);
-    toInsert.push({
-      profile_id: userId,
-      coffee_sku: sku.value,
-      coffee_name: coffee.name,
-      size: document.getElementById('so-size-'+idx).value,
-      grind: document.getElementById('so-grind-'+idx).value,
-      qty: parseInt(document.getElementById('so-qty-'+idx).value)||1,
-      region: region,
-      notes: notes,
-      order_type: 'wholesale'
-    });
-  });
-  if (!toInsert.length) { toast('Add at least one line','warn'); return; }
-  try {
-    // Replace all standing orders for this account
-    await dbFetch('standing_orders?profile_id=eq.'+userId, {method:'DELETE', prefer:'return=minimal'});
-    await dbFetch('standing_orders', {method:'POST', body:toInsert, prefer:'return=minimal'});
-    var modal = document.getElementById('standing-order-modal');
-    if (modal) modal.remove();
-    toast('Standing order saved · '+toInsert.length+' line'+(toInsert.length!==1?'s':''),'success');
-  } catch(e) { toast('Error saving: '+e.message,'error'); }
-}
-
-async function clearStandingOrder(userId, userName) {
-  if (!confirm('Clear standing order for '+userName+'?')) return;
-  try {
-    await dbFetch('standing_orders?profile_id=eq.'+userId, {method:'DELETE', prefer:'return=minimal'});
-    var modal = document.getElementById('standing-order-modal');
-    if (modal) modal.remove();
-    toast('Standing order cleared','success');
-  } catch(e) { toast('Error: '+e.message,'error'); }
 }
 
 async function showApproveModal(userId, userName, userEmail) {
