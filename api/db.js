@@ -1,5 +1,11 @@
 // Vercel serverless function — proxies Supabase REST API
-// Credentials stay server-side via environment variables
+// Place at: api/db.js (root level)
+
+export const config = {
+  api: {
+    bodyParser: true,
+  },
+};
 
 export default async function handler(req, res) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -9,30 +15,29 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Missing Supabase credentials' });
   }
 
-  // The full supabase path comes after /api/db/
-  // e.g. /api/db/orders?select=*&cycle_id=eq.123
-  const url = new URL(req.url, 'http://localhost');
-  
+  // req.url will be something like /api/db/coffees?select=*&active=eq.true
   // Extract everything after /api/db/
-  const pathMatch = url.pathname.match(/^\/api\/db\/(.*)$/);
-  const supabasePath = pathMatch ? pathMatch[1] : '';
-  const queryString = url.search; // includes the ?
+  const fullPath = req.url || '';
+  const match = fullPath.match(/\/api\/db\/(.*)$/);
+  if (!match) {
+    return res.status(400).json({ error: 'Invalid path' });
+  }
   
-  const supabaseUrl = `${SUPABASE_URL}/rest/v1/${supabasePath}${queryString}`;
-
-  // Forward user's JWT if present for RLS
-  const authHeader = req.headers['authorization'];
-  const preferHeader = req.headers['prefer'];
+  const supabasePath = match[1]; // e.g. "coffees?select=*&active=eq.true"
+  const supabaseUrl = `${SUPABASE_URL}/rest/v1/${supabasePath}`;
 
   const headers = {
     'apikey': SUPABASE_KEY,
-    'Authorization': authHeader || `Bearer ${SUPABASE_KEY}`,
+    'Authorization': req.headers['authorization'] || `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json',
   };
-  if (preferHeader) headers['Prefer'] = preferHeader;
+  
+  if (req.headers['prefer']) {
+    headers['Prefer'] = req.headers['prefer'];
+  }
 
   try {
-    const body = ['POST','PATCH','PUT'].includes(req.method)
+    const body = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method) && req.body
       ? JSON.stringify(req.body)
       : undefined;
 
@@ -45,7 +50,6 @@ export default async function handler(req, res) {
     const contentType = response.headers.get('content-type') || '';
     res.status(response.status);
     if (contentType) res.setHeader('Content-Type', contentType);
-
     if (response.status === 204) return res.end();
 
     const text = await response.text();
