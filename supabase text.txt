@@ -1,0 +1,8 @@
+// ═══════════════════════════════════════════════════════════
+// CONFIG — replace these with your actual values locally
+// ═══════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://dbbefcbsgltamzwidgyu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiYmVmY2JzZ2x0YW16d2lkZ3l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMTA5NjQsImV4cCI6MjA5MTY4Njk2NH0.9baJ7AyttRW9tDPitPvocHL5DzRuiiGlaodkErCAH0o';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);

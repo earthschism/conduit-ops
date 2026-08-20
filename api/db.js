@@ -1,5 +1,5 @@
 // Vercel serverless function — proxies Supabase REST API
-// Credentials stay server-side, never exposed to browser
+// Credentials stay server-side via environment variables
 
 export default async function handler(req, res) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -9,40 +9,44 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Missing Supabase credentials' });
   }
 
-  // Extract the path after /api/db/
-  const path = req.query.path ? (Array.isArray(req.query.path) ? req.query.path.join('/') : req.query.path) : '';
+  // The full supabase path comes after /api/db/
+  // e.g. /api/db/orders?select=*&cycle_id=eq.123
+  const url = new URL(req.url, 'http://localhost');
+  
+  // Extract everything after /api/db/
+  const pathMatch = url.pathname.match(/^\/api\/db\/(.*)$/);
+  const supabasePath = pathMatch ? pathMatch[1] : '';
+  const queryString = url.search; // includes the ?
+  
+  const supabaseUrl = `${SUPABASE_URL}/rest/v1/${supabasePath}${queryString}`;
 
-  // Build query string (exclude 'path' param)
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(req.query)) {
-    if (key !== 'path') params.append(key, value);
-  }
-  const qs = params.toString();
-  const url = `${SUPABASE_URL}/rest/v1/${path}${qs ? '?' + qs : ''}`;
-
-  // Forward auth token from client if present, else use service key
+  // Forward user's JWT if present for RLS
   const authHeader = req.headers['authorization'];
-  const token = authHeader ? authHeader.replace('Bearer ', '') : SUPABASE_KEY;
+  const preferHeader = req.headers['prefer'];
+
+  const headers = {
+    'apikey': SUPABASE_KEY,
+    'Authorization': authHeader || `Bearer ${SUPABASE_KEY}`,
+    'Content-Type': 'application/json',
+  };
+  if (preferHeader) headers['Prefer'] = preferHeader;
 
   try {
-    const response = await fetch(url, {
+    const body = ['POST','PATCH','PUT'].includes(req.method)
+      ? JSON.stringify(req.body)
+      : undefined;
+
+    const response = await fetch(supabaseUrl, {
       method: req.method,
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Prefer': req.headers['prefer'] || 'return=minimal',
-      },
-      body: ['POST','PATCH','PUT'].includes(req.method) ? JSON.stringify(req.body) : undefined,
+      headers,
+      body,
     });
 
     const contentType = response.headers.get('content-type') || '';
     res.status(response.status);
-    res.setHeader('Content-Type', contentType || 'application/json');
+    if (contentType) res.setHeader('Content-Type', contentType);
 
-    if (response.status === 204 || response.status === 201) {
-      return res.end();
-    }
+    if (response.status === 204) return res.end();
 
     const text = await response.text();
     return res.send(text);

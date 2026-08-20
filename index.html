@@ -673,9 +673,9 @@ async function dbFetch(path, options) {
   // Parse path and query string
   var parts = path.split('?');
   var tablePath = parts[0];
-  var qs = parts[1] || '';
+  var qs = parts.slice(1).join('?'); // preserve full query string
 
-  // Build URL for Vercel proxy
+  // Build URL for Vercel proxy — path goes in URL, not as query param
   var url = '/api/db/' + tablePath + (qs ? '?' + qs : '');
 
   var headers = {

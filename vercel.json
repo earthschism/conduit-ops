@@ -1,5 +1,9 @@
 {
-  "rewrites": [
-    { "source": "/api/db/:path*", "destination": "/api/db" }
-  ]
+  "outputDirectory": "docs",
+  "functions": {
+    "api/db.js": {
+      "memory": 128,
+      "maxDuration": 10
+    }
+  }
 }

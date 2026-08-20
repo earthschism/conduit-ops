@@ -24,7 +24,7 @@ if (!SUPABASE_ANON_KEY) {
 let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 
 // Use Netlify proxy URL for Supabase (avoids tracking prevention in all browsers)
-const PROXY_URL = 'https://conduitorders.com/supabase';
+const PROXY_URL = 'https://dbbefcbsgltamzwidgyu.supabase.co';
 
 // Replace placeholders - using split/join to avoid any quote character issues
 html = html.split("'YOUR_SUPABASE_URL'").join("'" + PROXY_URL + "'");
