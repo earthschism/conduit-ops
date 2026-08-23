@@ -6,11 +6,36 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Missing Supabase credentials' });
   }
 
-  // Extract path param — Vercel parses query string automatically
-  const supabasePath = req.query && req.query.path ? req.query.path : '';
+  // Debug: return everything we can see
+  const debugInfo = {
+    url: req.url,
+    method: req.method,
+    query: req.query,
+  };
+
+  // Try multiple ways to get the path
+  let supabasePath = '';
+  
+  // Method 1: req.query (Vercel auto-parsed)
+  if (req.query && req.query.path) {
+    supabasePath = req.query.path;
+  }
+  // Method 2: parse URL manually
+  else if (req.url) {
+    const qIndex = req.url.indexOf('?');
+    if (qIndex !== -1) {
+      const qs = req.url.slice(qIndex + 1);
+      const params = {};
+      qs.split('&').forEach(p => {
+        const [k, v] = p.split('=');
+        if (k) params[decodeURIComponent(k)] = v ? decodeURIComponent(v) : '';
+      });
+      supabasePath = params['path'] || '';
+    }
+  }
 
   if (!supabasePath) {
-    return res.status(400).json({ error: 'Missing path parameter', url: req.url, query: req.query });
+    return res.status(400).json({ error: 'Missing path', debug: debugInfo });
   }
 
   const supabaseUrl = `${SUPABASE_URL}/rest/v1/${supabasePath}`;
