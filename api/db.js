@@ -1,5 +1,5 @@
+// cache bust 1
 module.exports = async function handler(req, res) {
-  // Return everything for debugging
   return res.status(200).json({
     url: req.url,
     method: req.method,
