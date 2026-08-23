@@ -1,3 +1,6 @@
+// Vercel serverless function — proxies Supabase REST API
+// All calls go to /api/db?path=TABLE?QUERYSTRING
+
 module.exports = async function handler(req, res) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -6,11 +9,14 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Missing Supabase credentials' });
   }
 
-  const fullPath = req.url || '';
-  const match = fullPath.match(/\/api\/db\/(.*)$/);
-  if (!match) return res.status(400).json({ error: 'Invalid path' });
+  // Extract the supabase path from ?path= query param
+  const urlObj = new URL(req.url, 'http://localhost');
+  const supabasePath = decodeURIComponent(urlObj.searchParams.get('path') || '');
+  
+  if (!supabasePath) {
+    return res.status(400).json({ error: 'Missing path parameter' });
+  }
 
-  const supabasePath = match[1];
   const supabaseUrl = `${SUPABASE_URL}/rest/v1/${supabasePath}`;
 
   const headers = {

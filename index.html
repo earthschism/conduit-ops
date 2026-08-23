@@ -647,20 +647,18 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 <div class="toast-container" id="toasts"></div>
 
 <script>
-const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // kept for Edge Function calls only
-const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY'; // kept for Supabase auth client only
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── ROBUST DB FETCH ──
-// All REST calls go through /api/db (Vercel serverless proxy)
-// Supabase credentials never leave the server
 async function dbFetch(path, options) {
   options = options || {};
   var method = options.method || 'GET';
   var body = options.body;
 
-  // Get auth token for RLS — forward user's JWT so policies work
+  // Get auth token for RLS
   var token = null;
   try {
     var sess = await Promise.race([
@@ -670,13 +668,8 @@ async function dbFetch(path, options) {
     if (sess && sess.data && sess.data.session) token = sess.data.session.access_token;
   } catch(e) {}
 
-  // Parse path and query string
-  var parts = path.split('?');
-  var tablePath = parts[0];
-  var qs = parts.slice(1).join('?'); // preserve full query string
-
-  // Build URL for Vercel proxy — path goes in URL, not as query param
-  var url = '/api/db/' + tablePath + (qs ? '?' + qs : '');
+  // All calls go to /api/db?path=... (Vercel function)
+  var url = '/api/db?path=' + encodeURIComponent(path);
 
   var headers = {
     'Content-Type': 'application/json',
@@ -684,12 +677,7 @@ async function dbFetch(path, options) {
   };
   if (token) headers['Authorization'] = 'Bearer ' + token;
 
-  var res = await fetch(url, {
-    method: method,
-    headers: headers,
-    body: body ? JSON.stringify(body) : undefined
-  });
-
+  var res = await fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) { var err = await res.text(); throw new Error('DB error ' + res.status + ': ' + err); }
   if (res.status === 204 || res.status === 201) return [];
   var ct = res.headers.get('content-type') || '';
@@ -707,7 +695,7 @@ const TYPE_L = {subscription:'Subscription',wholesale:'Wholesale',manual:'Manual
 const SHIP_BOXES = [{type:'First Class',rate:6},{type:'Padded Flat Rate',rate:9},{type:'Medium Flat Rate',rate:14}];
 
 const ROAST_GROUPS = {
-  '9to5': ['1895','QUST','DSIG'],
+  '9to5': ['1895','QUST','DSIG','BONT'],
   'SHIP': ['COTU','DOSD'],
   'SEBD': ['BSKT'],
   'LOCO': ['OTIS'],
@@ -1517,12 +1505,6 @@ async function handleCSV(file) {
     });
 
     if (!toInsert.length) { toast('No valid coffee orders found in CSV','warn'); return; }
-
-    // Warn if Roaster's Choice wasn't set
-    var hasUnset = toInsert.some(function(o){ return o.coffee_sku === 'RC_UNSET'; });
-    if (hasUnset) {
-      toast("⚠️ Roaster's Choice not set for this cycle — those lines imported as RC_UNSET. Set it in the cycle bar and re-import.", 'warn');
-    }
     try { await dbFetch('orders', {method:'POST', body: toInsert, prefer:'return=minimal'}); }
     catch(e) { toast('Import error: '+e.message,'error'); return; }
     var msg = 'Imported '+toInsert.length+' line'+(toInsert.length!==1?'s':'')+' as "Online Orders"';
@@ -1547,14 +1529,9 @@ function parseProductName(name, roastersChoiceSku) {
   var sku='LOCO', size='2lb', grind='wb';
   var l = name.toLowerCase();
 
-  // Roaster's Choice / Single Origin maps to current cycle selection
-  if (l.includes("roaster's choice") || l.includes("roasters choice") ||
-      l.includes("roaster\u2019s choice") || l.includes("single origin")) {
-    if (!roastersChoiceSku) {
-      sku = 'RC_UNSET'; // will show as warning in import
-    } else {
-      sku = roastersChoiceSku;
-    }
+  // Roaster's Choice maps to current cycle selection
+  if (l.includes("roaster's choice") || l.includes("roasters choice") || l.includes("roaster's choice")) {
+    sku = roastersChoiceSku || 'RC';
     // Size/grind still parsed from the rest of the name below
   } else {
     var map = [
