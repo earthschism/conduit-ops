@@ -321,7 +321,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <select id="cycle-select" onchange="onCycleChange()"></select>
     <div style="width:1px;height:20px;background:var(--rule2);margin:0 8px;"></div>
     <span class="cycle-bar-label">Roaster's Choice</span>
-    <select id="roasters-choice-select" onchange="saveRoastersChoice(this.value)" style="color:var(--blue);font-weight:600;font-size:13px;border:none;background:transparent;padding:0;width:auto;box-shadow:none;">
+    <select id="roasters-choice-select" onchange="saveRoastersChoice(this.value)" style="color:var(--blue);font-weight:600;font-size:13px;border:1px solid var(--rule2);background:white;padding:4px 8px;border-radius:4px;width:auto;cursor:pointer;">
       <option value="">— not set —</option>
     </select>
     <div style="flex:1;"></div>
@@ -658,7 +658,6 @@ async function dbFetch(path, options) {
   var method = options.method || 'GET';
   var body = options.body;
 
-  // Get auth token for RLS
   var token = null;
   try {
     var sess = await Promise.race([
@@ -668,7 +667,6 @@ async function dbFetch(path, options) {
     if (sess && sess.data && sess.data.session) token = sess.data.session.access_token;
   } catch(e) {}
 
-  // All calls go to /api/db?path=... (Vercel function)
   var url = '/api/db?path=' + encodeURIComponent(path);
 
   var headers = {
