@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-08-23T16:25:21.564Z">
+<meta name="app-version" content="2026-08-23T16:33:24.511Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -321,9 +321,9 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <select id="cycle-select" onchange="onCycleChange()"></select>
     <div style="width:1px;height:20px;background:var(--rule2);margin:0 8px;"></div>
     <span class="cycle-bar-label">Roaster's Choice</span>
-    <select id="roasters-choice-select" onchange="saveRoastersChoice(this.value)" style="color:var(--blue);font-weight:600;font-size:13px;border:1px solid var(--rule2);background:white;padding:4px 8px;border-radius:4px;width:auto;cursor:pointer;">
+    <div style="display:block;"><select id="roasters-choice-select" onchange="saveRoastersChoice(this.value)" style="color:var(--blue);font-weight:600;font-size:13px;border:1px solid var(--rule2);background:white;padding:4px 8px;border-radius:4px;width:auto;cursor:pointer;">
       <option value="">— not set —</option>
-    </select>
+      </select></div>
     <div style="flex:1;"></div>
     <button class="btn btn-ghost btn-sm" id="btn-new-cycle" onclick="createNewCycle()" style="display:none;">+ New Cycle</button>
   </div>
