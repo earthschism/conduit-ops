@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-08-24T20:48:14.173Z">
+<meta name="app-version" content="2026-08-24T22:16:55.748Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -241,7 +241,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   table{font-size:11px;}
   th,td{padding:5px 7px;}
   .panel{display:block!important;}
-  #panel-orders,#panel-roast,#panel-portal,#panel-admin,#panel-catalog{display:none!important;}
+  #panel-orders,#panel-roast,#panel-portal,#panel-admin,#panel-catalog,#panel-supplies{display:none!important;}
   #panel-output{display:block!important;}
   .section-header{display:none!important;}
   /* Keep bagging grid on one page */
@@ -299,6 +299,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div class="tab active" data-tab="orders" onclick="showTab('orders',this)">Orders</div>
   <div class="tab" data-tab="roast" onclick="showTab('roast',this)">Roast Schedule</div>
   <div class="tab" data-tab="output" onclick="showTab('output',this)">Print &amp; Export</div>
+  <div class="tab hidden" data-tab="supplies" onclick="showTab('supplies',this)">Supplies</div>
   <div class="tab hidden" data-tab="portal" onclick="showTab('portal',this)">Place Order</div>
   <div class="tab hidden" data-tab="admin" onclick="showTab('admin',this)">Admin</div>
   <div class="tab hidden" data-tab="catalog" onclick="showTab('catalog',this)">Catalog</div>
@@ -626,6 +627,63 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   </div>
 </div>
 
+<!-- ── SUPPLIES PANEL ── -->
+<div class="panel" id="panel-supplies">
+  <div class="section-header">
+    <div><div class="section-title">Café Supplies</div><div class="section-sub">Search the supply catalog · build the weekly list · shared shopping note</div></div>
+    <button class="btn btn-primary btn-sm" onclick="showAddSupplyItemModal()">+ Add Catalog Item</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">This Week's List</div>
+    <div class="section-sub" id="supplies-week-label" style="margin-bottom:14px;">-</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Item</th><th>Category</th><th>Vendor</th><th class="num">Qty</th><th>Unit</th><th></th></tr></thead>
+        <tbody id="supply-list-tbody"><tr><td colspan="6" class="loading"><div class="spinner"></div></td></tr></tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <input type="text" id="adhoc-item-name" placeholder="Add something not in the catalog…" style="flex:1;">
+      <input type="text" id="adhoc-item-qty" placeholder="Qty" style="width:90px;">
+      <button class="btn btn-secondary btn-sm" onclick="addAdHocListItem()">Add</button>
+    </div>
+    <button class="btn btn-primary" id="finalize-list-btn" style="margin-top:16px;display:none;" onclick="finalizeWeeklyList()">Finalize for the Week</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Supply Catalog</div>
+    <div class="form-row c2" style="margin-bottom:16px;">
+      <div class="form-group"><label>Search</label><input type="text" id="supply-search" placeholder="e.g. blueberry syrup…" oninput="renderSupplyCatalog()"></div>
+      <div class="form-group"><label>Category</label>
+        <select id="supply-category-filter" onchange="renderSupplyCatalog()">
+          <option value="">All categories</option>
+          <option value="syrups">Syrups</option>
+          <option value="dairy">Dairy</option>
+          <option value="dry_goods">Dry Goods</option>
+          <option value="meats">Meats</option>
+          <option value="paper_goods">Paper Goods</option>
+          <option value="produce">Produce</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Category</th><th>Vendor</th><th>Unit</th><th>Sticky</th><th></th></tr></thead>
+        <tbody id="supply-catalog-tbody"><tr><td colspan="6" class="loading"><div class="spinner"></div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Shopping Note</div>
+    <div class="section-sub" style="margin-bottom:10px;">Shared freeform note — anyone on staff+ can edit. Saves automatically.</div>
+    <textarea id="shopping-note" rows="8" style="width:100%;font-family:'DM Mono',monospace;font-size:13px;line-height:1.6;" oninput="scheduleSaveNote()" placeholder="Anything that comes up — bulk buys, vendor calls, notes for next order…"></textarea>
+    <div class="section-sub" id="note-save-status" style="margin-top:6px;">-</div>
+  </div>
+</div>
+
 </div><!-- /content -->
 </div><!-- /main-app -->
 
@@ -886,19 +944,24 @@ async function initApp(user) {
   var fullName = metaName || user.email;
 
   document.getElementById('user-display').textContent = fullName;
-  var roleColors = {owner:'var(--blue)',staff:'var(--green2)',wholesale:'#c49a2a',subscriber:'#999'};
+  var roleColors = {owner:'var(--blue)',manager:'var(--green2)',staff:'#8a7010',wholesale:'#c49a2a',subscriber:'#999'};
   document.getElementById('role-pip').style.background = roleColors[role] || '#999';
 
-  var isStaff = ['owner','staff'].includes(role);
-  document.querySelector('[data-tab="orders"]').classList.toggle('hidden',!isStaff);
-  document.querySelector('[data-tab="roast"]').classList.toggle('hidden',!isStaff);
-  document.querySelector('[data-tab="output"]').classList.toggle('hidden',!isStaff);
-  document.querySelector('[data-tab="portal"]').classList.toggle('hidden',isStaff);
-  document.querySelector('[data-tab="admin"]').classList.toggle('hidden',role!=='owner');
-  document.querySelector('[data-tab="catalog"]').classList.toggle('hidden',role!=='owner');
-  document.getElementById('btn-new-cycle').style.display = isStaff ? 'block' : 'none';
-  document.getElementById('btn-add-order').style.display = isStaff ? 'inline-block' : 'none';
-  document.getElementById('csv-card').style.display = isStaff ? 'block' : 'none';
+  // Roasting ops (orders/roast/print/catalog): owner + manager only.
+  // Café internal (supplies + shopping note): owner + manager + staff.
+  // Everyone internal (owner/manager/staff) never sees the customer portal.
+  var isRoastingStaff = ['owner','manager'].includes(role);
+  var isInternal = ['owner','manager','staff'].includes(role);
+  document.querySelector('[data-tab="orders"]').classList.toggle('hidden',!isRoastingStaff);
+  document.querySelector('[data-tab="roast"]').classList.toggle('hidden',!isRoastingStaff);
+  document.querySelector('[data-tab="output"]').classList.toggle('hidden',!isRoastingStaff);
+  document.querySelector('[data-tab="supplies"]').classList.toggle('hidden',!isInternal);
+  document.querySelector('[data-tab="portal"]').classList.toggle('hidden',isInternal);
+  document.querySelector('[data-tab="admin"]').classList.toggle('hidden',!isRoastingStaff);
+  document.querySelector('[data-tab="catalog"]').classList.toggle('hidden',!isRoastingStaff);
+  document.getElementById('btn-new-cycle').style.display = isRoastingStaff ? 'block' : 'none';
+  document.getElementById('btn-add-order').style.display = isRoastingStaff ? 'inline-block' : 'none';
+  document.getElementById('csv-card').style.display = isRoastingStaff ? 'block' : 'none';
 
   currentProfile = {role: role, full_name: fullName};
   sb.from('profiles').select('*').eq('id', user.id).single().then(function(res) {
@@ -915,13 +978,16 @@ async function initApp(user) {
     }
   }).catch(function(){});
 
-  try { await loadCoffees(); buildChildOf(); } catch(e) { console.log('coffees load error:', e); }
-  try { await loadCycles(); } catch(e) { console.log('cycles load error:', e); }
-
-  if (isStaff) {
+  if (isRoastingStaff) {
+    try { await loadCoffees(); buildChildOf(); } catch(e) { console.log('coffees load error:', e); }
+    try { await loadCycles(); } catch(e) { console.log('cycles load error:', e); }
     try { await loadOrders(); } catch(e) { console.log('orders load error:', e); }
     document.querySelector('[data-tab="orders"]').click();
+  } else if (isInternal) {
+    document.querySelector('[data-tab="supplies"]').click();
   } else {
+    try { await loadCoffees(); buildChildOf(); } catch(e) { console.log('coffees load error:', e); }
+    try { await loadCycles(); } catch(e) { console.log('cycles load error:', e); }
     document.getElementById('portal-sub').textContent = 'Welcome back, ' + fullName;
     document.querySelector('[data-tab="portal"]').click();
     // Wait for profile to load from DB before checking pending status
@@ -960,8 +1026,8 @@ async function loadCycles() {
   sel.innerHTML = '';
   if (!cycles.length) { await createNewCycle(true); return; }
 
-  const isStaff = currentProfile && ['owner','staff'].includes(currentProfile.role);
-  if (isCycleClosed() && isStaff) {
+  const isRoastingStaff = currentProfile && ['owner','manager'].includes(currentProfile.role);
+  if (isCycleClosed() && isRoastingStaff) {
     const nextMon = getNextMondayDate();
     const nextName = 'Week of ' + nextMon.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     const alreadyExists = cycles.some(function(c){ return c.name === nextName; });
@@ -2256,15 +2322,26 @@ async function loadAdminUsers() {
     var approveBtn = (u.pending_approval || u.approved === false)
       ? '<button class="btn btn-ghost btn-sm" onclick="showApproveModal(\''+u.id+'\',\''+escHtml(u.full_name||'')+'\',\''+u.email+'\')">Approve</button>'
       : '<button class="btn btn-ghost btn-sm" onclick="showApproveModal(\''+u.id+'\',\''+escHtml(u.full_name||'')+'\',\''+u.email+'\')">Edit Access</button>';
+    // Only the owner can grant or change owner status. A manager viewing the list
+    // sees the owner's row as a locked badge, and never sees "Owner" as an option
+    // for anyone else.
+    var viewerIsOwner = currentProfile && currentProfile.role === 'owner';
+    var roleCell;
+    if (u.role === 'owner' && !viewerIsOwner) {
+      roleCell = '<span class="badge badge-blue">Owner</span>';
+    } else {
+      roleCell = '<select style="width:120px;" onchange="updateRole(\''+u.id+'\',this.value)">' +
+        (viewerIsOwner ? '<option '+(u.role==='owner'?'selected':'')+' value="owner">Owner</option>' : '') +
+        '<option '+(u.role==='manager'?'selected':'')+' value="manager">Manager</option>' +
+        '<option '+(u.role==='staff'?'selected':'')+' value="staff">Staff (Café)</option>' +
+        '<option '+(u.role==='wholesale'?'selected':'')+' value="wholesale">Wholesale</option>' +
+        '<option '+(u.role==='subscriber'?'selected':'')+' value="subscriber">Subscriber</option>' +
+      '</select>';
+    }
     return '<tr>' +
       '<td style="font-weight:600;">'+(u.full_name||'-')+'</td>' +
       '<td style="color:var(--ink3);font-size:12px;">'+u.email+'</td>' +
-      '<td><select style="width:110px;" onchange="updateRole(\''+u.id+'\',this.value)">' +
-        '<option '+(u.role==='owner'?'selected':'')+' value="owner">Owner</option>' +
-        '<option '+(u.role==='staff'?'selected':'')+' value="staff">Staff</option>' +
-        '<option '+(u.role==='wholesale'?'selected':'')+' value="wholesale">Wholesale</option>' +
-        '<option '+(u.role==='subscriber'?'selected':'')+' value="subscriber">Subscriber</option>' +
-      '</select></td>' +
+      '<td>'+roleCell+'</td>' +
       '<td><span class="badge badge-gray">'+(u.account_type||'retail')+'</span></td>' +
       '<td><span class="badge '+statusClass+'">'+statusText+'</span></td>' +
       '<td style="color:var(--ink3);font-size:12px;">'+new Date(u.created_at).toLocaleDateString()+'</td>' +
@@ -2305,7 +2382,8 @@ async function showApproveModal(userId, userName, userEmail) {
         '<select id="approve-role" style="width:100%;">' +
           '<option value="wholesale">Wholesale</option>' +
           '<option value="subscriber">Retail / Subscriber</option>' +
-          '<option value="staff">Staff</option>' +
+          '<option value="staff">Staff (Café)</option>' +
+          '<option value="manager">Manager</option>' +
         '</select>' +
       '</div>' +
       '<div style="margin-bottom:20px;">' +
@@ -2362,6 +2440,11 @@ async function confirmApprove(userId, userName, userEmail) {
 }
 
 async function updateRole(id, role) {
+  if (role === 'owner' && !(currentProfile && currentProfile.role === 'owner')) {
+    toast('Only the owner can grant owner status','warn');
+    await loadAdminUsers();
+    return;
+  }
   try {
     await dbFetch('profiles?id=eq.' + id, {method:'PATCH', body:{role:role}, prefer:'return=minimal'});
     toast('Role updated - user must sign out and back in','success');
@@ -2512,6 +2595,195 @@ async function updateCoffeeField(sku, field, value) {
   } catch(e) { toast('Error saving','error'); }
 }
 
+// ── SUPPLIES ──
+var supplyItems = [];
+var weeklyList = [];
+var _noteSaveTimer = null;
+var CATEGORY_LABELS = {syrups:'Syrups',dairy:'Dairy',dry_goods:'Dry Goods',meats:'Meats',paper_goods:'Paper Goods',produce:'Produce',other:'Other'};
+
+async function loadSupplies() {
+  var isSuppliesManager = currentProfile && ['owner','manager'].includes(currentProfile.role);
+  document.getElementById('finalize-list-btn').style.display = isSuppliesManager ? 'inline-block' : 'none';
+  try { supplyItems = await dbFetch('supply_items?select=*&active=eq.true&order=name'); } catch(e) { supplyItems = []; console.log('loadSupplies items error:', e); }
+  try { weeklyList = await dbFetch('supply_list_items?select=*&list_status=eq.open&order=created_at'); } catch(e) { weeklyList = []; console.log('loadSupplies list error:', e); }
+  document.getElementById('supplies-week-label').textContent = 'Open list · started ' + (weeklyList.length ? new Date(Math.min.apply(null, weeklyList.map(function(w){return new Date(w.created_at).getTime();}))).toLocaleDateString() : 'now');
+  renderSupplyCatalog();
+  renderWeeklyList();
+  try {
+    var note = await dbFetch('shared_notes?select=*&id=eq.shopping_list');
+    document.getElementById('shopping-note').value = (note && note[0] && note[0].content) || '';
+    document.getElementById('note-save-status').textContent = (note && note[0] && note[0].updated_at) ? 'Last saved ' + new Date(note[0].updated_at).toLocaleString() : '';
+  } catch(e) { console.log('loadSupplies note error:', e); }
+}
+
+function renderSupplyCatalog() {
+  var search = (document.getElementById('supply-search').value || '').toLowerCase().trim();
+  var cat = document.getElementById('supply-category-filter').value;
+  var isSuppliesManager = currentProfile && ['owner','manager'].includes(currentProfile.role);
+  var filtered = supplyItems.filter(function(it) {
+    if (cat && it.category !== cat) return false;
+    if (search && it.name.toLowerCase().indexOf(search) === -1) return false;
+    return true;
+  });
+  var tbody = document.getElementById('supply-catalog-tbody');
+  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No matching items.</td></tr>'; return; }
+  tbody.innerHTML = filtered.map(function(it) {
+    var stickyToggle = isSuppliesManager
+      ? '<input type="checkbox" '+(it.sticky?'checked':'')+' onchange="toggleSticky(\''+it.id+'\',this.checked)" style="width:auto;accent-color:var(--blue);">'
+      : (it.sticky ? '<span class="badge badge-blue">Sticky</span>' : '');
+    return '<tr>' +
+      '<td style="font-weight:600;">'+escHtml(it.name)+'</td>' +
+      '<td><span class="badge badge-gray">'+(CATEGORY_LABELS[it.category]||it.category)+'</span></td>' +
+      '<td style="color:var(--ink3);">'+escHtml(it.vendor||'-')+'</td>' +
+      '<td style="color:var(--ink3);">'+escHtml(it.unit||'-')+'</td>' +
+      '<td>'+stickyToggle+'</td>' +
+      '<td><button class="btn btn-ghost btn-sm" onclick="quickAddToList(\''+it.id+'\')">+ Add to list</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+async function quickAddToList(itemId) {
+  var item = supplyItems.find(function(i){return i.id===itemId;});
+  if (!item) return;
+  var already = weeklyList.find(function(w){return w.item_id===itemId;});
+  if (already) { toast(item.name+' is already on this week\'s list','info'); return; }
+  try {
+    await dbFetch('supply_list_items', {method:'POST', body:{
+      item_id: item.id, custom_name: null, category: item.category, vendor: item.vendor, unit: item.unit,
+      qty: null, list_status: 'open', added_by: currentUser.id
+    }, prefer:'return=minimal'});
+    toast(item.name+' added to list','success');
+    await loadSupplies();
+  } catch(e) { toast('Error adding item','error'); }
+}
+
+async function addAdHocListItem() {
+  var name = document.getElementById('adhoc-item-name').value.trim();
+  var qty = document.getElementById('adhoc-item-qty').value.trim();
+  if (!name) { toast('Enter an item name','warn'); return; }
+  try {
+    await dbFetch('supply_list_items', {method:'POST', body:{
+      item_id: null, custom_name: name, category: 'other', vendor: null, unit: null,
+      qty: qty || null, list_status: 'open', added_by: currentUser.id
+    }, prefer:'return=minimal'});
+    document.getElementById('adhoc-item-name').value = '';
+    document.getElementById('adhoc-item-qty').value = '';
+    toast('Added to list','success');
+    await loadSupplies();
+  } catch(e) { toast('Error adding item','error'); }
+}
+
+function renderWeeklyList() {
+  var tbody = document.getElementById('supply-list-tbody');
+  if (!weeklyList.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">List is empty — search the catalog below or add something ad hoc.</td></tr>'; return; }
+  tbody.innerHTML = weeklyList.map(function(w) {
+    var name = w.custom_name || (supplyItems.find(function(i){return i.id===w.item_id;}) || {}).name || '(unknown item)';
+    return '<tr>' +
+      '<td style="font-weight:600;">'+escHtml(name)+'</td>' +
+      '<td><span class="badge badge-gray">'+(CATEGORY_LABELS[w.category]||w.category||'-')+'</span></td>' +
+      '<td style="color:var(--ink3);">'+escHtml(w.vendor||'-')+'</td>' +
+      '<td class="num"><input type="text" value="'+escHtml(w.qty||'')+'" style="width:70px;text-align:right;" onchange="updateListItemQty(\''+w.id+'\',this.value)"></td>' +
+      '<td style="color:var(--ink3);">'+escHtml(w.unit||'-')+'</td>' +
+      '<td><button class="remove-btn" onclick="removeListItem(\''+w.id+'\')">×</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+async function updateListItemQty(id, qty) {
+  try { await dbFetch('supply_list_items?id=eq.'+id, {method:'PATCH', body:{qty:qty}, prefer:'return=minimal'}); }
+  catch(e) { toast('Error saving quantity','error'); }
+}
+
+async function removeListItem(id) {
+  try {
+    await dbFetch('supply_list_items?id=eq.'+id, {method:'DELETE', prefer:'return=minimal'});
+    await loadSupplies();
+  } catch(e) { toast('Error removing item','error'); }
+}
+
+async function finalizeWeeklyList() {
+  if (!weeklyList.length) { toast('List is already empty','info'); return; }
+  if (!confirm('Finalize this list? It will be archived and a fresh list will start, seeded with sticky items.')) return;
+  var weekLabel = 'Week of ' + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  try {
+    var ids = weeklyList.map(function(w){return w.id;});
+    await dbFetch('supply_list_items?id=in.('+ids.join(',')+')', {method:'PATCH', body:{list_status:'finalized', week_label: weekLabel, finalized_at: new Date().toISOString()}, prefer:'return=minimal'});
+    // Reseed sticky items for the new open list
+    var stickyItems = supplyItems.filter(function(i){return i.sticky;});
+    if (stickyItems.length) {
+      var inserts = stickyItems.map(function(i){ return {item_id:i.id, custom_name:null, category:i.category, vendor:i.vendor, unit:i.unit, qty:null, list_status:'open', added_by: currentUser.id}; });
+      await dbFetch('supply_list_items', {method:'POST', body:inserts, prefer:'return=minimal'});
+    }
+    toast('List finalized · new list started','success');
+    await loadSupplies();
+  } catch(e) { toast('Error finalizing list: '+e.message,'error'); }
+}
+
+function showAddSupplyItemModal() {
+  var modal = document.createElement('div');
+  modal.id = 'supply-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML =
+    '<div style="background:white;border-radius:12px;padding:32px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">' +
+      '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:20px;">Add Catalog Item</div>' +
+      '<div class="form-row"><div class="form-group"><label>Name</label><input type="text" id="si-name" placeholder="e.g. Blueberry Syrup"></div></div>' +
+      '<div class="form-row c2">' +
+        '<div class="form-group"><label>Category</label><select id="si-category">' +
+          Object.keys(CATEGORY_LABELS).map(function(k){return '<option value="'+k+'">'+CATEGORY_LABELS[k]+'</option>';}).join('') +
+        '</select></div>' +
+        '<div class="form-group"><label>Vendor</label><input type="text" id="si-vendor" placeholder="e.g. DairyFresh"></div>' +
+      '</div>' +
+      '<div class="form-row c2">' +
+        '<div class="form-group"><label>Unit</label><input type="text" id="si-unit" placeholder="e.g. case, gallon, lb"></div>' +
+        '<div class="form-group" style="justify-content:flex-end;"><label style="margin-bottom:9px;">Sticky (auto-add weekly)</label><input type="checkbox" id="si-sticky" style="width:auto;accent-color:var(--blue);"></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;margin-top:8px;">' +
+        '<button class="btn btn-primary" style="flex:1;" onclick="saveSupplyItemModal()">Save</button>' +
+        '<button class="btn btn-ghost" onclick="document.getElementById(\'supply-modal\').remove()">Cancel</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+async function saveSupplyItemModal() {
+  var name = document.getElementById('si-name').value.trim();
+  if (!name) { toast('Name is required','warn'); return; }
+  var body = {
+    name: name,
+    category: document.getElementById('si-category').value,
+    vendor: document.getElementById('si-vendor').value.trim() || null,
+    unit: document.getElementById('si-unit').value.trim() || null,
+    sticky: document.getElementById('si-sticky').checked,
+    active: true
+  };
+  try {
+    await dbFetch('supply_items', {method:'POST', body:body, prefer:'return=minimal'});
+    var modal = document.getElementById('supply-modal');
+    if (modal) modal.remove();
+    toast('Catalog item added','success');
+    await loadSupplies();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
+}
+
+async function toggleSticky(id, value) {
+  try { await dbFetch('supply_items?id=eq.'+id, {method:'PATCH', body:{sticky:value}, prefer:'return=minimal'}); }
+  catch(e) { toast('Error updating','error'); }
+}
+
+function scheduleSaveNote() {
+  document.getElementById('note-save-status').textContent = 'Saving…';
+  if (_noteSaveTimer) clearTimeout(_noteSaveTimer);
+  _noteSaveTimer = setTimeout(saveNote, 800);
+}
+
+async function saveNote() {
+  var content = document.getElementById('shopping-note').value;
+  try {
+    await dbFetch('shared_notes?id=eq.shopping_list', {method:'PATCH', body:{content:content, updated_by:currentUser.id, updated_at:new Date().toISOString()}, prefer:'return=minimal'});
+    document.getElementById('note-save-status').textContent = 'Saved ' + new Date().toLocaleTimeString();
+  } catch(e) { document.getElementById('note-save-status').textContent = 'Error saving'; }
+}
+
 // ── TABS ──
 function showTab(name, el) {
   document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
@@ -2522,6 +2794,7 @@ function showTab(name, el) {
   if (name==='admin') loadAdminUsers();
   if (name==='catalog') loadCatalog();
   if (name==='portal') { loadPortalCoffees(); loadPortalHistory(); }
+  if (name==='supplies') loadSupplies();
 }
 
 // ── TOAST ──
