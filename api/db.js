@@ -6,13 +6,10 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Missing Supabase credentials' });
   }
 
-  // Parse the raw URL to get query string
-  // req.url looks like /api/db?path=cycles%3Fselect%3D*
   const rawUrl = req.url || '';
   const qMark = rawUrl.indexOf('?');
   const qs = qMark !== -1 ? rawUrl.slice(qMark + 1) : '';
   
-  // Parse query string manually
   const params = {};
   qs.split('&').forEach(function(pair) {
     const eq = pair.indexOf('=');
@@ -26,19 +23,16 @@ module.exports = async function handler(req, res) {
   const supabasePath = params['path'] || '';
 
   if (!supabasePath) {
-    return res.status(400).json({ 
-      error: 'Missing path',
-      rawUrl: rawUrl,
-      qs: qs,
-      params: params
-    });
+    return res.status(400).json({ error: 'Missing path', rawUrl, qs, params });
   }
 
   const supabaseUrl = `${SUPABASE_URL}/rest/v1/${supabasePath}`;
 
+  // Always use service key — proxy is the security layer
+  // This bypasses RLS so all tables are accessible through our controlled proxy
   const headers = {
     'apikey': SUPABASE_KEY,
-    'Authorization': req.headers['authorization'] || `Bearer ${SUPABASE_KEY}`,
+    'Authorization': `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json',
   };
   if (req.headers['prefer']) headers['Prefer'] = req.headers['prefer'];
