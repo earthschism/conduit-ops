@@ -113,10 +113,10 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 .btn-full{width:100%;padding:12px;font-size:14px;}
 
 /* ── CYCLE BAR ── */
-.cycle-bar{display:flex;align-items:center;gap:12px;background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:11px 16px;margin-bottom:20px;box-shadow:var(--shadow);position:relative;z-index:50;}
+.cycle-bar{display:flex;align-items:center;gap:12px;background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:11px 16px;margin-bottom:20px;box-shadow:var(--shadow);}
 .cycle-bar-label{font-size:11px;color:var(--ink3);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;}
-.cycle-bar select{border:1px solid var(--rule2);background:white;padding:4px 8px;border-radius:4px;color:var(--blue);font-weight:600;font-size:13px;width:auto;cursor:pointer;-moz-appearance:auto;}
-.cycle-bar select:focus{box-shadow:none;}
+.cycle-bar select{border:none;background:transparent;padding:0;color:var(--blue);font-weight:600;font-size:14px;width:auto;box-shadow:none;}
+.cycle-bar select:focus{box-shadow:none;border:none;}
 
 /* ── UPLOAD ── */
 .upload-zone{border:2px dashed var(--rule2);border-radius:var(--radius);padding:28px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--paper2);}
@@ -321,9 +321,9 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <select id="cycle-select" onchange="onCycleChange()"></select>
     <div style="width:1px;height:20px;background:var(--rule2);margin:0 8px;"></div>
     <span class="cycle-bar-label">Roaster's Choice</span>
-    <div style="display:block;"><select id="roasters-choice-select" onchange="saveRoastersChoice(this.value)" style="color:var(--blue);font-weight:600;font-size:13px;border:1px solid var(--rule2);background:white;padding:4px 8px;border-radius:4px;width:auto;cursor:pointer;">
+    <select id="roasters-choice-select" onchange="saveRoastersChoice(this.value)" style="color:var(--blue);font-weight:600;font-size:13px;border:none;background:transparent;padding:0;width:auto;box-shadow:none;">
       <option value="">— not set —</option>
-      </select></div>
+    </select>
     <div style="flex:1;"></div>
     <button class="btn btn-ghost btn-sm" id="btn-new-cycle" onclick="createNewCycle()" style="display:none;">+ New Cycle</button>
   </div>
