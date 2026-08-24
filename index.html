@@ -631,7 +631,20 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 <div class="panel" id="panel-supplies">
   <div class="section-header">
     <div><div class="section-title">Café Supplies</div><div class="section-sub">Search the supply catalog · build the weekly list · shared shopping note</div></div>
-    <button class="btn btn-primary btn-sm" onclick="showAddSupplyItemModal()">+ Add Catalog Item</button>
+    <div id="supply-manager-actions" style="display:flex;gap:10px;">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('supply-csv-card').style.display=document.getElementById('supply-csv-card').style.display==='none'?'block':'none';">Upload Spreadsheet</button>
+      <button class="btn btn-primary btn-sm" onclick="showAddSupplyItemsModal()">+ Add Catalog Items</button>
+    </div>
+  </div>
+
+  <div class="card" id="supply-csv-card" style="display:none;">
+    <div class="card-title">Upload Spreadsheet</div>
+    <div class="section-sub" style="margin-bottom:14px;">CSV with columns: <strong>Name</strong> (required), Category, Vendor, Unit, Sticky (yes/no). Items with a name already in the catalog are skipped — only new ones get added.</div>
+    <div class="upload-zone" onclick="document.getElementById('supply-csv-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleSupplyCSVDrop(event)">
+      <input type="file" id="supply-csv-input" accept=".csv" style="display:none" onchange="handleSupplyCSV(this.files[0])">
+      <div style="font-size:13px;color:var(--ink3);">Drop a .csv here, or click to browse</div>
+    </div>
+    <div style="margin-top:10px;"><a href="#" onclick="downloadSupplyCSVTemplate();return false;" style="font-size:12px;color:var(--blue);">Download a blank template</a></div>
   </div>
 
   <div class="card">
@@ -944,7 +957,7 @@ async function initApp(user) {
   var fullName = metaName || user.email;
 
   document.getElementById('user-display').textContent = fullName;
-  var roleColors = {owner:'var(--blue)',manager:'var(--green2)',staff:'#8a7010',wholesale:'#c49a2a',subscriber:'#999'};
+  var roleColors = {owner:'var(--blue)',manager:'var(--green2)',staff:'#8a7010',wholesale:'#c49a2a'};
   document.getElementById('role-pip').style.background = roleColors[role] || '#999';
 
   // Roasting ops (orders/roast/print/catalog): owner + manager only.
@@ -2333,9 +2346,8 @@ async function loadAdminUsers() {
       roleCell = '<select style="width:120px;" onchange="updateRole(\''+u.id+'\',this.value)">' +
         (viewerIsOwner ? '<option '+(u.role==='owner'?'selected':'')+' value="owner">Owner</option>' : '') +
         '<option '+(u.role==='manager'?'selected':'')+' value="manager">Manager</option>' +
-        '<option '+(u.role==='staff'?'selected':'')+' value="staff">Staff (Café)</option>' +
+        '<option '+(u.role==='staff'?'selected':'')+' value="staff">Staff</option>' +
         '<option '+(u.role==='wholesale'?'selected':'')+' value="wholesale">Wholesale</option>' +
-        '<option '+(u.role==='subscriber'?'selected':'')+' value="subscriber">Subscriber</option>' +
       '</select>';
     }
     return '<tr>' +
@@ -2381,8 +2393,7 @@ async function showApproveModal(userId, userName, userEmail) {
         '<label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);display:block;margin-bottom:6px;">Account Type</label>' +
         '<select id="approve-role" style="width:100%;">' +
           '<option value="wholesale">Wholesale</option>' +
-          '<option value="subscriber">Retail / Subscriber</option>' +
-          '<option value="staff">Staff (Café)</option>' +
+          '<option value="staff">Staff</option>' +
           '<option value="manager">Manager</option>' +
         '</select>' +
       '</div>' +
@@ -2604,6 +2615,8 @@ var CATEGORY_LABELS = {syrups:'Syrups',dairy:'Dairy',dry_goods:'Dry Goods',meats
 async function loadSupplies() {
   var isSuppliesManager = currentProfile && ['owner','manager'].includes(currentProfile.role);
   document.getElementById('finalize-list-btn').style.display = isSuppliesManager ? 'inline-block' : 'none';
+  document.getElementById('supply-manager-actions').style.display = isSuppliesManager ? 'flex' : 'none';
+  if (!isSuppliesManager) document.getElementById('supply-csv-card').style.display = 'none';
   try { supplyItems = await dbFetch('supply_items?select=*&active=eq.true&order=name'); } catch(e) { supplyItems = []; console.log('loadSupplies items error:', e); }
   try { weeklyList = await dbFetch('supply_list_items?select=*&list_status=eq.open&order=created_at'); } catch(e) { weeklyList = []; console.log('loadSupplies list error:', e); }
   document.getElementById('supplies-week-label').textContent = 'Open list · started ' + (weeklyList.length ? new Date(Math.min.apply(null, weeklyList.map(function(w){return new Date(w.created_at).getTime();}))).toLocaleDateString() : 'now');
@@ -2719,50 +2732,138 @@ async function finalizeWeeklyList() {
   } catch(e) { toast('Error finalizing list: '+e.message,'error'); }
 }
 
-function showAddSupplyItemModal() {
+var supplyModalRowCount = 0;
+
+function showAddSupplyItemsModal() {
+  supplyModalRowCount = 0;
   var modal = document.createElement('div');
   modal.id = 'supply-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
   modal.innerHTML =
-    '<div style="background:white;border-radius:12px;padding:32px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">' +
-      '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:20px;">Add Catalog Item</div>' +
-      '<div class="form-row"><div class="form-group"><label>Name</label><input type="text" id="si-name" placeholder="e.g. Blueberry Syrup"></div></div>' +
-      '<div class="form-row c2">' +
-        '<div class="form-group"><label>Category</label><select id="si-category">' +
-          Object.keys(CATEGORY_LABELS).map(function(k){return '<option value="'+k+'">'+CATEGORY_LABELS[k]+'</option>';}).join('') +
-        '</select></div>' +
-        '<div class="form-group"><label>Vendor</label><input type="text" id="si-vendor" placeholder="e.g. DairyFresh"></div>' +
-      '</div>' +
-      '<div class="form-row c2">' +
-        '<div class="form-group"><label>Unit</label><input type="text" id="si-unit" placeholder="e.g. case, gallon, lb"></div>' +
-        '<div class="form-group" style="justify-content:flex-end;"><label style="margin-bottom:9px;">Sticky (auto-add weekly)</label><input type="checkbox" id="si-sticky" style="width:auto;accent-color:var(--blue);"></div>' +
-      '</div>' +
-      '<div style="display:flex;gap:10px;margin-top:8px;">' +
-        '<button class="btn btn-primary" style="flex:1;" onclick="saveSupplyItemModal()">Save</button>' +
+    '<div style="background:white;border-radius:12px;padding:32px;max-width:640px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">' +
+      '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:4px;">Add Catalog Items</div>' +
+      '<div class="section-sub" style="margin-bottom:18px;">Add one or a handful at once — same as adding an order with a few coffees. Duplicate names (already in the catalog) are skipped.</div>' +
+      '<div id="supply-rows-container"></div>' +
+      '<button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="addSupplyModalRow()">+ Add another item</button>' +
+      '<div style="display:flex;gap:10px;margin-top:20px;">' +
+        '<button class="btn btn-primary" style="flex:1;" onclick="saveSupplyItemsModal()">Save All</button>' +
         '<button class="btn btn-ghost" onclick="document.getElementById(\'supply-modal\').remove()">Cancel</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(modal);
+  addSupplyModalRow();
 }
 
-async function saveSupplyItemModal() {
-  var name = document.getElementById('si-name').value.trim();
-  if (!name) { toast('Name is required','warn'); return; }
-  var body = {
-    name: name,
-    category: document.getElementById('si-category').value,
-    vendor: document.getElementById('si-vendor').value.trim() || null,
-    unit: document.getElementById('si-unit').value.trim() || null,
-    sticky: document.getElementById('si-sticky').checked,
-    active: true
-  };
+function addSupplyModalRow() {
+  var id = supplyModalRowCount++;
+  var container = document.getElementById('supply-rows-container');
+  var div = document.createElement('div');
+  div.className = 'line-item-row'; div.id = 'sr-'+id;
+  div.style.gridTemplateColumns = '1.6fr 1fr 1fr 1fr 60px 32px';
+  div.innerHTML =
+    '<div class="form-group">'+(id===0?'<label>Name</label>':'')+'<input type="text" id="sr-name-'+id+'" placeholder="e.g. Blueberry Syrup"></div>' +
+    '<div class="form-group">'+(id===0?'<label>Category</label>':'')+'<select id="sr-category-'+id+'">' +
+      Object.keys(CATEGORY_LABELS).map(function(k){return '<option value="'+k+'">'+CATEGORY_LABELS[k]+'</option>';}).join('') +
+    '</select></div>' +
+    '<div class="form-group">'+(id===0?'<label>Vendor</label>':'')+'<input type="text" id="sr-vendor-'+id+'" placeholder="DairyFresh"></div>' +
+    '<div class="form-group">'+(id===0?'<label>Unit</label>':'')+'<input type="text" id="sr-unit-'+id+'" placeholder="case, lb…"></div>' +
+    '<div class="form-group">'+(id===0?'<label>Sticky</label>':'')+'<input type="checkbox" id="sr-sticky-'+id+'" style="width:auto;accent-color:var(--blue);margin-top:9px;"></div>' +
+    '<button class="remove-btn" onclick="document.getElementById(\'sr-'+id+'\').remove()"'+(id===0?' style="visibility:hidden;"':'')+'>×</button>';
+  container.appendChild(div);
+}
+
+async function saveSupplyItemsModal() {
+  var rows = document.querySelectorAll('[id^="sr-name-"]');
+  var existingNames = supplyItems.map(function(i){return i.name.trim().toLowerCase();});
+  var toInsert = [], skipped = [];
+  rows.forEach(function(input) {
+    var id = input.id.replace('sr-name-','');
+    var name = input.value.trim();
+    if (!name) return;
+    if (existingNames.indexOf(name.toLowerCase()) > -1) { skipped.push(name); return; }
+    existingNames.push(name.toLowerCase()); // guard against dupes within this same batch
+    toInsert.push({
+      name: name,
+      category: document.getElementById('sr-category-'+id).value,
+      vendor: document.getElementById('sr-vendor-'+id).value.trim() || null,
+      unit: document.getElementById('sr-unit-'+id).value.trim() || null,
+      sticky: document.getElementById('sr-sticky-'+id).checked,
+      active: true
+    });
+  });
+  if (!toInsert.length) { toast(skipped.length ? 'All entered names already exist in the catalog' : 'Add at least one item name','warn'); return; }
   try {
-    await dbFetch('supply_items', {method:'POST', body:body, prefer:'return=minimal'});
+    await dbFetch('supply_items', {method:'POST', body: toInsert.length===1 ? toInsert[0] : toInsert, prefer:'return=minimal'});
     var modal = document.getElementById('supply-modal');
     if (modal) modal.remove();
-    toast('Catalog item added','success');
+    var msg = 'Added '+toInsert.length+' item'+(toInsert.length!==1?'s':'');
+    if (skipped.length) msg += ' · skipped '+skipped.length+' duplicate'+(skipped.length!==1?'s':'');
+    toast(msg,'success');
     await loadSupplies();
   } catch(e) { toast('Error saving: '+e.message,'error'); }
+}
+
+// ── SUPPLY CSV IMPORT ──
+function handleSupplyCSVDrop(e) {
+  e.preventDefault(); e.currentTarget.classList.remove('drag');
+  var f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith('.csv')) handleSupplyCSV(f);
+  else toast('Please drop a .csv file','warn');
+}
+
+function downloadSupplyCSVTemplate() {
+  var csv = 'Name,Category,Vendor,Unit,Sticky\nBlueberry Syrup,syrups,DairyFresh,bottle,no\nWhole Milk,dairy,DairyFresh,gallon,yes\n';
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = 'supply-catalog-template.csv';
+  a.click();
+}
+
+async function handleSupplyCSV(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = async function(e) {
+    var lines = e.target.result.split('\n').filter(function(l){return l.trim();});
+    if (lines.length < 2) { toast('CSV has no data rows','warn'); return; }
+    var headers = parseCSVLine(lines[0]);
+    function col(n) { return headers.findIndex(function(h){return h.trim().toLowerCase()===n.toLowerCase();}); }
+    var C = { name:col('Name'), category:col('Category'), vendor:col('Vendor'), unit:col('Unit'), sticky:col('Sticky') };
+    if (C.name === -1) { toast('CSV needs a "Name" column','error'); return; }
+
+    var validCategories = Object.keys(CATEGORY_LABELS);
+    var existingNames = supplyItems.map(function(i){return i.name.trim().toLowerCase();});
+    var toInsert = [], skipped = 0;
+
+    for (var i=1; i<lines.length; i++) {
+      var row = parseCSVLine(lines[i]);
+      var name = (row[C.name]||'').trim();
+      if (!name) continue;
+      if (existingNames.indexOf(name.toLowerCase()) > -1) { skipped++; continue; }
+      existingNames.push(name.toLowerCase()); // dedupe within the file itself too
+      var cat = (C.category>-1 ? (row[C.category]||'').trim().toLowerCase().replace(/\s+/g,'_') : 'other') || 'other';
+      if (validCategories.indexOf(cat) === -1) cat = 'other';
+      var stickyRaw = (C.sticky>-1 ? (row[C.sticky]||'').trim().toLowerCase() : '');
+      toInsert.push({
+        name: name,
+        category: cat,
+        vendor: C.vendor>-1 ? ((row[C.vendor]||'').trim() || null) : null,
+        unit: C.unit>-1 ? ((row[C.unit]||'').trim() || null) : null,
+        sticky: ['yes','y','true','1'].indexOf(stickyRaw) > -1,
+        active: true
+      });
+    }
+
+    if (!toInsert.length) { toast(skipped ? 'Every row was already in the catalog ('+skipped+' skipped)' : 'No valid rows found','warn'); return; }
+    try {
+      await dbFetch('supply_items', {method:'POST', body: toInsert, prefer:'return=minimal'});
+      var msg = 'Imported '+toInsert.length+' item'+(toInsert.length!==1?'s':'');
+      if (skipped) msg += ' · skipped '+skipped+' duplicate'+(skipped!==1?'s':'');
+      toast(msg,'success');
+      document.getElementById('supply-csv-input').value = '';
+      await loadSupplies();
+    } catch(e) { toast('Import error: '+e.message,'error'); }
+  };
+  reader.readAsText(file);
 }
 
 async function toggleSticky(id, value) {
