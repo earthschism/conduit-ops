@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-08-24T19:13:25.674Z">
+<meta name="app-version" content="2026-08-24T20:19:20.920Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -423,17 +423,16 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
           <tr>
             <th>Roast</th>
             <th>Base SKU</th>
-            <th>Also Bags As</th>
             <th style="text-align:right;">Total Need (lb)</th>
-            <th style="text-align:right;">On Hand (lb)</th>
             <th style="text-align:right;">Water Loss %</th>
             <th style="text-align:right;">Batches</th>
+            <th style="text-align:right;">On Hand (lb)</th>
             <th style="text-align:right;">Output (lb)</th>
             <th style="text-align:right;">Surplus (lb)</th>
             <th>Notes</th>
           </tr>
         </thead>
-        <tbody id="roast-tbody"><tr><td colspan="10" class="empty">Add orders then calculate.</td></tr></tbody>
+        <tbody id="roast-tbody"><tr><td colspan="9" class="empty">Add orders then calculate.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -668,7 +667,7 @@ async function dbFetch(path, options) {
     'Content-Type': 'application/json',
     'Prefer': options.prefer || 'return=minimal'
   }, extra);
-  var url = '/api/db?path=' + encodeURIComponent(path);
+  var url = '/supabase/rest/v1/' + path;
   var res = await fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) { var err = await res.text(); throw new Error('DB error ' + res.status + ': ' + err); }
   if (res.status === 204 || res.status === 201) return [];
@@ -687,15 +686,23 @@ const TYPE_L = {subscription:'Subscription',wholesale:'Wholesale',manual:'Manual
 const SHIP_BOXES = [{type:'First Class',rate:6},{type:'Padded Flat Rate',rate:9},{type:'Medium Flat Rate',rate:14}];
 
 const ROAST_GROUPS = {
-  '9to5': ['1895','QUST','DSIG'],
+  '9to5': ['1895','QUST','DSIG','BONT'],
   'SHIP': ['COTU','DOSD'],
   'SEBD': ['BSKT'],
   'LOCO': ['OTIS'],
   'SOD':  ['CRSC'],
 };
 const CHILD_OF = {};
+Object.entries(ROAST_GROUPS).forEach(([parent, children]) => {
+  children.forEach(child => { CHILD_OF[child] = parent; });
+});
 
-const PACIFIC_OFFSET = -8;
+// Called after coffees load — overlays dynamic roasts_as from catalog
+function buildChildOf() {
+  coffees.forEach(function(c) {
+    if (c.roasts_as) CHILD_OF[c.sku] = c.roasts_as;
+  });
+}
 
 function getPacificNow() {
   const now = new Date();
@@ -727,9 +734,6 @@ function getNextMondayDate() {
   next.setDate(pacific.getDate() + daysUntilMonday);
   return next;
 }
-Object.entries(ROAST_GROUPS).forEach(([parent, children]) => {
-  children.forEach(child => { CHILD_OF[child] = parent; });
-});
 
 // ── STATE ──
 let currentUser=null, currentProfile=null;
@@ -913,7 +917,7 @@ async function initApp(user) {
     }
   }).catch(function(){});
 
-  try { await loadCoffees(); } catch(e) { console.log('coffees load error:', e); }
+  try { await loadCoffees(); buildChildOf(); } catch(e) { console.log('coffees load error:', e); }
   try { await loadCycles(); } catch(e) { console.log('cycles load error:', e); }
 
   if (isStaff) {
@@ -1139,8 +1143,8 @@ function renderOrdersTable() {
       '<td></td><td></td><td></td><td></td><td></td>' +
       '<td><span class="badge '+regionClass+'">'+(REGION_L[firstLine.region]||firstLine.region)+'</span></td>' +
       '<td></td>' +
-      '<td style="white-space:nowrap;display:flex;gap:4px;">' +
-        '<button class="btn btn-ghost btn-sm" onclick="addLineToCustomer(\''+escHtml(customerName)+'\',\''+firstLine.order_type+'\',\''+firstLine.region+'\')" style="font-size:11px;">+ Line</button>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn-ghost btn-sm" onclick="addLineToCustomer(\''+escHtml(customerName)+'\',\''+firstLine.order_type+'\',\''+firstLine.region+'\')" style="font-size:11px;">+ Line</button> ' +
         '<button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+JSON.stringify(allIds)+',event)" style="font-size:11px;">✕ all</button>' +
       '</td>' +
       '</tr>';
@@ -1638,11 +1642,10 @@ async function generateSchedule() {
     return '<tr>' +
       '<td><div style="font-weight:700;">'+r.name+'</div></td>' +
       '<td><span class="sku">'+r.sku+'</span></td>' +
-      '<td style="font-size:12px;">'+childStr+'</td>' +
       '<td class="num mono">'+r.totalLbs.toFixed(2)+'</td>' +
-      '<td class="num"><input type="number" min="0" step="0.1" value="'+r.onHand.toFixed(1)+'" title="Lbs on hand" style="'+editStyle+'" onchange="setRoastOverride(\''+r.sku+'\',\'onHand\',parseFloat(this.value)||0)"></td>' +
       '<td class="num"><input type="number" min="1" max="30" step="0.5" value="'+(r.wl*100).toFixed(1)+'" title="Water loss %" style="'+editStyle+'width:58px;" onchange="setRoastOverride(\''+r.sku+'\',\'waterLoss\',parseFloat(this.value)/100)"><span style="font-size:11px;color:var(--ink3);">%</span></td>' +
       '<td class="num mono" style="font-weight:700;font-size:18px;">'+r.fullBatches+'</td>' +
+      '<td class="num"><input type="number" min="0" step="0.1" value="'+r.onHand.toFixed(1)+'" title="Lbs on hand" style="'+editStyle+'" onchange="setRoastOverride(\''+r.sku+'\',\'onHand\',parseFloat(this.value)||0)"></td>' +
       '<td class="num mono">'+r.estOutput.toFixed(2)+'</td>' +
       '<td class="num mono" style="font-weight:600;color:'+surplusColor+';">'+surplusStr+'</td>' +
       '<td><input type="text" placeholder="notes..." style="border:none;background:transparent;font-size:12px;color:var(--ink3);width:100%;padding:2px 4px;"></td>' +
@@ -1685,6 +1688,17 @@ function printFulfillmentDirect() {
     var key = o.customer_name;
     if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
     groups[key].push(o);
+  });
+
+  // Sort each customer's lines by coffee catalog sort_order
+  Object.keys(groups).forEach(function(customerName) {
+    groups[customerName].sort(function(a, b) {
+      var coffeeA = coffees.find(function(c){return c.sku===a.coffee_sku;});
+      var coffeeB = coffees.find(function(c){return c.sku===b.coffee_sku;});
+      var sortA = coffeeA ? (coffeeA.sort_order||99) : 99;
+      var sortB = coffeeB ? (coffeeB.sort_order||99) : 99;
+      return sortA - sortB;
+    });
   });
 
   var fulfillHtml = groupOrder.map(function(customerName) {
@@ -1873,19 +1887,20 @@ function buildPrintSheets(rows, originTotals) {
         return;
       }
 
-      // For other sizes — show WB total + grind breakdown
-      var wbKey = s+'|wb';
-      var wbQty = r.grinds[wbKey]||0;
+      // For other sizes — show total left, grind breakdown right
+      var totalQty = qty;
       var grindLines = '';
       ['drip','coarse','fine'].forEach(function(g) {
         var gKey = s+'|'+g;
         var gQty = r.grinds[gKey]||0;
-        if (gQty) grindLines += '<div style="font-size:13px;color:var(--ink3);line-height:1.4;">'+gQty+' '+GRIND_LABEL[g]+'</div>';
+        if (gQty) grindLines += '<div style="font-size:12px;color:var(--ink3);line-height:1.5;">'+gQty+' '+GRIND_LABEL[g]+'</div>';
       });
 
-      html += '<td style="text-align:center;padding:10px 14px;">' +
-        (wbQty ? '<div style="font-family:\'DM Mono\',monospace;font-size:22px;font-weight:700;">'+wbQty+'</div>' : '') +
-        grindLines +
+      html += '<td style="padding:10px 14px;">' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<div style="font-family:\'DM Mono\',monospace;font-size:22px;font-weight:700;min-width:32px;">'+totalQty+'</div>' +
+          (grindLines ? '<div>'+grindLines+'</div>' : '') +
+        '</div>' +
       '</td>';
     });
 
@@ -2420,6 +2435,15 @@ function coffeeModalHTML(c) {
         '<option '+(!c.customer_facing?'selected':'')+' value="false">No</option>' +
       '</select></div>' +
     '</div>' +
+    '<div class="form-group" style="margin-bottom:20px;"><label>Roasts As (leave blank if its own roast)</label>' +
+      '<select id="cf-roasts-as">' +
+        '<option value="">— independent roast —</option>' +
+        coffees.filter(function(cf){ return !c.sku || cf.sku !== c.sku; }).map(function(cf){
+          return '<option value="'+cf.sku+'"'+(c.roasts_as===cf.sku?' selected':'')+'>'+cf.name+' ('+cf.sku+')</option>';
+        }).join('') +
+      '</select>' +
+      '<div style="font-size:11px;color:var(--ink3);margin-top:4px;">Orders for this coffee will count toward the selected coffee\'s roast batch.</div>' +
+    '</div>' +
     '<div style="display:flex;gap:10px;">' +
       '<button class="btn btn-primary" style="flex:1;" onclick="saveCoffeeModal(\''+escHtml(c.sku||'')+'\')">Save</button>' +
       '<button class="btn btn-ghost" onclick="document.getElementById(\'coffee-modal\').remove()">Cancel</button>' +
@@ -2461,6 +2485,7 @@ async function saveCoffeeModal(existingSku) {
     origin_region: document.getElementById('cf-origin').value.trim(),
     visibility: document.getElementById('cf-vis').value,
     customer_facing: document.getElementById('cf-facing').value === 'true',
+    roasts_as: document.getElementById('cf-roasts-as').value || null,
     sort_order: parseInt(document.getElementById('cf-sort').value)||99,
     active: true,
     water_loss: 0.15
