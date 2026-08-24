@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-08-24T16:50:45.224Z">
+<meta name="app-version" content="2026-08-24T17:12:49.599Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -816,22 +816,25 @@ async function doSignup() {
   if (error) { _signingUp = false; showAuthErr(error.message); return; }
 
   if (data.user) {
-    const {count} = await sb.from('profiles').select('*',{count:'exact',head:true});
-    const isFirst = (count===null||count===0);
+    var countData = await dbFetch('profiles?select=id', {prefer:'return=representation'});
+    const isFirst = (!countData || countData.length === 0);
     const assignedRole = isFirst ? 'owner' : 'wholesale';
     const pending = !isFirst;
     await sb.auth.updateUser({data: {full_name: name, role: assignedRole}});
-    await sb.from('profiles').update({
-      role: assignedRole,
-      full_name: name,
-      account_type: 'wholesale',
-      business_name: biz || null,
-      pending_approval: pending,
-      approved: !pending
-    }).eq('id', data.user.id);
+    await dbFetch('profiles?id=eq.'+data.user.id, {
+      method: 'PATCH',
+      body: {
+        role: assignedRole,
+        full_name: name,
+        account_type: 'wholesale',
+        business_name: biz || null,
+        pending_approval: pending,
+        approved: !pending
+      },
+      prefer: 'return=minimal'
+    });
 
     if (isFirst) {
-      // First account = owner, let them in normally
       _signingUp = false;
       await initApp(data.user);
       return;
@@ -905,14 +908,14 @@ async function initApp(user) {
   document.getElementById('csv-card').style.display = isStaff ? 'block' : 'none';
 
   currentProfile = {role: role, full_name: fullName};
-  sb.from('profiles').select('*').eq('id', user.id).single().then(function(res) {
-    if (res.data) {
-      currentProfile = res.data;
-      var dbRole = res.data.role;
-      // Only reload if: role genuinely changed AND account is active AND we haven't reloaded recently
+  dbFetch('profiles?select=*&id=eq.'+user.id).then(function(data) {
+    var res = data && data[0] ? data[0] : null;
+    if (res) {
+      currentProfile = res;
+      var dbRole = res.role;
       var lastReload = parseInt(sessionStorage.getItem('last_role_reload')||'0');
       var now = Date.now();
-      if (dbRole && dbRole !== role && res.data.approved && !res.data.pending_approval && (now - lastReload) > 10000) {
+      if (dbRole && dbRole !== role && res.approved && !res.pending_approval && (now - lastReload) > 10000) {
         sessionStorage.setItem('last_role_reload', now);
         window.location.reload();
       }
