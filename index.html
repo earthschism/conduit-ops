@@ -652,22 +652,20 @@ async function dbFetch(path, options) {
   options = options || {};
   var method = options.method || 'GET';
   var body = options.body;
-  var extra = options.headers || {};
-  var token = SUPABASE_KEY;
+  var token = null;
   try {
-    var sess = sb.auth.currentSession || (await Promise.race([
+    var sess = await Promise.race([
       sb.auth.getSession(),
       new Promise(function(r){ setTimeout(function(){ r({data:{session:null}}); }, 1000); })
-    ]));
+    ]);
     if (sess && sess.data && sess.data.session) token = sess.data.session.access_token;
   } catch(e) {}
-  var headers = Object.assign({
-    'apikey': SUPABASE_KEY,
-    'Authorization': 'Bearer ' + token,
+  var url = '/api/db?path=' + encodeURIComponent(path);
+  var headers = {
     'Content-Type': 'application/json',
     'Prefer': options.prefer || 'return=minimal'
-  }, extra);
-  var url = '/supabase/rest/v1/' + path;
+  };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
   var res = await fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) { var err = await res.text(); throw new Error('DB error ' + res.status + ': ' + err); }
   if (res.status === 204 || res.status === 201) return [];
