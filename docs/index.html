@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-08-24T17:12:49.599Z">
+<meta name="app-version" content="2026-08-24T18:25:19.085Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -427,10 +427,10 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
             <th style="text-align:right;">Total Need (lb)</th>
             <th style="text-align:right;">On Hand (lb)</th>
             <th style="text-align:right;">Water Loss %</th>
-            <th style="text-align:right;">Green to Pull (lb)</th>
             <th style="text-align:right;">Batches</th>
             <th style="text-align:right;">Output (lb)</th>
             <th style="text-align:right;">Surplus (lb)</th>
+            <th>Notes</th>
           </tr>
         </thead>
         <tbody id="roast-tbody"><tr><td colspan="10" class="empty">Add orders then calculate.</td></tr></tbody>
@@ -475,11 +475,6 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
         <thead><tr><th>#</th><th>Roast</th><th>Base SKU</th><th>Also Bags As</th><th style="text-align:right;">Total Need (lb)</th><th style="text-align:right;">Green to Pull (lb)</th><th style="text-align:right;">Batches</th><th style="text-align:right;">Remainder (lb)</th><th style="text-align:right;">Output (lb)</th><th style="text-align:right;">Surplus (lb)</th><th>Notes</th></tr></thead>
         <tbody id="roast-print-tbody"><tr><td colspan="11" class="empty">Calculate schedule first.</td></tr></tbody>
       </table>
-    </div>
-    <div style="margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;">
-      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Roaster</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
-      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Date Roasted</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
-      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin-bottom:8px;">Notes</div><div style="border-bottom:1px solid var(--ink3);height:28px;"></div></div>
     </div>
   </div>
 
@@ -619,13 +614,14 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 <!-- ── CATALOG PANEL ── -->
 <div class="panel" id="panel-catalog">
   <div class="section-header">
-    <div><div class="section-title">Coffee Catalog</div><div class="section-sub">SKUs · visibility · descriptions · sort order</div></div>
+    <div><div class="section-title">Coffee Catalog</div><div class="section-sub">Edit offerings · visibility · descriptions · sort order</div></div>
+    <button class="btn btn-primary btn-sm" onclick="showAddCoffeeModal()">+ Add Coffee</button>
   </div>
   <div class="card">
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>SKU</th><th>Name</th><th>Roast Level</th><th>Visibility</th><th>Customer Facing</th><th>Active</th><th>Sort</th></tr></thead>
-        <tbody id="catalog-tbody"><tr><td colspan="7" class="loading"><div class="spinner"></div></td></tr></tbody>
+        <thead><tr><th>SKU</th><th>Name</th><th>Tasting Notes</th><th>Roast</th><th>Origin</th><th>Visibility</th><th>Customer Facing</th><th>Active</th><th>Sort</th><th></th></tr></thead>
+        <tbody id="catalog-tbody"><tr><td colspan="10" class="loading"><div class="spinner"></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -657,24 +653,22 @@ async function dbFetch(path, options) {
   options = options || {};
   var method = options.method || 'GET';
   var body = options.body;
-
-  var token = null;
+  var extra = options.headers || {};
+  var token = SUPABASE_KEY;
   try {
-    var sess = await Promise.race([
+    var sess = sb.auth.currentSession || (await Promise.race([
       sb.auth.getSession(),
       new Promise(function(r){ setTimeout(function(){ r({data:{session:null}}); }, 1000); })
-    ]);
+    ]));
     if (sess && sess.data && sess.data.session) token = sess.data.session.access_token;
   } catch(e) {}
-
-  var url = '/api/db?path=' + encodeURIComponent(path);
-
-  var headers = {
+  var headers = Object.assign({
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + token,
     'Content-Type': 'application/json',
     'Prefer': options.prefer || 'return=minimal'
-  };
-  if (token) headers['Authorization'] = 'Bearer ' + token;
-
+  }, extra);
+  var url = '/supabase/rest/v1/' + path;
   var res = await fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) { var err = await res.text(); throw new Error('DB error ' + res.status + ': ' + err); }
   if (res.status === 204 || res.status === 201) return [];
@@ -693,7 +687,7 @@ const TYPE_L = {subscription:'Subscription',wholesale:'Wholesale',manual:'Manual
 const SHIP_BOXES = [{type:'First Class',rate:6},{type:'Padded Flat Rate',rate:9},{type:'Medium Flat Rate',rate:14}];
 
 const ROAST_GROUPS = {
-  '9to5': ['1895','QUST','DSIG','BONT'],
+  '9to5': ['1895','QUST','DSIG'],
   'SHIP': ['COTU','DOSD'],
   'SEBD': ['BSKT'],
   'LOCO': ['OTIS'],
@@ -816,25 +810,22 @@ async function doSignup() {
   if (error) { _signingUp = false; showAuthErr(error.message); return; }
 
   if (data.user) {
-    var countData = await dbFetch('profiles?select=id', {prefer:'return=representation'});
-    const isFirst = (!countData || countData.length === 0);
+    const {count} = await sb.from('profiles').select('*',{count:'exact',head:true});
+    const isFirst = (count===null||count===0);
     const assignedRole = isFirst ? 'owner' : 'wholesale';
     const pending = !isFirst;
     await sb.auth.updateUser({data: {full_name: name, role: assignedRole}});
-    await dbFetch('profiles?id=eq.'+data.user.id, {
-      method: 'PATCH',
-      body: {
-        role: assignedRole,
-        full_name: name,
-        account_type: 'wholesale',
-        business_name: biz || null,
-        pending_approval: pending,
-        approved: !pending
-      },
-      prefer: 'return=minimal'
-    });
+    await sb.from('profiles').update({
+      role: assignedRole,
+      full_name: name,
+      account_type: 'wholesale',
+      business_name: biz || null,
+      pending_approval: pending,
+      approved: !pending
+    }).eq('id', data.user.id);
 
     if (isFirst) {
+      // First account = owner, let them in normally
       _signingUp = false;
       await initApp(data.user);
       return;
@@ -908,14 +899,14 @@ async function initApp(user) {
   document.getElementById('csv-card').style.display = isStaff ? 'block' : 'none';
 
   currentProfile = {role: role, full_name: fullName};
-  dbFetch('profiles?select=*&id=eq.'+user.id).then(function(data) {
-    var res = data && data[0] ? data[0] : null;
-    if (res) {
-      currentProfile = res;
-      var dbRole = res.role;
+  sb.from('profiles').select('*').eq('id', user.id).single().then(function(res) {
+    if (res.data) {
+      currentProfile = res.data;
+      var dbRole = res.data.role;
+      // Only reload if: role genuinely changed AND account is active AND we haven't reloaded recently
       var lastReload = parseInt(sessionStorage.getItem('last_role_reload')||'0');
       var now = Date.now();
-      if (dbRole && dbRole !== role && res.approved && !res.pending_approval && (now - lastReload) > 10000) {
+      if (dbRole && dbRole !== role && res.data.approved && !res.data.pending_approval && (now - lastReload) > 10000) {
         sessionStorage.setItem('last_role_reload', now);
         window.location.reload();
       }
@@ -1148,7 +1139,10 @@ function renderOrdersTable() {
       '<td></td><td></td><td></td><td></td><td></td>' +
       '<td><span class="badge '+regionClass+'">'+(REGION_L[firstLine.region]||firstLine.region)+'</span></td>' +
       '<td></td>' +
-      '<td style="white-space:nowrap;"><button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+JSON.stringify(allIds)+',event)" style="font-size:11px;">✕ all</button></td>' +
+      '<td style="white-space:nowrap;display:flex;gap:4px;">' +
+        '<button class="btn btn-ghost btn-sm" onclick="addLineToCustomer(\''+escHtml(customerName)+'\',\''+firstLine.order_type+'\',\''+firstLine.region+'\')" style="font-size:11px;">+ Line</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+JSON.stringify(allIds)+',event)" style="font-size:11px;">✕ all</button>' +
+      '</td>' +
       '</tr>';
 
     // Line item rows — 11 cells, with inline edit on qty/size/grind/notes
@@ -1424,19 +1418,31 @@ async function deleteOrder(id) {
 async function deleteCustomerOrders(ids, event) {
   if (event) event.stopPropagation();
   if (!confirm('Delete all lines for this customer?')) return;
-  // Delete each id — Supabase REST supports IN filter
-  var filter = ids.map(function(id){return 'id=eq.'+id;}).join(',');
-  // Use OR logic: ?or=(id.eq.X,id.eq.Y)
   try {
-    await dbFetch('orders?id=in.('+ids.join(',')+')' , {method:'DELETE', prefer:'return=minimal'});
-  } catch(e) {
-    // Fallback: delete one by one
+    // Delete one by one — most reliable with proxy encoding
     for (var i=0; i<ids.length; i++) {
       await dbFetch('orders?id=eq.' + ids[i], {method:'DELETE', prefer:'return=minimal'});
     }
+    toast('Deleted customer orders','success');
+  } catch(e) {
+    toast('Error deleting: '+e.message,'error');
   }
-  toast('Deleted customer orders','success');
   await loadOrders();
+}
+
+function addLineToCustomer(customerName, orderType, region) {
+  // Pre-fill the add order form with this customer's details
+  var card = document.getElementById('add-order-card');
+  card.style.display = 'block';
+  document.getElementById('f-customer').value = customerName;
+  document.getElementById('f-type').value = orderType;
+  document.getElementById('f-region').value = region;
+  // Clear existing line items and add one fresh line
+  lineItemCount = 0;
+  document.getElementById('line-items-container').innerHTML = '';
+  addLineItem();
+  // Scroll to the form
+  card.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 // ── CSV IMPORT ──
@@ -1634,14 +1640,12 @@ async function generateSchedule() {
       '<td><span class="sku">'+r.sku+'</span></td>' +
       '<td style="font-size:12px;">'+childStr+'</td>' +
       '<td class="num mono">'+r.totalLbs.toFixed(2)+'</td>' +
-      // On Hand — editable
-      '<td class="num"><input type="number" min="0" step="0.1" value="'+r.onHand.toFixed(1)+'" title="Lbs already roasted on hand" style="'+editStyle+'" onchange="setRoastOverride(\''+r.sku+'\',\'onHand\',parseFloat(this.value)||0)"></td>' +
-      // Water Loss — editable %
+      '<td class="num"><input type="number" min="0" step="0.1" value="'+r.onHand.toFixed(1)+'" title="Lbs on hand" style="'+editStyle+'" onchange="setRoastOverride(\''+r.sku+'\',\'onHand\',parseFloat(this.value)||0)"></td>' +
       '<td class="num"><input type="number" min="1" max="30" step="0.5" value="'+(r.wl*100).toFixed(1)+'" title="Water loss %" style="'+editStyle+'width:58px;" onchange="setRoastOverride(\''+r.sku+'\',\'waterLoss\',parseFloat(this.value)/100)"><span style="font-size:11px;color:var(--ink3);">%</span></td>' +
-      '<td class="num mono" style="font-weight:700;color:var(--blue);">'+r.actualGreen.toFixed(0)+'</td>' +
       '<td class="num mono" style="font-weight:700;font-size:18px;">'+r.fullBatches+'</td>' +
       '<td class="num mono">'+r.estOutput.toFixed(2)+'</td>' +
       '<td class="num mono" style="font-weight:600;color:'+surplusColor+';">'+surplusStr+'</td>' +
+      '<td><input type="text" placeholder="notes..." style="border:none;background:transparent;font-size:12px;color:var(--ink3);width:100%;padding:2px 4px;"></td>' +
       '</tr>';
   }).join('');
 
@@ -1806,19 +1810,22 @@ function buildPrintSheets(rows, originTotals) {
   document.getElementById('green-card').style.display = 'block';
 
   // ── Bagging sheet — grid layout ──
-  // SIZE_ORDER: Bulk left → 4oz right
   var SIZE_COL = ['20lb','5lb','2lb','1lb','12oz','4oz'];
   var SIZE_LABEL = {'20lb':'Bulk','5lb':'5 lb','2lb':'2 lb','1lb':'1 lb','12oz':'12 oz','4oz':'4oz'};
+  var GRIND_LABEL = {drip:'Drip',coarse:'Coarse',fine:'Fine'};
   var bagAgg = {};
-  var grindTasks = []; // {customer, name, sku, grind, size, qty}
+  var grindTasks = [];
 
   orders.forEach(function(o) {
     if (!bagAgg[o.coffee_sku]) bagAgg[o.coffee_sku] = {
-      name:o.coffee_name, sku:o.coffee_sku, sizes:{}
+      name:o.coffee_name, sku:o.coffee_sku, sizes:{}, grinds:{}
     };
+    // Track by size+grind for breakdown
+    var key = o.size+'|'+(o.size==='4oz'?'wb':o.grind);
+    bagAgg[o.coffee_sku].grinds[key] = (bagAgg[o.coffee_sku].grinds[key]||0) + o.qty;
     bagAgg[o.coffee_sku].sizes[o.size] = (bagAgg[o.coffee_sku].sizes[o.size]||0) + o.qty;
 
-    if (o.grind !== 'wb' && o.size !== '4oz') {
+    if (o.grind !== 'wb' && o.size !== '4oz' && o.size !== '20lb') {
       var taskKey = o.customer_name+'|'+o.coffee_name+'|'+o.size+'|'+o.grind;
       var existing = grindTasks.find(function(t){return t.key===taskKey;});
       if (existing) { existing.qty += o.qty; }
@@ -1836,41 +1843,63 @@ function buildPrintSheets(rows, originTotals) {
   var colTotals = {};
   SIZE_COL.forEach(function(s){ colTotals[s]=0; });
 
-  // Build grid header
+  // Build grid header — no SKU, no Total
   var headHtml = '<tr style="background:var(--paper2);">' +
-    '<th style="text-align:left;padding:10px 12px;font-size:13px;font-weight:700;">Coffee</th>' +
-    '<th style="text-align:left;padding:10px 8px;font-size:11px;color:var(--ink3);">SKU</th>';
+    '<th style="text-align:left;padding:10px 14px;font-size:15px;font-weight:700;">Coffee</th>';
   SIZE_COL.forEach(function(s){
-    headHtml += '<th style="text-align:center;padding:10px 12px;font-size:13px;font-weight:700;">'+SIZE_LABEL[s]+'</th>';
+    headHtml += '<th style="text-align:center;padding:10px 14px;font-size:15px;font-weight:700;">'+SIZE_LABEL[s]+'</th>';
   });
-  headHtml += '<th style="text-align:center;padding:10px 12px;font-size:13px;font-weight:700;color:var(--blue);">TOTAL</th></tr>';
+  headHtml += '</tr>';
   document.getElementById('bag-grid-head').innerHTML = headHtml;
 
   var bodyHtml = bagRows.map(function(r, i) {
-    var rowTotal = 0;
     var bg = i%2===0 ? '' : 'background:var(--paper2);';
     var html = '<tr style="'+bg+'">' +
-      '<td style="font-weight:700;font-size:15px;padding:10px 12px;">'+r.name+'</td>' +
-      '<td style="padding:10px 8px;"><span class="sku">'+r.sku+'</span></td>';
+      '<td style="font-weight:700;font-size:16px;padding:10px 14px;">'+r.name+'</td>';
+
     SIZE_COL.forEach(function(s) {
       var qty = r.sizes[s]||0;
-      rowTotal += qty;
+      if (s !== '20lb') grandTotal += qty;
       colTotals[s] = (colTotals[s]||0) + qty;
-      html += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:'+(qty?'20px':'14px')+';font-weight:'+(qty?'700':'400')+';color:'+(qty?'var(--ink)':'var(--rule2)')+';padding:10px 12px;">'+(qty||'—')+'</td>';
+
+      if (!qty) {
+        html += '<td style="text-align:center;font-size:16px;color:var(--rule2);padding:10px 14px;">—</td>';
+        return;
+      }
+
+      // For 4oz — just show number, no grind breakdown
+      if (s === '4oz') {
+        html += '<td style="text-align:center;padding:10px 14px;"><div style="font-family:\'DM Mono\',monospace;font-size:22px;font-weight:700;">'+qty+'</div></td>';
+        return;
+      }
+
+      // For other sizes — show WB total + grind breakdown
+      var wbKey = s+'|wb';
+      var wbQty = r.grinds[wbKey]||0;
+      var grindLines = '';
+      ['drip','coarse','fine'].forEach(function(g) {
+        var gKey = s+'|'+g;
+        var gQty = r.grinds[gKey]||0;
+        if (gQty) grindLines += '<div style="font-size:13px;color:var(--ink3);line-height:1.4;">'+gQty+' '+GRIND_LABEL[g]+'</div>';
+      });
+
+      html += '<td style="text-align:center;padding:10px 14px;">' +
+        (wbQty ? '<div style="font-family:\'DM Mono\',monospace;font-size:22px;font-weight:700;">'+wbQty+'</div>' : '') +
+        grindLines +
+      '</td>';
     });
-    grandTotal += rowTotal;
-    html += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;color:var(--blue);padding:10px 12px;">'+rowTotal+'</td></tr>';
+
+    html += '</tr>';
     return html;
   }).join('');
 
-  // Totals row
+  // Totals row — no Total column
   bodyHtml += '<tr style="border-top:3px solid var(--ink);background:var(--paper2);">' +
-    '<td style="font-weight:700;font-size:14px;padding:10px 12px;text-transform:uppercase;letter-spacing:0.05em;">TOTAL</td>' +
-    '<td></td>';
+    '<td style="font-weight:700;font-size:15px;padding:10px 14px;text-transform:uppercase;letter-spacing:0.05em;">TOTAL BAGS</td>';
   SIZE_COL.forEach(function(s) {
-    bodyHtml += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;padding:10px 12px;">'+(colTotals[s]||'—')+'</td>';
+    bodyHtml += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:22px;font-weight:700;padding:10px 14px;">'+(colTotals[s]||'—')+'</td>';
   });
-  bodyHtml += '<td style="text-align:center;font-family:\'DM Mono\',monospace;font-size:24px;font-weight:700;color:var(--blue);padding:10px 12px;">'+grandTotal+'</td></tr>';
+  bodyHtml += '</tr>';
   document.getElementById('bag-grid-tbody').innerHTML = bodyHtml;
 
   // Grinding tasks — by account
@@ -2331,12 +2360,14 @@ async function loadCatalog() {
   var data = [];
   try { data = await dbFetch('coffees?select=*&order=sort_order'); } catch(e) {}
   var tbody = document.getElementById('catalog-tbody');
-  if (!data.length) { tbody.innerHTML='<tr><td colspan="7" class="empty">No coffees.</td></tr>'; return; }
+  if (!data.length) { tbody.innerHTML='<tr><td colspan="10" class="empty">No coffees.</td></tr>'; return; }
   tbody.innerHTML = data.map(function(c) {
     return '<tr>' +
       '<td><span class="sku">'+c.sku+'</span></td>' +
-      '<td style="font-weight:600;">'+c.name+'</td>' +
+      '<td style="font-weight:600;">'+escHtml(c.name)+'</td>' +
+      '<td style="font-size:12px;color:var(--ink3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(c.tasting_notes||'-')+'</td>' +
       '<td><span class="badge badge-gray">'+(c.roast_level||'-')+'</span></td>' +
+      '<td style="font-size:12px;color:var(--ink3);">'+(c.origin_region||'-')+'</td>' +
       '<td><select style="width:120px;" onchange="updateCoffeeField(\''+c.sku+'\',\'visibility\',this.value)">' +
         '<option '+(c.visibility==='both'?'selected':'')+' value="both">Both</option>' +
         '<option '+(c.visibility==='retail'?'selected':'')+' value="retail">Retail only</option>' +
@@ -2352,8 +2383,101 @@ async function loadCatalog() {
         '<option '+(!c.active?'selected':'')+' value="false">Inactive</option>' +
       '</select></td>' +
       '<td><input class="inline-num" type="number" value="'+(c.sort_order||99)+'" style="width:50px;" onchange="updateCoffeeField(\''+c.sku+'\',\'sort_order\',parseInt(this.value))"></td>' +
+      '<td><button class="btn btn-ghost btn-sm" onclick="showEditCoffeeModal(\''+c.sku+'\')">Edit</button></td>' +
       '</tr>';
   }).join('');
+}
+
+function coffeeModalHTML(c) {
+  c = c || {};
+  return '<div style="background:white;border-radius:12px;padding:32px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">' +
+    '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:20px;">'+(c.sku?'Edit Coffee':'Add Coffee')+'</div>' +
+    '<div class="form-row c2" style="margin-bottom:12px;">' +
+      '<div class="form-group"><label>SKU</label><input type="text" id="cf-sku" value="'+escHtml(c.sku||'')+'" '+(c.sku?'readonly style="background:var(--paper2);"':'')+' placeholder="e.g. LAKE"></div>' +
+      '<div class="form-group"><label>Sort Order</label><input type="number" id="cf-sort" value="'+(c.sort_order||99)+'" min="1"></div>' +
+    '</div>' +
+    '<div class="form-group" style="margin-bottom:12px;"><label>Name</label><input type="text" id="cf-name" value="'+escHtml(c.name||'')+'" placeholder="Coffee name"></div>' +
+    '<div class="form-group" style="margin-bottom:12px;"><label>Tasting Notes</label><input type="text" id="cf-notes" value="'+escHtml(c.tasting_notes||'')+'" placeholder="Stone fruit, milk chocolate, clean finish"></div>' +
+    '<div class="form-group" style="margin-bottom:12px;"><label>Description</label><textarea id="cf-desc" rows="3" style="width:100%;">'+escHtml(c.description||'')+'</textarea></div>' +
+    '<div class="form-row c2" style="margin-bottom:12px;">' +
+      '<div class="form-group"><label>Roast Level</label><select id="cf-roast">' +
+        '<option '+(c.roast_level==='light'?'selected':'')+' value="light">Light</option>' +
+        '<option '+(c.roast_level==='medium'?'selected':'')+' value="medium">Medium</option>' +
+        '<option '+(c.roast_level==='medium-dark'?'selected':'')+' value="medium-dark">Medium-Dark</option>' +
+        '<option '+(c.roast_level==='dark'?'selected':'')+' value="dark">Dark</option>' +
+      '</select></div>' +
+      '<div class="form-group"><label>Origin Region</label><input type="text" id="cf-origin" value="'+escHtml(c.origin_region||'')+'" placeholder="e.g. Central America"></div>' +
+    '</div>' +
+    '<div class="form-row c2" style="margin-bottom:20px;">' +
+      '<div class="form-group"><label>Visibility</label><select id="cf-vis">' +
+        '<option '+(c.visibility==='both'?'selected':'')+' value="both">Both</option>' +
+        '<option '+(c.visibility==='wholesale'?'selected':'')+' value="wholesale">Wholesale only</option>' +
+        '<option '+(c.visibility==='retail'?'selected':'')+' value="retail">Retail only</option>' +
+        '<option '+(c.visibility==='internal'?'selected':'')+' value="internal">Internal</option>' +
+      '</select></div>' +
+      '<div class="form-group"><label>Customer Facing</label><select id="cf-facing">' +
+        '<option '+(c.customer_facing?'selected':'')+' value="true">Yes</option>' +
+        '<option '+(!c.customer_facing?'selected':'')+' value="false">No</option>' +
+      '</select></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;">' +
+      '<button class="btn btn-primary" style="flex:1;" onclick="saveCoffeeModal(\''+escHtml(c.sku||'')+'\')">Save</button>' +
+      '<button class="btn btn-ghost" onclick="document.getElementById(\'coffee-modal\').remove()">Cancel</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function showAddCoffeeModal() {
+  var modal = document.createElement('div');
+  modal.id = 'coffee-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = coffeeModalHTML();
+  document.body.appendChild(modal);
+}
+
+async function showEditCoffeeModal(sku) {
+  var coffee = coffees.find(function(c){return c.sku===sku;});
+  if (!coffee) {
+    try { var data = await dbFetch('coffees?select=*&sku=eq.'+sku); coffee = data[0]; } catch(e) {}
+  }
+  var modal = document.createElement('div');
+  modal.id = 'coffee-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = coffeeModalHTML(coffee);
+  document.body.appendChild(modal);
+}
+
+async function saveCoffeeModal(existingSku) {
+  var sku = document.getElementById('cf-sku').value.trim().toUpperCase();
+  var name = document.getElementById('cf-name').value.trim();
+  if (!sku || !name) { toast('SKU and Name are required','warn'); return; }
+
+  var body = {
+    sku: sku,
+    name: name,
+    tasting_notes: document.getElementById('cf-notes').value.trim(),
+    description: document.getElementById('cf-desc').value.trim(),
+    roast_level: document.getElementById('cf-roast').value,
+    origin_region: document.getElementById('cf-origin').value.trim(),
+    visibility: document.getElementById('cf-vis').value,
+    customer_facing: document.getElementById('cf-facing').value === 'true',
+    sort_order: parseInt(document.getElementById('cf-sort').value)||99,
+    active: true,
+    water_loss: 0.15
+  };
+
+  try {
+    if (existingSku) {
+      await dbFetch('coffees?sku=eq.'+existingSku, {method:'PATCH', body:body, prefer:'return=minimal'});
+    } else {
+      await dbFetch('coffees', {method:'POST', body:body, prefer:'return=minimal'});
+    }
+    var modal = document.getElementById('coffee-modal');
+    if (modal) modal.remove();
+    toast((existingSku?'Coffee updated':'Coffee added'),'success');
+    await loadCoffees();
+    await loadCatalog();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
 }
 
 async function updateCoffeeField(sku, field, value) {
