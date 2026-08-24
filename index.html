@@ -668,7 +668,7 @@ async function dbFetch(path, options) {
     'Content-Type': 'application/json',
     'Prefer': options.prefer || 'return=minimal'
   }, extra);
-  var url = '/supabase/rest/v1/' + path;
+  var url = '/api/db?path=' + encodeURIComponent(path);
   var res = await fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) { var err = await res.text(); throw new Error('DB error ' + res.status + ': ' + err); }
   if (res.status === 204 || res.status === 201) return [];
