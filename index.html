@@ -672,8 +672,8 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Category</th><th>Vendor</th><th>Unit</th><th class="num">Par</th><th class="num">On Hand</th><th class="num">Need</th><th>Sticky</th><th></th></tr></thead>
-        <tbody id="supply-catalog-tbody"><tr><td colspan="9" class="loading"><div class="spinner"></div></td></tr></tbody>
+        <thead><tr><th>Name</th><th>Code</th><th>Category</th><th>Vendor</th><th>Unit</th><th class="num">Par</th><th class="num">On Hand</th><th class="num">Need</th><th>Sticky</th><th></th></tr></thead>
+        <tbody id="supply-catalog-tbody"><tr><td colspan="10" class="loading"><div class="spinner"></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -690,7 +690,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('supply-csv-card').style.display=document.getElementById('supply-csv-card').style.display==='none'?'block':'none';">Show / Hide</button>
   </div>
   <div class="card" id="supply-csv-card" style="display:none;">
-    <div class="section-sub" style="margin-bottom:14px;">CSV with columns: <strong>Name</strong> (required), Category, Vendor, Unit, Sticky (yes/no). Items with a name already in the catalog are skipped — only new ones get added.</div>
+    <div class="section-sub" style="margin-bottom:14px;">CSV with columns: <strong>Name</strong> (required), Code, Category, Vendor, Unit, Sticky (yes/no). Items with a name already in the catalog are skipped — only new ones get added.</div>
     <div class="upload-zone" onclick="document.getElementById('supply-csv-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleSupplyCSVDrop(event)">
       <input type="file" id="supply-csv-input" accept=".csv" style="display:none" onchange="handleSupplyCSV(this.files[0])">
       <div style="font-size:13px;color:var(--ink3);">Drop a .csv here, or click to browse</div>
@@ -2642,7 +2642,7 @@ function renderSupplyCatalog() {
     return true;
   });
   var tbody = document.getElementById('supply-catalog-tbody');
-  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty">No matching items.</td></tr>'; return; }
+  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="10" class="empty">No matching items.</td></tr>'; return; }
   tbody.innerHTML = filtered.map(function(it) {
     var stickyToggle = isSuppliesManager
       ? '<input type="checkbox" '+(it.sticky?'checked':'')+' onchange="toggleSticky(\''+it.id+'\',this.checked)" style="width:auto;accent-color:var(--blue);">'
@@ -2655,6 +2655,7 @@ function renderSupplyCatalog() {
     var needCell = need!=null ? (need>0 ? '<span class="badge badge-gold">'+need+'</span>' : '<span class="badge badge-green">0</span>') : '-';
     return '<tr>' +
       '<td style="font-weight:600;">'+escHtml(it.name)+'</td>' +
+      '<td style="color:var(--ink3);font-size:12px;">'+escHtml(it.product_code||'-')+'</td>' +
       '<td><span class="badge badge-gray">'+(CATEGORY_LABELS[it.category]||it.category)+'</span></td>' +
       '<td style="color:var(--ink3);">'+escHtml(it.vendor||'-')+'</td>' +
       '<td style="color:var(--ink3);">'+escHtml(it.unit||'-')+'</td>' +
@@ -2784,9 +2785,10 @@ function addSupplyModalRow() {
   var container = document.getElementById('supply-rows-container');
   var div = document.createElement('div');
   div.className = 'line-item-row'; div.id = 'sr-'+id;
-  div.style.gridTemplateColumns = '1.6fr 1fr 1fr 1fr 60px 32px';
+  div.style.gridTemplateColumns = '1.4fr 1fr 1fr 1fr 1fr 60px 32px';
   div.innerHTML =
     '<div class="form-group">'+(id===0?'<label>Name</label>':'')+'<input type="text" id="sr-name-'+id+'" placeholder="e.g. Blueberry Syrup"></div>' +
+    '<div class="form-group">'+(id===0?'<label>Code</label>':'')+'<input type="text" id="sr-code-'+id+'" placeholder="optional"></div>' +
     '<div class="form-group">'+(id===0?'<label>Category</label>':'')+'<select id="sr-category-'+id+'">' +
       Object.keys(CATEGORY_LABELS).map(function(k){return '<option value="'+k+'">'+CATEGORY_LABELS[k]+'</option>';}).join('') +
     '</select></div>' +
@@ -2809,6 +2811,7 @@ async function saveSupplyItemsModal() {
     existingNames.push(name.toLowerCase()); // guard against dupes within this same batch
     toInsert.push({
       name: name,
+      product_code: document.getElementById('sr-code-'+id).value.trim() || null,
       category: document.getElementById('sr-category-'+id).value,
       vendor: document.getElementById('sr-vendor-'+id).value.trim() || null,
       unit: document.getElementById('sr-unit-'+id).value.trim() || null,
@@ -2837,7 +2840,7 @@ function handleSupplyCSVDrop(e) {
 }
 
 function downloadSupplyCSVTemplate() {
-  var csv = 'Name,Category,Vendor,Unit,Sticky\nBlueberry Syrup,syrups,DairyFresh,bottle,no\nWhole Milk,dairy,DairyFresh,gallon,yes\n';
+  var csv = 'Name,Code,Category,Vendor,Unit,Sticky\nBlueberry Syrup,SYR-4402,syrups,DairyFresh,bottle,no\nWhole Milk,,dairy,DairyFresh,gallon,yes\n';
   var a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download = 'supply-catalog-template.csv';
@@ -2852,7 +2855,7 @@ async function handleSupplyCSV(file) {
     if (lines.length < 2) { toast('CSV has no data rows','warn'); return; }
     var headers = parseCSVLine(lines[0]);
     function col(n) { return headers.findIndex(function(h){return h.trim().toLowerCase()===n.toLowerCase();}); }
-    var C = { name:col('Name'), category:col('Category'), vendor:col('Vendor'), unit:col('Unit'), sticky:col('Sticky') };
+    var C = { name:col('Name'), code:col('Code'), category:col('Category'), vendor:col('Vendor'), unit:col('Unit'), sticky:col('Sticky') };
     if (C.name === -1) { toast('CSV needs a "Name" column','error'); return; }
 
     var validCategories = Object.keys(CATEGORY_LABELS);
@@ -2870,6 +2873,7 @@ async function handleSupplyCSV(file) {
       var stickyRaw = (C.sticky>-1 ? (row[C.sticky]||'').trim().toLowerCase() : '');
       toInsert.push({
         name: name,
+        product_code: C.code>-1 ? ((row[C.code]||'').trim() || null) : null,
         category: cat,
         vendor: C.vendor>-1 ? ((row[C.vendor]||'').trim() || null) : null,
         unit: C.unit>-1 ? ((row[C.unit]||'').trim() || null) : null,
