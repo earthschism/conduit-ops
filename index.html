@@ -1,3 +1,10 @@
+<!--
+  CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-02 — Supplies rebuilt as two views (Build List checklist + Manage Catalog); fixed mobile cycle-bar overflow (Add Order/Fulfillment wrapping)
+  2026-09-02 — Added optional product_code column to supply catalog (CSV + multi-add modal + table)
+  2026-09-02 — Removed subscriber role; added par_level/on_hand columns + Need column to supply catalog
+  2026-09-01 — Added café supplies feature (catalog, weekly list, sticky items, shopping note) + manager role
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -56,6 +63,21 @@ body{background:var(--paper);color:var(--ink);font-family:'DM Sans',sans-serif;f
 .section-sub{font-size:12px;color:var(--ink3);margin-top:3px;}
 
 .card{background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow);}
+
+/* ── SUPPLIES CHECKLIST ── */
+.supplies-view-btn{opacity:0.55;}
+.supplies-view-btn.active{opacity:1;background:var(--paper2);border-color:var(--ink);}
+.checklist-category{position:sticky;top:0;background:var(--paper);z-index:5;padding:14px 2px 6px;font-family:'Libre Baskerville',serif;font-size:16px;font-weight:700;color:var(--ink);}
+.checklist-vendor{padding:8px 2px 4px 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);}
+.checklist-card{background:white;border:1px solid var(--rule);border-radius:var(--radius);margin-bottom:16px;overflow:hidden;box-shadow:var(--shadow);}
+.checklist-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--rule);}
+.checklist-row:last-child{border-bottom:none;}
+.checklist-row.checked{background:var(--paper2);}
+.checklist-row input[type="checkbox"]{width:22px;height:22px;flex-shrink:0;accent-color:var(--blue);}
+.checklist-row .cl-name{flex:1;font-size:14px;font-weight:600;color:var(--ink);}
+.checklist-row .cl-name .cl-need{display:block;font-size:11px;font-weight:400;color:#a9791a;margin-top:2px;}
+.checklist-row input.cl-qty{width:64px;text-align:center;flex-shrink:0;padding:8px 4px;}
+.checklist-empty{padding:40px 20px;text-align:center;color:var(--ink3);font-size:13px;}
 .card-title{font-family:'Libre Baskerville',serif;font-size:15px;color:var(--ink);margin-bottom:14px;display:flex;align-items:center;gap:8px;font-weight:700;}
 .card-title::before{content:'';display:block;width:3px;height:16px;background:var(--blue);border-radius:2px;flex-shrink:0;}
 
@@ -113,8 +135,11 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 .btn-full{width:100%;padding:12px;font-size:14px;}
 
 /* ── CYCLE BAR ── */
-.cycle-bar{display:flex;align-items:center;gap:12px;background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:11px 16px;margin-bottom:20px;box-shadow:var(--shadow);}
+.cycle-bar{display:flex;align-items:center;gap:12px;background:white;border:1px solid var(--rule);border-radius:var(--radius);padding:11px 16px;margin-bottom:20px;box-shadow:var(--shadow);flex-wrap:wrap;}
 .cycle-bar-label{font-size:11px;color:var(--ink3);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;}
+.cycle-bar-divider{width:1px;height:20px;background:var(--rule2);margin:0 8px;}
+.cycle-bar-spacer{flex:1;}
+.cycle-bar-actions{display:flex;gap:8px;}
 .cycle-bar select{border:none;background:transparent;padding:0;color:var(--blue);font-weight:600;font-size:14px;width:auto;box-shadow:none;}
 .cycle-bar select:focus{box-shadow:none;border:none;}
 
@@ -207,9 +232,17 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   .cycle-bar{padding:9px 12px;gap:8px;}
   .cycle-bar select{font-size:13px;}
   #btn-new-cycle{padding:4px 8px;font-size:11px;}
+  .cycle-bar-spacer{display:none;}
+  .cycle-bar-actions{width:100%;order:99;}
+  .cycle-bar-actions .btn{flex:1;text-align:center;}
 
   /* upload zone */
   .upload-zone{padding:18px 14px;}
+
+  /* checklist */
+  .checklist-row{padding:16px;gap:10px;}
+  .checklist-row .cl-name{font-size:15px;}
+  .checklist-row input.cl-qty{width:56px;}
 
   /* manual entry form - stack all cols */
   .form-row.c2,.form-row.c3,.form-row.c4{grid-template-columns:1fr;}
@@ -319,14 +352,16 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div class="cycle-bar">
     <span class="cycle-bar-label">Cycle</span>
     <select id="cycle-select" onchange="onCycleChange()"></select>
-    <div style="width:1px;height:20px;background:var(--rule2);margin:0 8px;"></div>
+    <div class="cycle-bar-divider"></div>
     <span class="cycle-bar-label">Roaster's Choice</span>
     <select id="roasters-choice-select" onchange="saveRoastersChoice(this.value)" style="color:var(--blue);font-weight:600;font-size:13px;border:none;background:transparent;padding:0;width:auto;box-shadow:none;">
       <option value="">— not set —</option>
     </select>
-    <div style="flex:1;"></div>
-    <button class="btn btn-ghost btn-sm" id="btn-add-order" onclick="toggleAddOrder()">+ Add Order</button>
-    <button class="btn btn-ghost btn-sm" onclick="printFulfillmentDirect()">🖨 Fulfillment</button>
+    <div class="cycle-bar-spacer"></div>
+    <div class="cycle-bar-actions">
+      <button class="btn btn-ghost btn-sm" id="btn-add-order" onclick="toggleAddOrder()">+ Add Order</button>
+      <button class="btn btn-ghost btn-sm" onclick="printFulfillmentDirect()">🖨 Fulfillment</button>
+    </div>
   </div>
   <div class="stats-row">
     <div class="stat"><div class="stat-label">Total Bags</div><div class="stat-value" id="stat-bags">0</div></div>
@@ -630,72 +665,86 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 <!-- ── SUPPLIES PANEL ── -->
 <div class="panel" id="panel-supplies">
   <div class="section-header">
-    <div><div class="section-title">Café Supplies</div><div class="section-sub">Search the supply catalog · build the weekly list · shared shopping note</div></div>
-    <div id="supply-manager-actions" style="display:flex;gap:10px;">
-      <button class="btn btn-primary btn-sm" onclick="showAddSupplyItemsModal()">+ Add Catalog Items</button>
+    <div><div class="section-title">Café Supplies</div><div class="section-sub" id="supplies-view-sub">Check off what's needed · quantity is optional</div></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-ghost btn-sm supplies-view-btn active" id="btn-view-build" onclick="switchSuppliesView('build')">Build List</button>
+      <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-view-manage" onclick="switchSuppliesView('manage')">Manage Catalog</button>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">This Week's List</div>
-    <div class="section-sub" id="supplies-week-label" style="margin-bottom:14px;">-</div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th>Item</th><th>Category</th><th>Vendor</th><th class="num">Qty</th><th>Unit</th><th></th></tr></thead>
-        <tbody id="supply-list-tbody"><tr><td colspan="6" class="loading"><div class="spinner"></div></td></tr></tbody>
-      </table>
+  <!-- ── BUILD LIST VIEW (daily use) ── -->
+  <div id="supplies-view-build">
+    <div class="card" style="padding:14px 16px;">
+      <input type="text" id="checklist-search" placeholder="Search…" oninput="renderChecklist()" style="margin:0;">
     </div>
-    <div style="display:flex;gap:10px;margin-top:16px;">
-      <input type="text" id="adhoc-item-name" placeholder="Add something not in the catalog…" style="flex:1;">
-      <input type="text" id="adhoc-item-qty" placeholder="Qty" style="width:90px;">
-      <button class="btn btn-secondary btn-sm" onclick="addAdHocListItem()">Add</button>
-    </div>
-    <button class="btn btn-primary" id="finalize-list-btn" style="margin-top:16px;display:none;" onclick="finalizeWeeklyList()">Finalize for the Week</button>
-  </div>
 
-  <div class="card">
-    <div class="card-title">Supply Catalog</div>
-    <div class="form-row c2" style="margin-bottom:16px;">
-      <div class="form-group"><label>Search</label><input type="text" id="supply-search" placeholder="e.g. blueberry syrup…" oninput="renderSupplyCatalog()"></div>
-      <div class="form-group"><label>Category</label>
-        <select id="supply-category-filter" onchange="renderSupplyCatalog()">
-          <option value="">All categories</option>
-          <option value="syrups">Syrups</option>
-          <option value="dairy">Dairy</option>
-          <option value="dry_goods">Dry Goods</option>
-          <option value="meats">Meats</option>
-          <option value="paper_goods">Paper Goods</option>
-          <option value="produce">Produce</option>
-          <option value="other">Other</option>
-        </select>
+    <div id="checklist-groups"><div class="loading"><div class="spinner"></div></div></div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:10px;">Something not in the list?</div>
+      <div style="display:flex;gap:10px;">
+        <input type="text" id="adhoc-item-name" placeholder="Add something not in the catalog…" style="flex:1;">
+        <input type="text" id="adhoc-item-qty" placeholder="Qty" style="width:90px;">
+        <button class="btn btn-secondary btn-sm" onclick="addAdHocListItem()">Add</button>
       </div>
     </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th>Name</th><th>Code</th><th>Category</th><th>Vendor</th><th>Unit</th><th class="num">Par</th><th class="num">On Hand</th><th class="num">Need</th><th>Sticky</th><th></th></tr></thead>
-        <tbody id="supply-catalog-tbody"><tr><td colspan="10" class="loading"><div class="spinner"></div></td></tr></tbody>
-      </table>
+
+    <div class="card">
+      <div class="card-title">Shopping Note</div>
+      <div class="section-sub" style="margin-bottom:10px;">Shared freeform note — anyone on staff+ can edit. Saves automatically.</div>
+      <textarea id="shopping-note" rows="6" style="width:100%;font-family:'DM Mono',monospace;font-size:13px;line-height:1.6;" oninput="scheduleSaveNote()" placeholder="Anything that comes up — bulk buys, vendor calls, notes for next order…"></textarea>
+      <div class="section-sub" id="note-save-status" style="margin-top:6px;">-</div>
     </div>
+
+    <button class="btn btn-primary" id="finalize-list-btn" style="display:none;width:100%;" onclick="finalizeWeeklyList()">Finalize for the Week</button>
   </div>
 
-  <div class="card">
-    <div class="card-title">Shopping Note</div>
-    <div class="section-sub" style="margin-bottom:10px;">Shared freeform note — anyone on staff+ can edit. Saves automatically.</div>
-    <textarea id="shopping-note" rows="8" style="width:100%;font-family:'DM Mono',monospace;font-size:13px;line-height:1.6;" oninput="scheduleSaveNote()" placeholder="Anything that comes up — bulk buys, vendor calls, notes for next order…"></textarea>
-    <div class="section-sub" id="note-save-status" style="margin-top:6px;">-</div>
-  </div>
-
-  <div class="card" id="supply-manager-actions-2" style="display:flex;align-items:center;justify-content:space-between;">
-    <div class="card-title" style="margin-bottom:0;">Upload Spreadsheet</div>
-    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('supply-csv-card').style.display=document.getElementById('supply-csv-card').style.display==='none'?'block':'none';">Show / Hide</button>
-  </div>
-  <div class="card" id="supply-csv-card" style="display:none;">
-    <div class="section-sub" style="margin-bottom:14px;">CSV with columns: <strong>Name</strong> (required), Code, Category, Vendor, Unit, Sticky (yes/no). Items with a name already in the catalog are skipped — only new ones get added.</div>
-    <div class="upload-zone" onclick="document.getElementById('supply-csv-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleSupplyCSVDrop(event)">
-      <input type="file" id="supply-csv-input" accept=".csv" style="display:none" onchange="handleSupplyCSV(this.files[0])">
-      <div style="font-size:13px;color:var(--ink3);">Drop a .csv here, or click to browse</div>
+  <!-- ── MANAGE CATALOG VIEW (occasional, manager+) ── -->
+  <div id="supplies-view-manage" style="display:none;">
+    <div class="section-header">
+      <div><div class="section-title" style="font-size:16px;">Manage Catalog</div><div class="section-sub">Par levels, vendor codes, bulk import</div></div>
+      <div id="supply-manager-actions" style="display:flex;gap:10px;">
+        <button class="btn btn-primary btn-sm" onclick="showAddSupplyItemsModal()">+ Add Catalog Items</button>
+      </div>
     </div>
-    <div style="margin-top:10px;"><a href="#" onclick="downloadSupplyCSVTemplate();return false;" style="font-size:12px;color:var(--blue);">Download a blank template</a></div>
+
+    <div class="card">
+      <div class="card-title">Supply Catalog</div>
+      <div class="form-row c2" style="margin-bottom:16px;">
+        <div class="form-group"><label>Search</label><input type="text" id="supply-search" placeholder="e.g. blueberry syrup…" oninput="renderSupplyCatalog()"></div>
+        <div class="form-group"><label>Category</label>
+          <select id="supply-category-filter" onchange="renderSupplyCatalog()">
+            <option value="">All categories</option>
+            <option value="syrups">Syrups</option>
+            <option value="dairy">Dairy</option>
+            <option value="dry_goods">Dry Goods</option>
+            <option value="meats">Meats</option>
+            <option value="paper_goods">Paper Goods</option>
+            <option value="produce">Produce</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Code</th><th>Category</th><th>Vendor</th><th>Unit</th><th class="num">Par</th><th class="num">On Hand</th><th class="num">Need</th><th>Sticky</th><th></th></tr></thead>
+          <tbody id="supply-catalog-tbody"><tr><td colspan="10" class="loading"><div class="spinner"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="supply-manager-actions-2" style="display:flex;align-items:center;justify-content:space-between;">
+      <div class="card-title" style="margin-bottom:0;">Upload Spreadsheet</div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('supply-csv-card').style.display=document.getElementById('supply-csv-card').style.display==='none'?'block':'none';">Show / Hide</button>
+    </div>
+    <div class="card" id="supply-csv-card" style="display:none;">
+      <div class="section-sub" style="margin-bottom:14px;">CSV with columns: <strong>Name</strong> (required), Code, Category, Vendor, Unit, Sticky (yes/no). Items with a name already in the catalog are skipped — only new ones get added.</div>
+      <div class="upload-zone" onclick="document.getElementById('supply-csv-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleSupplyCSVDrop(event)">
+        <input type="file" id="supply-csv-input" accept=".csv" style="display:none" onchange="handleSupplyCSV(this.files[0])">
+        <div style="font-size:13px;color:var(--ink3);">Drop a .csv here, or click to browse</div>
+      </div>
+      <div style="margin-top:10px;"><a href="#" onclick="downloadSupplyCSVTemplate();return false;" style="font-size:12px;color:var(--blue);">Download a blank template</a></div>
+    </div>
   </div>
 </div>
 
@@ -807,6 +856,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
+console.log('Conduit Ops build: 2026-09-02 — Supplies checklist rebuild + mobile cycle-bar fix');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -2616,20 +2666,146 @@ var CATEGORY_LABELS = {syrups:'Syrups',dairy:'Dairy',dry_goods:'Dry Goods',meats
 
 async function loadSupplies() {
   var isSuppliesManager = currentProfile && ['owner','manager'].includes(currentProfile.role);
-  document.getElementById('finalize-list-btn').style.display = isSuppliesManager ? 'inline-block' : 'none';
+  document.getElementById('finalize-list-btn').style.display = isSuppliesManager ? 'block' : 'none';
   document.getElementById('supply-manager-actions').style.display = isSuppliesManager ? 'flex' : 'none';
   document.getElementById('supply-manager-actions-2').style.display = isSuppliesManager ? 'flex' : 'none';
-  if (!isSuppliesManager) document.getElementById('supply-csv-card').style.display = 'none';
+  document.getElementById('btn-view-manage').style.display = isSuppliesManager ? 'inline-block' : 'none';
+  if (!isSuppliesManager) { document.getElementById('supply-csv-card').style.display = 'none'; switchSuppliesView('build'); }
   try { supplyItems = await dbFetch('supply_items?select=*&active=eq.true&order=name'); } catch(e) { supplyItems = []; console.log('loadSupplies items error:', e); }
   try { weeklyList = await dbFetch('supply_list_items?select=*&list_status=eq.open&order=created_at'); } catch(e) { weeklyList = []; console.log('loadSupplies list error:', e); }
-  document.getElementById('supplies-week-label').textContent = 'Open list · started ' + (weeklyList.length ? new Date(Math.min.apply(null, weeklyList.map(function(w){return new Date(w.created_at).getTime();}))).toLocaleDateString() : 'now');
   renderSupplyCatalog();
-  renderWeeklyList();
+  renderChecklist();
   try {
     var note = await dbFetch('shared_notes?select=*&id=eq.shopping_list');
     document.getElementById('shopping-note').value = (note && note[0] && note[0].content) || '';
     document.getElementById('note-save-status').textContent = (note && note[0] && note[0].updated_at) ? 'Last saved ' + new Date(note[0].updated_at).toLocaleString() : '';
   } catch(e) { console.log('loadSupplies note error:', e); }
+}
+
+function switchSuppliesView(view) {
+  var isBuild = view === 'build';
+  document.getElementById('supplies-view-build').style.display = isBuild ? 'block' : 'none';
+  document.getElementById('supplies-view-manage').style.display = isBuild ? 'none' : 'block';
+  document.getElementById('btn-view-build').classList.toggle('active', isBuild);
+  document.getElementById('btn-view-manage').classList.toggle('active', !isBuild);
+  document.getElementById('supplies-view-sub').textContent = isBuild
+    ? "Check off what's needed · quantity is optional"
+    : 'Par levels, vendor codes, bulk import';
+}
+
+// ── CHECKLIST (Build List view) ──
+function renderChecklist() {
+  var search = (document.getElementById('checklist-search').value || '').toLowerCase().trim();
+  var listByItem = {}; // item_id -> list row
+  weeklyList.forEach(function(w) { if (w.item_id) listByItem[w.item_id] = w; });
+
+  var items = supplyItems.filter(function(it) {
+    return !search || it.name.toLowerCase().indexOf(search) > -1;
+  });
+
+  var container = document.getElementById('checklist-groups');
+  if (!items.length) { container.innerHTML = '<div class="checklist-empty">No matching items.</div>'; return; }
+
+  // group by category, then vendor within category
+  var byCategory = {};
+  items.forEach(function(it) {
+    var cat = it.category || 'other';
+    byCategory[cat] = byCategory[cat] || {};
+    var ven = it.vendor || 'No vendor set';
+    byCategory[cat][ven] = byCategory[cat][ven] || [];
+    byCategory[cat][ven].push(it);
+  });
+
+  var catOrder = Object.keys(CATEGORY_LABELS).filter(function(c){ return byCategory[c]; });
+  Object.keys(byCategory).forEach(function(c){ if (catOrder.indexOf(c) === -1) catOrder.push(c); });
+
+  var html = '';
+  catOrder.forEach(function(cat) {
+    html += '<div class="checklist-category">' + (CATEGORY_LABELS[cat]||cat) + '</div>';
+    html += '<div class="checklist-card">';
+    var vendors = Object.keys(byCategory[cat]).sort();
+    vendors.forEach(function(ven, vi) {
+      html += '<div class="checklist-vendor">' + escHtml(ven) + '</div>';
+      byCategory[cat][ven].forEach(function(it) {
+        var listRow = listByItem[it.id];
+        var checked = !!listRow;
+        var qtyVal = listRow ? (listRow.qty || '') : '';
+        var need = (it.par_level!=null) ? Math.max(0, (it.par_level||0) - (it.on_hand||0)) : null;
+        var cbId = 'ccb-'+it.id, qtyId = 'cqty-'+it.id;
+        html += '<div class="checklist-row'+(checked?' checked':'')+'" id="crow-'+it.id+'">' +
+          '<input type="checkbox" id="'+cbId+'" '+(checked?'checked':'')+' onchange="toggleChecklistItem(\''+it.id+'\',this.checked)">' +
+          '<span class="cl-name">'+escHtml(it.name)+(need>0?'<span class="cl-need">suggested: '+need+'</span>':'')+'</span>' +
+          '<input type="text" class="cl-qty" id="'+qtyId+'" placeholder="qty" value="'+escHtml(qtyVal)+'" onchange="updateChecklistQty(\''+it.id+'\',this.value)">' +
+          '</div>';
+      });
+    });
+    html += '</div>';
+  });
+
+  // ad-hoc (non-catalog) items already on the list
+  var adhoc = weeklyList.filter(function(w) { return !w.item_id; });
+  if (adhoc.length) {
+    html += '<div class="checklist-category">Added This Week</div><div class="checklist-card">';
+    adhoc.forEach(function(w) {
+      html += '<div class="checklist-row checked">' +
+        '<input type="checkbox" checked onchange="removeAdHocListItem(\''+w.id+'\')">' +
+        '<span class="cl-name">'+escHtml(w.custom_name)+'</span>' +
+        '<input type="text" class="cl-qty" value="'+escHtml(w.qty||'')+'" onchange="updateChecklistQty(null,this.value,\''+w.id+'\')">' +
+        '</div>';
+    });
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+async function toggleChecklistItem(itemId, checked) {
+  var item = supplyItems.find(function(i){return i.id===itemId;});
+  if (!item) return;
+  if (checked) {
+    var qtyVal = (document.getElementById('cqty-'+itemId) || {}).value || '';
+    try {
+      await dbFetch('supply_list_items', {method:'POST', body:{
+        item_id: item.id, custom_name: null, category: item.category, vendor: item.vendor, unit: item.unit,
+        qty: qtyVal.trim() || null, list_status: 'open', added_by: currentUser.id
+      }, prefer:'return=minimal'});
+      await loadSupplies();
+    } catch(e) { toast('Error adding item','error'); document.getElementById('ccb-'+itemId).checked = false; }
+  } else {
+    var existing = weeklyList.find(function(w){return w.item_id===itemId;});
+    if (!existing) return;
+    try {
+      await dbFetch('supply_list_items?id=eq.'+existing.id, {method:'DELETE', prefer:'return=minimal'});
+      await loadSupplies();
+    } catch(e) { toast('Error removing item','error'); document.getElementById('ccb-'+itemId).checked = true; }
+  }
+}
+
+async function updateChecklistQty(itemId, val, existingListId) {
+  val = (val||'').trim();
+  var existing = existingListId ? weeklyList.find(function(w){return w.id===existingListId;}) : weeklyList.find(function(w){return w.item_id===itemId;});
+  if (existing) {
+    try { await dbFetch('supply_list_items?id=eq.'+existing.id, {method:'PATCH', body:{qty: val||null}, prefer:'return=minimal'}); existing.qty = val||null; }
+    catch(e) { toast('Error saving quantity','error'); }
+    return;
+  }
+  if (itemId && val) {
+    // typing a quantity on an item that isn't checked yet — treat it as checking it
+    var item = supplyItems.find(function(i){return i.id===itemId;});
+    if (!item) return;
+    try {
+      await dbFetch('supply_list_items', {method:'POST', body:{
+        item_id: item.id, custom_name: null, category: item.category, vendor: item.vendor, unit: item.unit,
+        qty: val, list_status: 'open', added_by: currentUser.id
+      }, prefer:'return=minimal'});
+      await loadSupplies();
+    } catch(e) { toast('Error adding item','error'); }
+  }
+}
+
+async function removeAdHocListItem(id) {
+  try { await dbFetch('supply_list_items?id=eq.'+id, {method:'DELETE', prefer:'return=minimal'}); await loadSupplies(); }
+  catch(e) { toast('Error removing item','error'); }
 }
 
 function renderSupplyCatalog() {
@@ -2710,34 +2886,6 @@ async function addAdHocListItem() {
     toast('Added to list','success');
     await loadSupplies();
   } catch(e) { toast('Error adding item','error'); }
-}
-
-function renderWeeklyList() {
-  var tbody = document.getElementById('supply-list-tbody');
-  if (!weeklyList.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">List is empty — search the catalog below or add something ad hoc.</td></tr>'; return; }
-  tbody.innerHTML = weeklyList.map(function(w) {
-    var name = w.custom_name || (supplyItems.find(function(i){return i.id===w.item_id;}) || {}).name || '(unknown item)';
-    return '<tr>' +
-      '<td style="font-weight:600;">'+escHtml(name)+'</td>' +
-      '<td><span class="badge badge-gray">'+(CATEGORY_LABELS[w.category]||w.category||'-')+'</span></td>' +
-      '<td style="color:var(--ink3);">'+escHtml(w.vendor||'-')+'</td>' +
-      '<td class="num"><input type="text" value="'+escHtml(w.qty||'')+'" style="width:70px;text-align:right;" onchange="updateListItemQty(\''+w.id+'\',this.value)"></td>' +
-      '<td style="color:var(--ink3);">'+escHtml(w.unit||'-')+'</td>' +
-      '<td><button class="remove-btn" onclick="removeListItem(\''+w.id+'\')">×</button></td>' +
-      '</tr>';
-  }).join('');
-}
-
-async function updateListItemQty(id, qty) {
-  try { await dbFetch('supply_list_items?id=eq.'+id, {method:'PATCH', body:{qty:qty}, prefer:'return=minimal'}); }
-  catch(e) { toast('Error saving quantity','error'); }
-}
-
-async function removeListItem(id) {
-  try {
-    await dbFetch('supply_list_items?id=eq.'+id, {method:'DELETE', prefer:'return=minimal'});
-    await loadSupplies();
-  } catch(e) { toast('Error removing item','error'); }
 }
 
 async function finalizeWeeklyList() {
