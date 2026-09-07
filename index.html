@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-08 — Added category filter dropdown to Build List (next to search), same categories as Manage Catalog
   2026-09-08 — Moved On Hand column next to Total Need in the editable Roast Schedule table
   2026-09-08 — Categories in Supplies are now freeform text with autocomplete (was a fixed list of 7 that silently dumped anything unmatched, like "Baking," into Other) — applies to CSV import, multi-add, Manage Catalog inline edit, and category filter; old slug-based categories still display correctly and merge with matching freeform ones
   2026-09-08 — FIXED REAL BUG: role/name now read from profiles table at login instead of stale session metadata that never updated when Admin changed a role (this is why Ritsie stayed stuck on Supplies-only after being made manager — sign-out/back-in never actually fixed it, since metadata was never touched)
@@ -691,6 +692,9 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div id="supplies-view-build">
     <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
       <input type="text" id="checklist-search" placeholder="Search…" oninput="renderChecklist()" style="margin:0;flex:1;min-width:140px;">
+      <select id="checklist-category-filter" onchange="renderChecklist()" style="margin:0;width:auto;min-width:140px;">
+        <option value="">All categories</option>
+      </select>
       <div id="checklist-count-badge" style="font-size:13px;font-weight:700;color:var(--blue);white-space:nowrap;">0 on list</div>
     </div>
 
@@ -879,7 +883,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-08c — On Hand column moved next to Total Need');
+console.log('Conduit Ops build: 2026-09-08d — Category filter added to Build List checklist');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -2745,12 +2749,14 @@ function refreshCategoryDatalist() {
 }
 
 function refreshCategoryFilterOptions() {
-  var sel = document.getElementById('supply-category-filter');
-  if (!sel) return;
-  var current = sel.value;
   var cats = knownCategories();
-  sel.innerHTML = '<option value="">All categories</option>' + cats.map(function(c){ return '<option value="'+escHtml(c)+'">'+escHtml(c)+'</option>'; }).join('');
-  if (cats.indexOf(current) > -1) sel.value = current;
+  ['supply-category-filter','checklist-category-filter'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var current = sel.value;
+    sel.innerHTML = '<option value="">All categories</option>' + cats.map(function(c){ return '<option value="'+escHtml(c)+'">'+escHtml(c)+'</option>'; }).join('');
+    if (cats.indexOf(current) > -1) sel.value = current;
+  });
 }
 
 async function loadSupplies() {
@@ -2790,13 +2796,16 @@ function switchSuppliesView(view) {
 // ── CHECKLIST (Build List view) ──
 function renderChecklist() {
   var search = (document.getElementById('checklist-search').value || '').toLowerCase().trim();
+  var catFilter = document.getElementById('checklist-category-filter').value;
   var listByItem = {}; // item_id -> list row
   weeklyList.forEach(function(w) { if (w.item_id) listByItem[w.item_id] = w; });
   var countBadge = document.getElementById('checklist-count-badge');
   if (countBadge) countBadge.textContent = weeklyList.length + (weeklyList.length===1 ? ' item on list' : ' items on list');
 
   var items = supplyItems.filter(function(it) {
-    return !search || it.name.toLowerCase().indexOf(search) > -1;
+    if (search && it.name.toLowerCase().indexOf(search) === -1) return false;
+    if (catFilter && displayCategory(it.category) !== catFilter) return false;
+    return true;
   });
 
   var container = document.getElementById('checklist-groups');
