@@ -1,5 +1,8 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-08 — Review List now has a By Category / By Vendor toggle — By Vendor pulls every item that vendor supplies together regardless of category, for when you're actually placing orders
+  2026-09-08 — Added Master Update (owner only): upload a master spreadsheet to sync the whole catalog by name — updates Category/Vendor/Unit/Code on matches, adds new items, deactivates anything missing from the sheet (never deletes, never touches par/on-hand/sticky). Shows a full preview before anything is committed.
+  2026-09-08 — Item name is now editable inline in Manage Catalog (re-uploading a spreadsheet with different capitalization would only skip the "duplicate," never update it — this gives a direct way to fix names)
   2026-09-08 — Added category filter dropdown to Build List (next to search), same categories as Manage Catalog
   2026-09-08 — Moved On Hand column next to Total Need in the editable Roast Schedule table
   2026-09-08 — Categories in Supplies are now freeform text with autocomplete (was a fixed list of 7 that silently dumped anything unmatched, like "Baking," into Other) — applies to CSV import, multi-add, Manage Catalog inline edit, and category filter; old slug-based categories still display correctly and merge with matching freeform ones
@@ -20,7 +23,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-09-07T23:48:34.409Z">
+<meta name="app-version" content="2026-09-07T23:51:36.966Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -721,6 +724,10 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div id="supplies-view-review" style="display:none;">
     <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <div id="review-count-badge" style="font-size:13px;font-weight:700;color:var(--blue);">0 items</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm supplies-view-btn active" id="btn-review-group-category" onclick="setReviewGroupMode('category')">By Category</button>
+        <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-review-group-vendor" onclick="setReviewGroupMode('vendor')">By Vendor</button>
+      </div>
       <div style="flex:1;"></div>
       <button class="btn btn-ghost btn-sm" onclick="copyCompleteList()">📋 Copy Complete List</button>
       <button class="btn btn-ghost btn-sm" onclick="printReviewList()">🖨 Print</button>
@@ -771,6 +778,24 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
         <div style="font-size:13px;color:var(--ink3);">Drop a .csv here, or click to browse</div>
       </div>
       <div style="margin-top:10px;"><a href="#" onclick="downloadSupplyCSVTemplate();return false;" style="font-size:12px;color:var(--blue);">Download a blank template</a></div>
+    </div>
+
+    <div class="card" id="master-update-toggle-card" style="display:none;align-items:center;justify-content:space-between;border-color:#c0392b;">
+      <div>
+        <div class="card-title" style="margin-bottom:0;color:#c0392b;">Master Update</div>
+        <div class="section-sub">Owner only — syncs the entire catalog to exactly match a spreadsheet</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('master-update-card').style.display=document.getElementById('master-update-card').style.display==='none'?'block':'none';">Show / Hide</button>
+    </div>
+    <div class="card" id="master-update-card" style="display:none;border-color:#c0392b;">
+      <div class="section-sub" style="margin-bottom:14px;">
+        Upload your master spreadsheet (same columns as above). Every item matched by name gets its Category, Vendor, Unit, and Code updated to match the sheet — <strong>par level, on-hand count, and sticky are never touched by this</strong>. New names get added. Anything currently active but missing from this sheet gets <strong>deactivated</strong> (hidden, not deleted — nothing is permanently destroyed). Nothing happens until you review the preview and confirm.
+      </div>
+      <div class="upload-zone" onclick="document.getElementById('master-update-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleMasterUpdateDrop(event)">
+        <input type="file" id="master-update-input" accept=".csv" style="display:none" onchange="handleMasterUpdateFile(this.files[0])">
+        <div style="font-size:13px;color:var(--ink3);">Drop your master spreadsheet here, or click to browse</div>
+      </div>
+      <div id="master-update-preview" style="margin-top:16px;"></div>
     </div>
   </div>
 </div>
@@ -883,7 +908,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-08d — Category filter added to Build List checklist');
+console.log('Conduit Ops build: 2026-09-08g — Review List By Category/By Vendor toggle added');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -2761,11 +2786,14 @@ function refreshCategoryFilterOptions() {
 
 async function loadSupplies() {
   var isSuppliesManager = currentProfile && ['owner','manager'].includes(currentProfile.role);
+  var isOwner = currentProfile && currentProfile.role === 'owner';
   document.getElementById('finalize-list-btn').style.display = isSuppliesManager ? 'block' : 'none';
   document.getElementById('clear-all-btn').style.display = isSuppliesManager ? 'block' : 'none';
   document.getElementById('supply-manager-actions').style.display = isSuppliesManager ? 'flex' : 'none';
   document.getElementById('supply-manager-actions-2').style.display = isSuppliesManager ? 'flex' : 'none';
   document.getElementById('btn-view-manage').style.display = isSuppliesManager ? 'inline-block' : 'none';
+  document.getElementById('master-update-toggle-card').style.display = isOwner ? 'flex' : 'none';
+  if (!isOwner) { document.getElementById('master-update-card').style.display = 'none'; masterUpdatePlan = null; }
   if (!isSuppliesManager) { document.getElementById('supply-csv-card').style.display = 'none'; if (document.getElementById('supplies-view-manage').style.display !== 'none') switchSuppliesView('build'); }
   try { supplyItems = await dbFetch('supply_items?select=*&active=eq.true&order=name'); } catch(e) { supplyItems = []; console.log('loadSupplies items error:', e); }
   try { weeklyList = await dbFetch('supply_list_items?select=*&list_status=eq.open&order=created_at'); } catch(e) { weeklyList = []; console.log('loadSupplies list error:', e); }
@@ -2937,6 +2965,24 @@ function groupListByVendor() {
   return byVendor;
 }
 
+var reviewGroupMode = 'category';
+
+function setReviewGroupMode(mode) {
+  reviewGroupMode = mode;
+  document.getElementById('btn-review-group-category').classList.toggle('active', mode==='category');
+  document.getElementById('btn-review-group-vendor').classList.toggle('active', mode==='vendor');
+  renderReviewList();
+}
+
+function reviewItemRowHtml(w) {
+  var name = w.custom_name || (supplyItems.find(function(i){return i.id===w.item_id;}) || {}).name || '(unknown item)';
+  var qty = (w.qty||'').toString().trim();
+  return '<div class="checklist-row">' +
+    '<span class="cl-name">'+escHtml(name)+'</span>' +
+    '<span style="font-size:13px;color:var(--ink3);min-width:60px;text-align:right;">'+(qty ? escHtml(qty)+(w.unit?' '+escHtml(w.unit):'') : '—')+'</span>' +
+    '</div>';
+}
+
 function renderReviewList() {
   var countBadge = document.getElementById('review-count-badge');
   if (countBadge) countBadge.textContent = weeklyList.length + (weeklyList.length===1 ? ' item' : ' items');
@@ -2944,47 +2990,61 @@ function renderReviewList() {
   var container = document.getElementById('review-groups');
   if (!weeklyList.length) { container.innerHTML = '<div class="checklist-empty">Nothing on the list yet — check items off in Build List.</div>'; return; }
 
-  // on-screen grouping stays category > vendor, same as Build List, for consistency.
-  var byCategory = {};
-  weeklyList.forEach(function(w) {
-    var cat = w.item_id ? displayCategory(w.category) : 'Added This Week';
-    byCategory[cat] = byCategory[cat] || {};
-    var ven = w.vendor || 'No vendor set';
-    byCategory[cat][ven] = byCategory[cat][ven] || [];
-    byCategory[cat][ven].push(w);
-  });
-
-  var catOrder = Object.keys(byCategory).filter(function(c){ return c !== 'Added This Week'; }).sort(function(a,b) {
-    if (a==='Other') return 1;
-    if (b==='Other') return -1;
-    return a.localeCompare(b);
-  });
-  if (byCategory['Added This Week']) catOrder.push('Added This Week');
-
-  var seenVendorCopyBtn = {};
   var html = '';
-  catOrder.forEach(function(cat) {
-    html += '<div class="checklist-category">' + escHtml(cat) + '</div>';
-    html += '<div class="checklist-card">';
-    var vendors = Object.keys(byCategory[cat]).sort();
-    vendors.forEach(function(ven) {
-      var showCopyBtn = !seenVendorCopyBtn[ven] && ven !== 'No vendor set';
-      seenVendorCopyBtn[ven] = true;
-      html += '<div class="checklist-vendor" style="display:flex;align-items:center;justify-content:space-between;">' +
-        '<span>'+escHtml(ven)+'</span>' +
-        (showCopyBtn ? '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="copyVendorList('+JSON.stringify(ven)+')">Copy</button>' : '') +
-        '</div>';
-      byCategory[cat][ven].forEach(function(w) {
-        var name = w.custom_name || (supplyItems.find(function(i){return i.id===w.item_id;}) || {}).name || '(unknown item)';
-        var qty = (w.qty||'').toString().trim();
-        html += '<div class="checklist-row">' +
-          '<span class="cl-name">'+escHtml(name)+'</span>' +
-          '<span style="font-size:13px;color:var(--ink3);min-width:60px;text-align:right;">'+(qty ? escHtml(qty)+(w.unit?' '+escHtml(w.unit):'') : '—')+'</span>' +
-          '</div>';
-      });
+
+  if (reviewGroupMode === 'vendor') {
+    // Grouped by vendor first — every item that vendor supplies together, regardless of category.
+    // This is the "ready to order" view.
+    var byVendor = groupListByVendor();
+    var vendors = Object.keys(byVendor).sort(function(a,b) {
+      if (a==='No vendor set') return 1;
+      if (b==='No vendor set') return -1;
+      return a.localeCompare(b);
     });
-    html += '</div>';
-  });
+    vendors.forEach(function(ven) {
+      html += '<div class="checklist-category" style="display:flex;align-items:center;justify-content:space-between;">' +
+        '<span>'+escHtml(ven)+'</span>' +
+        (ven !== 'No vendor set' ? '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="copyVendorList('+JSON.stringify(ven)+')">Copy</button>' : '') +
+        '</div>';
+      html += '<div class="checklist-card">';
+      byVendor[ven].forEach(function(w) { html += reviewItemRowHtml(w); });
+      html += '</div>';
+    });
+  } else {
+    // Grouped by category, then vendor within it — same shape as Build List.
+    var byCategory = {};
+    weeklyList.forEach(function(w) {
+      var cat = w.item_id ? displayCategory(w.category) : 'Added This Week';
+      byCategory[cat] = byCategory[cat] || {};
+      var ven = w.vendor || 'No vendor set';
+      byCategory[cat][ven] = byCategory[cat][ven] || [];
+      byCategory[cat][ven].push(w);
+    });
+
+    var catOrder = Object.keys(byCategory).filter(function(c){ return c !== 'Added This Week'; }).sort(function(a,b) {
+      if (a==='Other') return 1;
+      if (b==='Other') return -1;
+      return a.localeCompare(b);
+    });
+    if (byCategory['Added This Week']) catOrder.push('Added This Week');
+
+    var seenVendorCopyBtn = {};
+    catOrder.forEach(function(cat) {
+      html += '<div class="checklist-category">' + escHtml(cat) + '</div>';
+      html += '<div class="checklist-card">';
+      var vendors = Object.keys(byCategory[cat]).sort();
+      vendors.forEach(function(ven) {
+        var showCopyBtn = !seenVendorCopyBtn[ven] && ven !== 'No vendor set';
+        seenVendorCopyBtn[ven] = true;
+        html += '<div class="checklist-vendor" style="display:flex;align-items:center;justify-content:space-between;">' +
+          '<span>'+escHtml(ven)+'</span>' +
+          (showCopyBtn ? '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="copyVendorList('+JSON.stringify(ven)+')">Copy</button>' : '') +
+          '</div>';
+        byCategory[cat][ven].forEach(function(w) { html += reviewItemRowHtml(w); });
+      });
+      html += '</div>';
+    });
+  }
 
   container.innerHTML = html;
 }
@@ -3066,8 +3126,11 @@ function renderSupplyCatalog() {
     var vendorCell = isSuppliesManager
       ? '<input type="text" value="'+escHtml(it.vendor||'')+'" style="width:100px;" onchange="updateItemVendor(\''+it.id+'\',this.value)">'
       : escHtml(it.vendor||'-');
+    var nameCell = isSuppliesManager
+      ? '<input type="text" value="'+escHtml(it.name)+'" style="width:160px;font-weight:600;" onchange="updateItemName(\''+it.id+'\',this.value)">'
+      : escHtml(it.name);
     return '<tr>' +
-      '<td style="font-weight:600;">'+escHtml(it.name)+'</td>' +
+      '<td style="font-weight:600;">'+nameCell+'</td>' +
       '<td style="color:var(--ink3);font-size:12px;">'+escHtml(it.product_code||'-')+'</td>' +
       '<td>'+categoryCell+'</td>' +
       '<td style="color:var(--ink3);">'+vendorCell+'</td>' +
@@ -3090,6 +3153,13 @@ async function updateItemCategory(id, val) {
 async function updateItemVendor(id, val) {
   try { await dbFetch('supply_items?id=eq.'+id, {method:'PATCH', body:{vendor:val.trim()||null}, prefer:'return=minimal'}); await loadSupplies(); }
   catch(e) { toast('Error updating vendor','error'); }
+}
+
+async function updateItemName(id, val) {
+  val = val.trim();
+  if (!val) { toast('Name cannot be empty','warn'); await loadSupplies(); return; }
+  try { await dbFetch('supply_items?id=eq.'+id, {method:'PATCH', body:{name:val}, prefer:'return=minimal'}); await loadSupplies(); }
+  catch(e) { toast('Error updating name','error'); }
 }
 
 async function updateParLevel(id, val) {
@@ -3301,6 +3371,130 @@ async function handleSupplyCSV(file) {
 async function toggleSticky(id, value) {
   try { await dbFetch('supply_items?id=eq.'+id, {method:'PATCH', body:{sticky:value}, prefer:'return=minimal'}); }
   catch(e) { toast('Error updating','error'); }
+}
+
+// ── MASTER UPDATE (owner only) — syncs the whole catalog to match a spreadsheet ──
+var masterUpdatePlan = null;
+
+function handleMasterUpdateDrop(e) {
+  e.preventDefault(); e.currentTarget.classList.remove('drag');
+  var f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith('.csv')) handleMasterUpdateFile(f);
+  else toast('Please drop a .csv file','warn');
+}
+
+function handleMasterUpdateFile(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var lines = e.target.result.split('\n').filter(function(l){return l.trim();});
+    if (lines.length < 2) { toast('CSV has no data rows','warn'); return; }
+    var headers = parseCSVLine(lines[0]);
+    function col(n) { return headers.findIndex(function(h){return h.trim().toLowerCase()===n.toLowerCase();}); }
+    var C = { name:col('Name'), code:col('Code'), category:col('Category'), vendor:col('Vendor'), unit:col('Unit'), sticky:col('Sticky') };
+    if (C.name === -1) { toast('CSV needs a "Name" column','error'); return; }
+
+    var sheetRows = [];
+    var seenLower = {};
+    for (var i=1; i<lines.length; i++) {
+      var row = parseCSVLine(lines[i]);
+      var name = (row[C.name]||'').trim();
+      if (!name) continue;
+      if (seenLower[name.toLowerCase()]) continue; // dedupe within the file itself
+      seenLower[name.toLowerCase()] = true;
+      sheetRows.push({
+        name: name,
+        product_code: C.code>-1 ? ((row[C.code]||'').trim() || null) : undefined,
+        category: C.category>-1 ? ((row[C.category]||'').trim() || 'Other') : undefined,
+        vendor: C.vendor>-1 ? ((row[C.vendor]||'').trim() || null) : undefined,
+        unit: C.unit>-1 ? ((row[C.unit]||'').trim() || null) : undefined,
+        sticky: C.sticky>-1 ? (['yes','y','true','1'].indexOf((row[C.sticky]||'').trim().toLowerCase())>-1) : false
+      });
+    }
+    if (!sheetRows.length) { toast('No valid rows found in that file','warn'); return; }
+
+    var existingByLower = {};
+    supplyItems.forEach(function(it){ existingByLower[it.name.trim().toLowerCase()] = it; });
+
+    var toUpdate = [], toAdd = [], matchedIds = {};
+    sheetRows.forEach(function(row) {
+      var existing = existingByLower[row.name.toLowerCase()];
+      if (existing) {
+        matchedIds[existing.id] = true;
+        var changes = {};
+        // Only category/vendor/unit/code sync from the sheet. Par level, on-hand,
+        // and sticky are operational/local settings and are never overwritten here.
+        if (row.category !== undefined && displayCategory(existing.category) !== row.category) changes.category = row.category;
+        if (row.vendor !== undefined && (existing.vendor||null) !== row.vendor) changes.vendor = row.vendor;
+        if (row.unit !== undefined && (existing.unit||null) !== row.unit) changes.unit = row.unit;
+        if (row.product_code !== undefined && (existing.product_code||null) !== row.product_code) changes.product_code = row.product_code;
+        if (Object.keys(changes).length) toUpdate.push({id: existing.id, name: existing.name, changes: changes});
+      } else {
+        toAdd.push(row);
+      }
+    });
+
+    var toDeactivate = supplyItems.filter(function(it){ return !matchedIds[it.id]; });
+
+    masterUpdatePlan = { toUpdate: toUpdate, toAdd: toAdd, toDeactivate: toDeactivate };
+    renderMasterUpdatePreview();
+  };
+  reader.readAsText(file);
+}
+
+function renderMasterUpdatePreview() {
+  var p = masterUpdatePlan;
+  var container = document.getElementById('master-update-preview');
+  if (!p) { container.innerHTML = ''; return; }
+  var html = '<div class="section-sub" style="margin-bottom:10px;font-weight:600;color:var(--ink);">Preview — nothing has changed yet</div>';
+  html += '<div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap;">' +
+    '<div><span class="badge badge-green">'+p.toAdd.length+'</span> new</div>' +
+    '<div><span class="badge badge-gold">'+p.toUpdate.length+'</span> updated</div>' +
+    '<div><span class="badge badge-gray">'+p.toDeactivate.length+'</span> deactivated</div>' +
+  '</div>';
+  if (p.toDeactivate.length) {
+    html += '<div class="section-sub" style="margin-bottom:6px;"><strong>Will be deactivated</strong> (missing from this sheet — hidden from the catalog, not deleted):</div>';
+    html += '<div style="font-size:12px;color:var(--ink3);margin-bottom:14px;">'+p.toDeactivate.map(function(it){return escHtml(it.name);}).join(', ')+'</div>';
+  }
+  if (p.toAdd.length) {
+    html += '<div class="section-sub" style="margin-bottom:6px;"><strong>Will be added</strong>:</div>';
+    html += '<div style="font-size:12px;color:var(--ink3);margin-bottom:14px;">'+p.toAdd.map(function(r){return escHtml(r.name);}).join(', ')+'</div>';
+  }
+  html += '<div style="display:flex;gap:10px;">' +
+    '<button class="btn btn-danger" onclick="commitMasterUpdate()">Confirm Master Update</button>' +
+    '<button class="btn btn-ghost" onclick="cancelMasterUpdate()">Cancel</button>' +
+  '</div>';
+  container.innerHTML = html;
+}
+
+function cancelMasterUpdate() {
+  masterUpdatePlan = null;
+  document.getElementById('master-update-input').value = '';
+  document.getElementById('master-update-preview').innerHTML = '';
+}
+
+async function commitMasterUpdate() {
+  var p = masterUpdatePlan;
+  if (!p) return;
+  if (!confirm('This will update '+p.toUpdate.length+', add '+p.toAdd.length+', and deactivate '+p.toDeactivate.length+' item(s). This cannot be undone automatically. Continue?')) return;
+  try {
+    for (var i=0; i<p.toUpdate.length; i++) {
+      await dbFetch('supply_items?id=eq.'+p.toUpdate[i].id, {method:'PATCH', body:p.toUpdate[i].changes, prefer:'return=minimal'});
+    }
+    if (p.toAdd.length) {
+      var inserts = p.toAdd.map(function(r){ return {
+        name: r.name, category: r.category||'Other', vendor: r.vendor||null,
+        unit: r.unit||null, product_code: r.product_code||null, sticky: !!r.sticky, active: true
+      }; });
+      await dbFetch('supply_items', {method:'POST', body: inserts, prefer:'return=minimal'});
+    }
+    for (var j=0; j<p.toDeactivate.length; j++) {
+      await dbFetch('supply_items?id=eq.'+p.toDeactivate[j].id, {method:'PATCH', body:{active:false}, prefer:'return=minimal'});
+    }
+    toast('Master update complete','success');
+    cancelMasterUpdate();
+    await loadSupplies();
+  } catch(e) { toast('Error applying master update: '+e.message,'error'); }
 }
 
 function scheduleSaveNote() {
