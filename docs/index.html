@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-08 — FIXED REAL BUG: role/name now read from profiles table at login instead of stale session metadata that never updated when Admin changed a role (this is why Ritsie stayed stuck on Supplies-only after being made manager — sign-out/back-in never actually fixed it, since metadata was never touched)
   2026-09-07 — CSV import hidden until "+Add Order" is opened; roasting "on hand" now persists per cycle (was lost on refresh); theme shifted from tan to light blue
   2026-09-07 — Polish batch: coffees now always follow catalog Sort Order everywhere (roast schedule, both fulfillment sheets, Orders tab, bagging grid); roasting sheet columns reworked (removed Base SKU/Also Bags As/Remainder, added Water Loss %/On Hand, moved Notes after Batches, larger print font); added Clear All to Supplies Review List
   2026-09-07 — Supplies: added visible list counter, made category/vendor editable in Manage Catalog, shrunk mobile checklist rows, shrunk fulfillment print sheet fonts
@@ -16,7 +17,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-09-07T22:28:04.341Z">
+<meta name="app-version" content="2026-09-07T22:37:44.155Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -882,7 +883,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-07e — CSV import hidden on default, on-hand persists per cycle, light blue theme');
+console.log('Conduit Ops build: 2026-09-08 — FIX: role/name read from profiles table, not stale session metadata');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -1029,10 +1030,18 @@ async function initApp(user) {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
 
-  var metaRole = user.user_metadata && user.user_metadata.role;
+  // Role and name come from the profiles table — the same place Admin edits —
+  // not from login session metadata, which never gets updated when a role changes.
+  var profileRow = null;
+  try {
+    var profileRows = await dbFetch('profiles?select=*&id=eq.'+user.id);
+    profileRow = profileRows && profileRows[0];
+  } catch(e) { console.log('profile fetch error:', e); }
+
   var metaName = user.user_metadata && user.user_metadata.full_name;
-  var role = metaRole || 'wholesale';
-  var fullName = metaName || user.email;
+  var role = (profileRow && profileRow.role) || (user.user_metadata && user.user_metadata.role) || 'wholesale';
+  var fullName = (profileRow && profileRow.full_name) || metaName || user.email;
+  currentProfile = profileRow || {role: role, full_name: fullName};
 
   document.getElementById('user-display').textContent = fullName;
   var roleColors = {owner:'var(--blue)',manager:'var(--green2)',staff:'#8a7010',wholesale:'#c49a2a'};
@@ -1053,21 +1062,6 @@ async function initApp(user) {
   document.getElementById('btn-new-cycle').style.display = isRoastingStaff ? 'block' : 'none';
   document.getElementById('btn-add-order').style.display = isRoastingStaff ? 'inline-block' : 'none';
 
-  currentProfile = {role: role, full_name: fullName};
-  sb.from('profiles').select('*').eq('id', user.id).single().then(function(res) {
-    if (res.data) {
-      currentProfile = res.data;
-      var dbRole = res.data.role;
-      // Only reload if: role genuinely changed AND account is active AND we haven't reloaded recently
-      var lastReload = parseInt(sessionStorage.getItem('last_role_reload')||'0');
-      var now = Date.now();
-      if (dbRole && dbRole !== role && res.data.approved && !res.data.pending_approval && (now - lastReload) > 10000) {
-        sessionStorage.setItem('last_role_reload', now);
-        window.location.reload();
-      }
-    }
-  }).catch(function(){});
-
   if (isRoastingStaff) {
     try { await loadCoffees(); buildChildOf(); } catch(e) { console.log('coffees load error:', e); }
     try { await loadCycles(); } catch(e) { console.log('cycles load error:', e); }
@@ -1080,14 +1074,7 @@ async function initApp(user) {
     try { await loadCycles(); } catch(e) { console.log('cycles load error:', e); }
     document.getElementById('portal-sub').textContent = 'Welcome back, ' + fullName;
     document.querySelector('[data-tab="portal"]').click();
-    // Wait for profile to load from DB before checking pending status
-    var profile = null;
-    try { 
-      var res = await dbFetch('profiles?select=*&id=eq.'+user.id);
-      profile = res && res[0] ? res[0] : null;
-      if (profile) currentProfile = profile;
-    } catch(e) {}
-    if (profile && (profile.pending_approval || profile.approved === false)) {
+    if (profileRow && (profileRow.pending_approval || profileRow.approved === false)) {
       document.getElementById('portal-pending').style.display = 'block';
       document.getElementById('portal-form-wrap').style.display = 'none';
     } else {
