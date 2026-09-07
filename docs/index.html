@@ -1,6 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
-  2026-09-07 — Supplies: added Review List view (copy per-vendor / copy complete list / print, Finalize moved here)
+  2026-09-07 — Polish batch: coffees now always follow catalog Sort Order everywhere (roast schedule, both fulfillment sheets, Orders tab, bagging grid); roasting sheet columns reworked (removed Base SKU/Also Bags As/Remainder, added Water Loss %/On Hand, moved Notes after Batches, larger print font); added Clear All to Supplies Review List
   2026-09-07 — Supplies: added visible list counter, made category/vendor editable in Manage Catalog, shrunk mobile checklist rows, shrunk fulfillment print sheet fonts
   2026-09-02 — Supplies rebuilt as two views (Build List checklist + Manage Catalog); fixed mobile cycle-bar overflow (Add Order/Fulfillment wrapping)
   2026-09-02 — Added optional product_code column to supply catalog (CSV + multi-add modal + table)
@@ -15,7 +15,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-09-07T21:59:37.693Z">
+<meta name="app-version" content="2026-09-07T22:15:35.074Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -286,6 +286,10 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   /* Keep bagging grid on one page */
   #bag-grid-table{font-size:13px!important;page-break-inside:avoid;}
   #bag-grid-table td,#bag-grid-table th{padding:7px 10px!important;font-size:13px!important;}
+  /* Roasting sheet — larger, easier to read at the roaster */
+  #roast-sheet table{font-size:14px!important;}
+  #roast-sheet td,#roast-sheet th{padding:8px 10px!important;font-size:14px!important;}
+  #roast-sheet .print-title{font-size:20px!important;}
   /* Keep fulfillment account blocks together */
   .fulfillment-block{page-break-inside:avoid;}
   /* Grinding tasks stay with bagging */
@@ -513,8 +517,8 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <div class="print-section">
       <div class="print-section-title">Batch List</div>
       <table>
-        <thead><tr><th>#</th><th>Roast</th><th>Base SKU</th><th>Also Bags As</th><th style="text-align:right;">Total Need (lb)</th><th style="text-align:right;">Green to Pull (lb)</th><th style="text-align:right;">Batches</th><th style="text-align:right;">Remainder (lb)</th><th style="text-align:right;">Output (lb)</th><th style="text-align:right;">Surplus (lb)</th><th>Notes</th></tr></thead>
-        <tbody id="roast-print-tbody"><tr><td colspan="11" class="empty">Calculate schedule first.</td></tr></tbody>
+        <thead><tr><th>#</th><th>Roast</th><th style="text-align:right;">Total Need (lb)</th><th style="text-align:right;">Water Loss %</th><th style="text-align:right;">On Hand (lb)</th><th style="text-align:right;">Green to Pull (lb)</th><th style="text-align:right;">Batches</th><th>Notes</th><th style="text-align:right;">Output (lb)</th><th style="text-align:right;">Surplus (lb)</th></tr></thead>
+        <tbody id="roast-print-tbody"><tr><td colspan="10" class="empty">Calculate schedule first.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -716,6 +720,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 
     <div id="review-groups"><div class="checklist-empty">Nothing on the list yet.</div></div>
 
+    <button class="btn btn-danger" id="clear-all-btn" style="display:none;width:100%;margin-bottom:10px;" onclick="clearAllListItems()">Clear All — Start Over</button>
     <button class="btn btn-primary" id="finalize-list-btn" style="display:none;width:100%;" onclick="finalizeWeeklyList()">Finalize for the Week</button>
   </div>
 
@@ -876,7 +881,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-07c — Supplies Review List view (copy/print/finalize)');
+console.log('Conduit Ops build: 2026-09-07d — Polish batch: coffee sort order everywhere, roasting sheet rework, Clear All');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -1270,6 +1275,13 @@ function renderOrdersTable() {
     if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
     groups[key].push(o);
   });
+  // Coffees always follow the catalog's Sort Order within each customer's lines.
+  Object.keys(groups).forEach(function(key) {
+    groups[key].sort(function(a,b) {
+      var coffeeA = getCoffee(a.coffee_sku), coffeeB = getCoffee(b.coffee_sku);
+      return (coffeeA ? (coffeeA.sort_order||99) : 99) - (coffeeB ? (coffeeB.sort_order||99) : 99);
+    });
+  });
 
   var html = '';
   groupOrder.forEach(function(customerName) {
@@ -1442,6 +1454,13 @@ function renderOrderCardsMobile() {
     var key = o.customer_name;
     if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
     groups[key].push(o);
+  });
+  // Coffees always follow the catalog's Sort Order within each customer's lines.
+  Object.keys(groups).forEach(function(key) {
+    groups[key].sort(function(a,b) {
+      var coffeeA = getCoffee(a.coffee_sku), coffeeB = getCoffee(b.coffee_sku);
+      return (coffeeA ? (coffeeA.sort_order||99) : 99) - (coffeeB ? (coffeeB.sort_order||99) : 99);
+    });
   });
 
   var html = '';
@@ -1776,6 +1795,12 @@ async function generateSchedule() {
       estOutput:estOutput, surplus:surplus, childSkus:childSkus, children:children});
   });
 
+  // Coffees always follow the catalog's Sort Order — this feeds the roast table,
+  // the roasting/green-pull/bagging print sheets, and the CSV export, all at once.
+  rows.sort(function(a,b) {
+    return (getCoffee(a.sku).sort_order||99) - (getCoffee(b.sku).sort_order||99);
+  });
+
   roastSchedule = rows;
 
   var tbody = document.getElementById('roast-tbody');
@@ -1937,21 +1962,19 @@ function buildPrintSheets(rows, originTotals) {
   document.getElementById('roast-sheet-meta').textContent = metaStr;
   document.getElementById('roast-sheet-batches').textContent = totBatches;
   document.getElementById('roast-print-tbody').innerHTML = rows.map(function(r,i) {
-    var childStr = r.childSkus.length ? r.childSkus.join(', ') : '-';
     var bg = i%2===0 ? 'background:var(--paper2);' : '';
     var surplusStr = r.surplus>0 ? '+'+r.surplus.toFixed(2) : '-';
     return '<tr style="'+bg+'">' +
       '<td class="mono" style="color:var(--ink3);">'+(i+1)+'</td>' +
       '<td style="font-weight:700;">'+r.name+'</td>' +
-      '<td><span class="sku">'+r.sku+'</span></td>' +
-      '<td style="font-size:12px;color:var(--ink3);">'+childStr+'</td>' +
       '<td class="num mono">'+r.totalLbs.toFixed(2)+'</td>' +
+      '<td class="num mono">'+(r.wl*100).toFixed(1)+'%</td>' +
+      '<td class="num mono">'+r.onHand.toFixed(1)+'</td>' +
       '<td class="num mono" style="font-weight:700;">'+r.actualGreen.toFixed(0)+'</td>' +
       '<td class="num mono" style="font-size:16px;font-weight:700;">'+r.fullBatches+'</td>' +
-      '<td class="num mono">'+(r.remainder>0.05?r.remainder.toFixed(2):'-')+'</td>' +
+      '<td style="min-width:130px;"></td>' +
       '<td class="num mono">'+r.estOutput.toFixed(2)+'</td>' +
       '<td class="num mono">'+surplusStr+'</td>' +
-      '<td style="min-width:80px;"></td>' +
       '</tr>';
   }).join('');
 
@@ -1998,10 +2021,13 @@ function buildPrintSheets(rows, originTotals) {
 
   grindTasks.sort(function(a,b){
     if (a.customer !== b.customer) return a.customer.localeCompare(b.customer);
-    return a.name.localeCompare(b.name);
+    return (getCoffee(a.sku).sort_order||99) - (getCoffee(b.sku).sort_order||99);
   });
 
   var bagRows = Object.values(bagAgg);
+  bagRows.sort(function(a,b) {
+    return (getCoffee(a.sku).sort_order||99) - (getCoffee(b.sku).sort_order||99);
+  });
   var grandTotal = 0;
   var colTotals = {};
   SIZE_COL.forEach(function(s){ colTotals[s]=0; });
@@ -2090,6 +2116,13 @@ function buildPrintSheets(rows, originTotals) {
     var key = o.customer_name;
     if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
     groups[key].push(o);
+  });
+  // Coffees always follow the catalog's Sort Order within each customer's lines.
+  Object.keys(groups).forEach(function(key) {
+    groups[key].sort(function(a,b) {
+      var coffeeA = getCoffee(a.coffee_sku), coffeeB = getCoffee(b.coffee_sku);
+      return (coffeeA ? (coffeeA.sort_order||99) : 99) - (coffeeB ? (coffeeB.sort_order||99) : 99);
+    });
   });
 
   var fulfillHtml = groupOrder.map(function(customerName) {
@@ -2687,6 +2720,7 @@ var CATEGORY_LABELS = {syrups:'Syrups',dairy:'Dairy',dry_goods:'Dry Goods',meats
 async function loadSupplies() {
   var isSuppliesManager = currentProfile && ['owner','manager'].includes(currentProfile.role);
   document.getElementById('finalize-list-btn').style.display = isSuppliesManager ? 'block' : 'none';
+  document.getElementById('clear-all-btn').style.display = isSuppliesManager ? 'block' : 'none';
   document.getElementById('supply-manager-actions').style.display = isSuppliesManager ? 'flex' : 'none';
   document.getElementById('supply-manager-actions-2').style.display = isSuppliesManager ? 'flex' : 'none';
   document.getElementById('btn-view-manage').style.display = isSuppliesManager ? 'inline-block' : 'none';
@@ -3066,6 +3100,17 @@ async function finalizeWeeklyList() {
     toast('List finalized · new list started','success');
     await loadSupplies();
   } catch(e) { toast('Error finalizing list: '+e.message,'error'); }
+}
+
+async function clearAllListItems() {
+  if (!weeklyList.length) { toast('List is already empty','info'); return; }
+  if (!confirm('Clear the ENTIRE list? This removes all '+weeklyList.length+' item(s), including sticky ones, with no archive. This cannot be undone.')) return;
+  try {
+    var ids = weeklyList.map(function(w){return w.id;});
+    await dbFetch('supply_list_items?id=in.('+ids.join(',')+')', {method:'DELETE', prefer:'return=minimal'});
+    toast('List cleared','success');
+    await loadSupplies();
+  } catch(e) { toast('Error clearing list: '+e.message,'error'); }
 }
 
 var supplyModalRowCount = 0;
