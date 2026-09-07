@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-07 — CSV import hidden until "+Add Order" is opened; roasting "on hand" now persists per cycle (was lost on refresh); theme shifted from tan to light blue
   2026-09-07 — Polish batch: coffees now always follow catalog Sort Order everywhere (roast schedule, both fulfillment sheets, Orders tab, bagging grid); roasting sheet columns reworked (removed Base SKU/Also Bags As/Remainder, added Water Loss %/On Hand, moved Notes after Batches, larger print font); added Clear All to Supplies Review List
   2026-09-07 — Supplies: added visible list counter, made category/vendor editable in Manage Catalog, shrunk mobile checklist rows, shrunk fulfillment print sheet fonts
   2026-09-02 — Supplies rebuilt as two views (Build List checklist + Manage Catalog); fixed mobile cycle-bar overflow (Add Order/Fulfillment wrapping)
@@ -21,12 +22,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --ink:#1c1714;--ink2:#3a2e28;--ink3:#6b5a50;
-  --paper:#faf6f0;--paper2:#f2ebe0;--paper3:#e8ddd0;
-  --rule:rgba(90,60,30,0.14);--rule2:rgba(90,60,30,0.26);
+  --ink:#16212e;--ink2:#2c3e50;--ink3:#5a6b7d;
+  --paper:#f2f6fb;--paper2:#e6edf7;--paper3:#d6e3f2;
+  --rule:rgba(30,70,140,0.13);--rule2:rgba(30,70,140,0.24);
   --blue:#2121d4;--blue2:#3535e8;--blue3:#5858f0;
   --gold:#e8c830;--green:#1a5e2e;--green2:#2a8042;
-  --radius:6px;--shadow:0 1px 3px rgba(28,23,20,0.08),0 4px 12px rgba(28,23,20,0.05);
+  --radius:6px;--shadow:0 1px 3px rgba(22,33,46,0.08),0 4px 12px rgba(22,33,46,0.05);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--paper);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;}
@@ -379,7 +380,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <div class="stat"><div class="stat-label">Lbs Needed</div><div class="stat-value" id="stat-lbs">0</div></div>
     <div class="stat"><div class="stat-label">Ship / Pickup</div><div class="stat-value" id="stat-ship">-</div></div>
   </div>
-  <div class="card" id="csv-card">
+  <div class="card" id="csv-card" style="display:none;">
     <div class="card-title">Shopify CSV Import</div>
     <div class="upload-zone" onclick="document.getElementById('csv-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
       <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSV(this.files[0])">
@@ -881,7 +882,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-07d — Polish batch: coffee sort order everywhere, roasting sheet rework, Clear All');
+console.log('Conduit Ops build: 2026-09-07e — CSV import hidden on default, on-hand persists per cycle, light blue theme');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -1051,7 +1052,6 @@ async function initApp(user) {
   document.querySelector('[data-tab="catalog"]').classList.toggle('hidden',!isRoastingStaff);
   document.getElementById('btn-new-cycle').style.display = isRoastingStaff ? 'block' : 'none';
   document.getElementById('btn-add-order').style.display = isRoastingStaff ? 'inline-block' : 'none';
-  document.getElementById('csv-card').style.display = isRoastingStaff ? 'block' : 'none';
 
   currentProfile = {role: role, full_name: fullName};
   sb.from('profiles').select('*').eq('id', user.id).single().then(function(res) {
@@ -1140,6 +1140,7 @@ async function loadCycles() {
   currentCycleId = openCycle.id;
   sel.value = currentCycleId;
   document.getElementById('cycle-pill').textContent = openCycle.name;
+  loadOnHandFromCycle(openCycle);
   updateRoastersChoiceSelector();
 }
 
@@ -1242,7 +1243,7 @@ function onCycleChange() {
   currentCycleId = sel.value;
   const c = cycles.find(c => c.id===currentCycleId);
   if (c) document.getElementById('cycle-pill').textContent = c.name;
-  roastOverrides = {}; // reset per-session overrides for new cycle
+  loadOnHandFromCycle(c); // on-hand is per-cycle — loads saved values, or empty for a fresh cycle
   updateRoastersChoiceSelector();
   loadOrders();
 }
@@ -1526,6 +1527,7 @@ function toggleAddOrder() {
   var c = document.getElementById('add-order-card');
   var showing = c.style.display !== 'none';
   c.style.display = showing ? 'none' : 'block';
+  document.getElementById('csv-card').style.display = showing ? 'none' : 'block';
   if (!showing) { lineItemCount=0; document.getElementById('line-items-container').innerHTML=''; addLineItem(); }
 }
 
@@ -1948,6 +1950,26 @@ function setRoastOverride(sku, field, value) {
   if (!roastOverrides[sku]) roastOverrides[sku] = {};
   roastOverrides[sku][field] = value;
   generateSchedule(); // recalculate live
+  if (field === 'onHand') saveOnHandOverride(sku, value);
+}
+
+async function saveOnHandOverride(sku, value) {
+  if (!currentCycleId) return;
+  var cycle = cycles.find(function(c){return c.id===currentCycleId;});
+  var stored = Object.assign({}, (cycle && cycle.roast_on_hand) || {});
+  stored[sku] = value;
+  if (cycle) cycle.roast_on_hand = stored; // keep local cache in sync so switching cycles and back still shows it
+  try {
+    await dbFetch('cycles?id=eq.'+currentCycleId, {method:'PATCH', body:{roast_on_hand: stored}, prefer:'return=minimal'});
+  } catch(e) { toast('Error saving on-hand amount','error'); }
+}
+
+function loadOnHandFromCycle(cycle) {
+  roastOverrides = {};
+  var stored = (cycle && cycle.roast_on_hand) || {};
+  Object.keys(stored).forEach(function(sku) {
+    roastOverrides[sku] = {onHand: stored[sku]};
+  });
 }
 
 // ── PRINT SHEETS ──
