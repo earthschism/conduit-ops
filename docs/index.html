@@ -1,5 +1,7 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-08 — Moved On Hand column next to Total Need in the editable Roast Schedule table
+  2026-09-08 — Categories in Supplies are now freeform text with autocomplete (was a fixed list of 7 that silently dumped anything unmatched, like "Baking," into Other) — applies to CSV import, multi-add, Manage Catalog inline edit, and category filter; old slug-based categories still display correctly and merge with matching freeform ones
   2026-09-08 — FIXED REAL BUG: role/name now read from profiles table at login instead of stale session metadata that never updated when Admin changed a role (this is why Ritsie stayed stuck on Supplies-only after being made manager — sign-out/back-in never actually fixed it, since metadata was never touched)
   2026-09-07 — CSV import hidden until "+Add Order" is opened; roasting "on hand" now persists per cycle (was lost on refresh); theme shifted from tan to light blue
   2026-09-07 — Polish batch: coffees now always follow catalog Sort Order everywhere (roast schedule, both fulfillment sheets, Orders tab, bagging grid); roasting sheet columns reworked (removed Base SKU/Also Bags As/Remainder, added Water Loss %/On Hand, moved Notes after Batches, larger print font); added Clear All to Supplies Review List
@@ -17,7 +19,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-09-07T22:37:44.155Z">
+<meta name="app-version" content="2026-09-07T22:55:27.407Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -472,9 +474,9 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
             <th>Roast</th>
             <th>Base SKU</th>
             <th style="text-align:right;">Total Need (lb)</th>
+            <th style="text-align:right;">On Hand (lb)</th>
             <th style="text-align:right;">Water Loss %</th>
             <th style="text-align:right;">Batches</th>
-            <th style="text-align:right;">On Hand (lb)</th>
             <th style="text-align:right;">Output (lb)</th>
             <th style="text-align:right;">Surplus (lb)</th>
             <th>Notes</th>
@@ -742,14 +744,8 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
         <div class="form-group"><label>Category</label>
           <select id="supply-category-filter" onchange="renderSupplyCatalog()">
             <option value="">All categories</option>
-            <option value="syrups">Syrups</option>
-            <option value="dairy">Dairy</option>
-            <option value="dry_goods">Dry Goods</option>
-            <option value="meats">Meats</option>
-            <option value="paper_goods">Paper Goods</option>
-            <option value="produce">Produce</option>
-            <option value="other">Other</option>
           </select>
+          <datalist id="category-datalist"></datalist>
         </div>
       </div>
       <div class="tbl-wrap">
@@ -883,7 +879,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-08 — FIX: role/name read from profiles table, not stale session metadata');
+console.log('Conduit Ops build: 2026-09-08c — On Hand column moved next to Total Need');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -1806,9 +1802,9 @@ async function generateSchedule() {
       '<td><div style="font-weight:700;">'+r.name+'</div></td>' +
       '<td><span class="sku">'+r.sku+'</span></td>' +
       '<td class="num mono">'+r.totalLbs.toFixed(2)+'</td>' +
+      '<td class="num"><input type="number" min="0" step="0.1" value="'+r.onHand.toFixed(1)+'" title="Lbs on hand" style="'+editStyle+'" onchange="setRoastOverride(\''+r.sku+'\',\'onHand\',parseFloat(this.value)||0)"></td>' +
       '<td class="num"><input type="number" min="1" max="30" step="0.5" value="'+(r.wl*100).toFixed(1)+'" title="Water loss %" style="'+editStyle+'width:58px;" onchange="setRoastOverride(\''+r.sku+'\',\'waterLoss\',parseFloat(this.value)/100)"><span style="font-size:11px;color:var(--ink3);">%</span></td>' +
       '<td class="num mono" style="font-weight:700;font-size:18px;">'+r.fullBatches+'</td>' +
-      '<td class="num"><input type="number" min="0" step="0.1" value="'+r.onHand.toFixed(1)+'" title="Lbs on hand" style="'+editStyle+'" onchange="setRoastOverride(\''+r.sku+'\',\'onHand\',parseFloat(this.value)||0)"></td>' +
       '<td class="num mono">'+r.estOutput.toFixed(2)+'</td>' +
       '<td class="num mono" style="font-weight:600;color:'+surplusColor+';">'+surplusStr+'</td>' +
       '<td><input type="text" placeholder="notes..." style="border:none;background:transparent;font-size:12px;color:var(--ink3);width:100%;padding:2px 4px;"></td>' +
@@ -2724,7 +2720,38 @@ async function updateCoffeeField(sku, field, value) {
 var supplyItems = [];
 var weeklyList = [];
 var _noteSaveTimer = null;
-var CATEGORY_LABELS = {syrups:'Syrups',dairy:'Dairy',dry_goods:'Dry Goods',meats:'Meats',paper_goods:'Paper Goods',produce:'Produce',other:'Other'};
+var CATEGORY_LABELS = {syrups:'Syrups',dairy:'Dairy',dry_goods:'Dry Goods',meats:'Meats',paper_goods:'Paper Goods',produce:'Produce',other:'Other'}; // legacy slugs from before categories were freeform — still displayed correctly for old items
+
+function displayCategory(cat) {
+  return CATEGORY_LABELS[cat] || cat || 'Other';
+}
+
+function knownCategories() {
+  var set = {};
+  supplyItems.forEach(function(it) { set[displayCategory(it.category)] = true; });
+  var list = Object.keys(set);
+  list.sort(function(a,b) {
+    if (a==='Other') return 1;
+    if (b==='Other') return -1;
+    return a.localeCompare(b);
+  });
+  return list;
+}
+
+function refreshCategoryDatalist() {
+  var dl = document.getElementById('category-datalist');
+  if (!dl) return;
+  dl.innerHTML = knownCategories().map(function(c){ return '<option value="'+escHtml(c)+'">'; }).join('');
+}
+
+function refreshCategoryFilterOptions() {
+  var sel = document.getElementById('supply-category-filter');
+  if (!sel) return;
+  var current = sel.value;
+  var cats = knownCategories();
+  sel.innerHTML = '<option value="">All categories</option>' + cats.map(function(c){ return '<option value="'+escHtml(c)+'">'+escHtml(c)+'</option>'; }).join('');
+  if (cats.indexOf(current) > -1) sel.value = current;
+}
 
 async function loadSupplies() {
   var isSuppliesManager = currentProfile && ['owner','manager'].includes(currentProfile.role);
@@ -2736,6 +2763,8 @@ async function loadSupplies() {
   if (!isSuppliesManager) { document.getElementById('supply-csv-card').style.display = 'none'; if (document.getElementById('supplies-view-manage').style.display !== 'none') switchSuppliesView('build'); }
   try { supplyItems = await dbFetch('supply_items?select=*&active=eq.true&order=name'); } catch(e) { supplyItems = []; console.log('loadSupplies items error:', e); }
   try { weeklyList = await dbFetch('supply_list_items?select=*&list_status=eq.open&order=created_at'); } catch(e) { weeklyList = []; console.log('loadSupplies list error:', e); }
+  refreshCategoryDatalist();
+  refreshCategoryFilterOptions();
   renderSupplyCatalog();
   renderChecklist();
   renderReviewList();
@@ -2776,22 +2805,25 @@ function renderChecklist() {
     return;
   }
 
-  // group by category, then vendor within category
+  // group by category (normalized so old slugs and new freeform names merge), then vendor within category
   var byCategory = {};
   items.forEach(function(it) {
-    var cat = it.category || 'other';
+    var cat = displayCategory(it.category);
     byCategory[cat] = byCategory[cat] || {};
     var ven = it.vendor || 'No vendor set';
     byCategory[cat][ven] = byCategory[cat][ven] || [];
     byCategory[cat][ven].push(it);
   });
 
-  var catOrder = Object.keys(CATEGORY_LABELS).filter(function(c){ return byCategory[c]; });
-  Object.keys(byCategory).forEach(function(c){ if (catOrder.indexOf(c) === -1) catOrder.push(c); });
+  var catOrder = Object.keys(byCategory).sort(function(a,b) {
+    if (a==='Other') return 1;
+    if (b==='Other') return -1;
+    return a.localeCompare(b);
+  });
 
   var html = '';
   catOrder.forEach(function(cat) {
-    html += '<div class="checklist-category">' + (CATEGORY_LABELS[cat]||cat) + '</div>';
+    html += '<div class="checklist-category">' + escHtml(cat) + '</div>';
     html += '<div class="checklist-card">';
     var vendors = Object.keys(byCategory[cat]).sort();
     vendors.forEach(function(ven, vi) {
@@ -2906,21 +2938,24 @@ function renderReviewList() {
   // on-screen grouping stays category > vendor, same as Build List, for consistency.
   var byCategory = {};
   weeklyList.forEach(function(w) {
-    var cat = w.item_id ? (w.category || 'other') : 'adhoc';
+    var cat = w.item_id ? displayCategory(w.category) : 'Added This Week';
     byCategory[cat] = byCategory[cat] || {};
     var ven = w.vendor || 'No vendor set';
     byCategory[cat][ven] = byCategory[cat][ven] || [];
     byCategory[cat][ven].push(w);
   });
 
-  var catOrder = Object.keys(CATEGORY_LABELS).filter(function(c){ return byCategory[c]; });
-  Object.keys(byCategory).forEach(function(c){ if (c!=='adhoc' && catOrder.indexOf(c) === -1) catOrder.push(c); });
-  if (byCategory['adhoc']) catOrder.push('adhoc');
+  var catOrder = Object.keys(byCategory).filter(function(c){ return c !== 'Added This Week'; }).sort(function(a,b) {
+    if (a==='Other') return 1;
+    if (b==='Other') return -1;
+    return a.localeCompare(b);
+  });
+  if (byCategory['Added This Week']) catOrder.push('Added This Week');
 
   var seenVendorCopyBtn = {};
   var html = '';
   catOrder.forEach(function(cat) {
-    html += '<div class="checklist-category">' + (cat==='adhoc' ? 'Added This Week' : (CATEGORY_LABELS[cat]||cat)) + '</div>';
+    html += '<div class="checklist-category">' + escHtml(cat) + '</div>';
     html += '<div class="checklist-card">';
     var vendors = Object.keys(byCategory[cat]).sort();
     vendors.forEach(function(ven) {
@@ -3000,7 +3035,7 @@ function renderSupplyCatalog() {
   var cat = document.getElementById('supply-category-filter').value;
   var isSuppliesManager = currentProfile && ['owner','manager'].includes(currentProfile.role);
   var filtered = supplyItems.filter(function(it) {
-    if (cat && it.category !== cat) return false;
+    if (cat && displayCategory(it.category) !== cat) return false;
     if (search && it.name.toLowerCase().indexOf(search) === -1) return false;
     return true;
   });
@@ -3017,10 +3052,8 @@ function renderSupplyCatalog() {
     var need = (it.par_level!=null) ? Math.max(0, (it.par_level||0) - (it.on_hand||0)) : null;
     var needCell = need!=null ? (need>0 ? '<span class="badge badge-gold">'+need+'</span>' : '<span class="badge badge-green">0</span>') : '-';
     var categoryCell = isSuppliesManager
-      ? '<select style="width:120px;font-size:12px;" onchange="updateItemCategory(\''+it.id+'\',this.value)">' +
-          Object.keys(CATEGORY_LABELS).map(function(k){return '<option value="'+k+'" '+(it.category===k?'selected':'')+'>'+CATEGORY_LABELS[k]+'</option>';}).join('') +
-        '</select>'
-      : '<span class="badge badge-gray">'+(CATEGORY_LABELS[it.category]||it.category)+'</span>';
+      ? '<input type="text" list="category-datalist" value="'+escHtml(displayCategory(it.category))+'" style="width:120px;font-size:12px;" onchange="updateItemCategory(\''+it.id+'\',this.value)">'
+      : '<span class="badge badge-gray">'+escHtml(displayCategory(it.category))+'</span>';
     var vendorCell = isSuppliesManager
       ? '<input type="text" value="'+escHtml(it.vendor||'')+'" style="width:100px;" onchange="updateItemVendor(\''+it.id+'\',this.value)">'
       : escHtml(it.vendor||'-');
@@ -3040,6 +3073,7 @@ function renderSupplyCatalog() {
 }
 
 async function updateItemCategory(id, val) {
+  val = (val||'').trim() || 'Other';
   try { await dbFetch('supply_items?id=eq.'+id, {method:'PATCH', body:{category:val}, prefer:'return=minimal'}); await loadSupplies(); }
   catch(e) { toast('Error updating category','error'); }
 }
@@ -3153,9 +3187,7 @@ function addSupplyModalRow() {
   div.innerHTML =
     '<div class="form-group">'+(id===0?'<label>Name</label>':'')+'<input type="text" id="sr-name-'+id+'" placeholder="e.g. Blueberry Syrup"></div>' +
     '<div class="form-group">'+(id===0?'<label>Code</label>':'')+'<input type="text" id="sr-code-'+id+'" placeholder="optional"></div>' +
-    '<div class="form-group">'+(id===0?'<label>Category</label>':'')+'<select id="sr-category-'+id+'">' +
-      Object.keys(CATEGORY_LABELS).map(function(k){return '<option value="'+k+'">'+CATEGORY_LABELS[k]+'</option>';}).join('') +
-    '</select></div>' +
+    '<div class="form-group">'+(id===0?'<label>Category</label>':'')+'<input type="text" list="category-datalist" id="sr-category-'+id+'" placeholder="e.g. Baking"></div>' +
     '<div class="form-group">'+(id===0?'<label>Vendor</label>':'')+'<input type="text" id="sr-vendor-'+id+'" placeholder="DairyFresh"></div>' +
     '<div class="form-group">'+(id===0?'<label>Unit</label>':'')+'<input type="text" id="sr-unit-'+id+'" placeholder="case, lb…"></div>' +
     '<div class="form-group">'+(id===0?'<label>Sticky</label>':'')+'<input type="checkbox" id="sr-sticky-'+id+'" style="width:auto;accent-color:var(--blue);margin-top:9px;"></div>' +
@@ -3176,7 +3208,7 @@ async function saveSupplyItemsModal() {
     toInsert.push({
       name: name,
       product_code: document.getElementById('sr-code-'+id).value.trim() || null,
-      category: document.getElementById('sr-category-'+id).value,
+      category: document.getElementById('sr-category-'+id).value.trim() || 'Other',
       vendor: document.getElementById('sr-vendor-'+id).value.trim() || null,
       unit: document.getElementById('sr-unit-'+id).value.trim() || null,
       sticky: document.getElementById('sr-sticky-'+id).checked,
@@ -3204,7 +3236,7 @@ function handleSupplyCSVDrop(e) {
 }
 
 function downloadSupplyCSVTemplate() {
-  var csv = 'Name,Code,Category,Vendor,Unit,Sticky\nBlueberry Syrup,SYR-4402,syrups,DairyFresh,bottle,no\nWhole Milk,,dairy,DairyFresh,gallon,yes\n';
+  var csv = 'Name,Code,Category,Vendor,Unit,Sticky\nBlueberry Syrup,SYR-4402,Syrups,DairyFresh,bottle,no\nWhole Milk,,Dairy,DairyFresh,gallon,yes\nFlour,,Baking,Costco,50lb bag,no\n';
   var a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download = 'supply-catalog-template.csv';
@@ -3222,7 +3254,6 @@ async function handleSupplyCSV(file) {
     var C = { name:col('Name'), code:col('Code'), category:col('Category'), vendor:col('Vendor'), unit:col('Unit'), sticky:col('Sticky') };
     if (C.name === -1) { toast('CSV needs a "Name" column','error'); return; }
 
-    var validCategories = Object.keys(CATEGORY_LABELS);
     var existingNames = supplyItems.map(function(i){return i.name.trim().toLowerCase();});
     var toInsert = [], skipped = 0;
 
@@ -3232,8 +3263,7 @@ async function handleSupplyCSV(file) {
       if (!name) continue;
       if (existingNames.indexOf(name.toLowerCase()) > -1) { skipped++; continue; }
       existingNames.push(name.toLowerCase()); // dedupe within the file itself too
-      var cat = (C.category>-1 ? (row[C.category]||'').trim().toLowerCase().replace(/\s+/g,'_') : 'other') || 'other';
-      if (validCategories.indexOf(cat) === -1) cat = 'other';
+      var cat = (C.category>-1 ? (row[C.category]||'').trim() : '') || 'Other';
       var stickyRaw = (C.sticky>-1 ? (row[C.sticky]||'').trim().toLowerCase() : '');
       toInsert.push({
         name: name,
