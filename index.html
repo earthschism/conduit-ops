@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-XX — Supplies: added visible list counter, made category/vendor editable in Manage Catalog, shrunk mobile checklist rows, shrunk fulfillment print sheet fonts
   2026-09-02 — Supplies rebuilt as two views (Build List checklist + Manage Catalog); fixed mobile cycle-bar overflow (Add Order/Fulfillment wrapping)
   2026-09-02 — Added optional product_code column to supply catalog (CSV + multi-add modal + table)
   2026-09-02 — Removed subscriber role; added par_level/on_hand columns + Need column to supply catalog
@@ -240,9 +241,13 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   .upload-zone{padding:18px 14px;}
 
   /* checklist */
-  .checklist-row{padding:16px;gap:10px;}
-  .checklist-row .cl-name{font-size:15px;}
-  .checklist-row input.cl-qty{width:56px;}
+  .checklist-row{padding:10px 12px;gap:8px;}
+  .checklist-row .cl-name{font-size:13px;}
+  .checklist-row .cl-name .cl-need{font-size:10px;}
+  .checklist-row input[type="checkbox"]{width:19px;height:19px;}
+  .checklist-row input.cl-qty{width:46px;padding:6px 3px;font-size:13px;}
+  .checklist-category{font-size:14px;padding:10px 2px 4px;}
+  .checklist-vendor{font-size:10px;padding:6px 2px 3px 4px;}
 
   /* manual entry form - stack all cols */
   .form-row.c2,.form-row.c3,.form-row.c4{grid-template-columns:1fr;}
@@ -674,8 +679,9 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 
   <!-- ── BUILD LIST VIEW (daily use) ── -->
   <div id="supplies-view-build">
-    <div class="card" style="padding:14px 16px;">
-      <input type="text" id="checklist-search" placeholder="Search…" oninput="renderChecklist()" style="margin:0;">
+    <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px;">
+      <input type="text" id="checklist-search" placeholder="Search…" oninput="renderChecklist()" style="margin:0;flex:1;">
+      <div id="checklist-count-badge" style="font-size:13px;font-weight:700;color:var(--blue);white-space:nowrap;">0 on list</div>
     </div>
 
     <div id="checklist-groups"><div class="loading"><div class="spinner"></div></div></div>
@@ -1837,32 +1843,32 @@ function printFulfillmentDirect() {
     var totalBags = lines.reduce(function(s,o){return s+o.qty;},0);
     var lineRows = lines.map(function(o) {
       return '<tr>' +
-        '<td style="padding:9px 12px;font-size:15px;font-weight:600;">'+escHtml(o.coffee_name)+'</td>' +
-        '<td style="padding:9px 12px;"><span class="sku">'+o.coffee_sku+'</span></td>' +
-        '<td style="padding:9px 12px;font-family:\'DM Mono\',monospace;font-size:14px;text-align:center;">'+o.size+'</td>' +
-        '<td style="padding:9px 12px;font-size:14px;color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
-        '<td style="padding:9px 12px;font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;text-align:center;">'+o.qty+'</td>' +
-        '<td style="padding:9px 12px;font-size:12px;color:var(--ink3);font-style:italic;">'+(o.notes||'')+'</td>' +
-        '<td style="padding:9px 12px;text-align:center;font-size:22px;">☐</td>' +
+        '<td style="padding:4px 8px;font-size:11px;font-weight:600;">'+escHtml(o.coffee_name)+'</td>' +
+        '<td style="padding:4px 8px;"><span class="sku">'+o.coffee_sku+'</span></td>' +
+        '<td style="padding:4px 8px;font-family:\'DM Mono\',monospace;font-size:10px;text-align:center;">'+o.size+'</td>' +
+        '<td style="padding:4px 8px;font-size:10px;color:var(--ink3);">'+(GRIND_L[o.grind]||o.grind)+'</td>' +
+        '<td style="padding:4px 8px;font-family:\'DM Mono\',monospace;font-size:13px;font-weight:700;text-align:center;">'+o.qty+'</td>' +
+        '<td style="padding:4px 8px;font-size:9px;color:var(--ink3);font-style:italic;">'+(o.notes||'')+'</td>' +
+        '<td style="padding:4px 8px;text-align:center;font-size:14px;">☐</td>' +
         '</tr>';
     }).join('');
-    return '<div style="margin-bottom:18px;border:2px solid var(--ink);border-radius:6px;overflow:hidden;page-break-inside:avoid;">' +
-      '<div style="background:var(--ink);color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">' +
-        '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;">'+escHtml(customerName)+'</div>' +
-        '<div style="display:flex;gap:20px;align-items:center;">' +
-          '<span style="font-size:13px;opacity:0.7;">'+regionLabel+'</span>' +
-          '<span style="font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;">'+totalBags+' bag'+(totalBags!==1?'s':'')+'</span>' +
+    return '<div style="margin-bottom:8px;border:1.5px solid var(--ink);border-radius:5px;overflow:hidden;page-break-inside:avoid;">' +
+      '<div style="background:var(--ink);color:white;padding:5px 10px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<div style="font-family:\'Libre Baskerville\',serif;font-size:13px;font-weight:700;">'+escHtml(customerName)+'</div>' +
+        '<div style="display:flex;gap:12px;align-items:center;">' +
+          '<span style="font-size:9px;opacity:0.7;">'+regionLabel+'</span>' +
+          '<span style="font-family:\'DM Mono\',monospace;font-size:12px;font-weight:700;">'+totalBags+' bag'+(totalBags!==1?'s':'')+'</span>' +
         '</div>' +
       '</div>' +
       '<table style="width:100%;border-collapse:collapse;">' +
         '<thead><tr style="background:var(--paper2);">' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Coffee</th>' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">SKU</th>' +
-          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Size</th>' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Grind</th>' +
-          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Qty</th>' +
-          '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">Notes</th>' +
-          '<th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);">✓</th>' +
+          '<th style="padding:3px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink3);">Coffee</th>' +
+          '<th style="padding:3px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink3);">SKU</th>' +
+          '<th style="padding:3px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink3);">Size</th>' +
+          '<th style="padding:3px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink3);">Grind</th>' +
+          '<th style="padding:3px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink3);">Qty</th>' +
+          '<th style="padding:3px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink3);">Notes</th>' +
+          '<th style="padding:3px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink3);">✓</th>' +
         '</tr></thead>' +
         '<tbody>'+lineRows+'</tbody>' +
       '</table>' +
@@ -1876,21 +1882,21 @@ function printFulfillmentDirect() {
     '<style>'+
       ':root{--ink:#1c1714;--ink3:#6b5a50;--paper2:#f2ebe0;--rule:rgba(90,60,30,0.14);}'+
       '*{box-sizing:border-box;margin:0;padding:0;}'+
-      'body{font-family:\'DM Sans\',sans-serif;color:var(--ink);padding:24px;background:white;}'+
-      '.sku{font-family:\'DM Mono\',monospace;font-size:11px;color:#2121d4;background:rgba(33,33,212,0.06);padding:2px 7px;border-radius:4px;border:1px solid rgba(33,33,212,0.18);}'+
+      'body{font-family:\'DM Sans\',sans-serif;color:var(--ink);padding:12px;background:white;font-size:12px;}'+
+      '.sku{font-family:\'DM Mono\',monospace;font-size:9px;color:#2121d4;background:rgba(33,33,212,0.06);padding:1px 5px;border-radius:3px;border:1px solid rgba(33,33,212,0.18);}'+
       'table{width:100%;border-collapse:collapse;}'+
       'td{border-bottom:1px solid var(--rule);}'+
       'tr:last-child td{border-bottom:none;}'+
-      '@media print{body{padding:8px;}@page{margin:1cm;}}'+
+      '@media print{body{padding:6px;font-size:11px;}@page{margin:0.6cm;}}'+
     '</style></head><body>'+
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #1c1714;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #1c1714;">'+
       '<div>'+
-        '<div style="font-family:\'Libre Baskerville\',serif;font-size:24px;font-weight:700;">Conduit Coffee — Fulfillment Sheet</div>'+
-        '<div style="font-size:13px;color:var(--ink3);margin-top:4px;font-family:\'DM Mono\',monospace;">'+cycleName+' · '+dateStr+'</div>'+
+        '<div style="font-family:\'Libre Baskerville\',serif;font-size:15px;font-weight:700;">Conduit Coffee — Fulfillment Sheet</div>'+
+        '<div style="font-size:10px;color:var(--ink3);margin-top:2px;font-family:\'DM Mono\',monospace;">'+cycleName+' · '+dateStr+'</div>'+
       '</div>'+
       '<div style="text-align:right;">'+
-        '<div style="font-family:\'DM Mono\',monospace;font-size:28px;font-weight:700;color:#2121d4;">'+orders.reduce(function(s,o){return s+o.qty;},0)+'</div>'+
-        '<div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.06em;">Total Bags</div>'+
+        '<div style="font-family:\'DM Mono\',monospace;font-size:18px;font-weight:700;color:#2121d4;">'+orders.reduce(function(s,o){return s+o.qty;},0)+'</div>'+
+        '<div style="font-size:8px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em;">Total Bags</div>'+
       '</div>'+
     '</div>'+
     fulfillHtml+
@@ -2698,6 +2704,8 @@ function renderChecklist() {
   var search = (document.getElementById('checklist-search').value || '').toLowerCase().trim();
   var listByItem = {}; // item_id -> list row
   weeklyList.forEach(function(w) { if (w.item_id) listByItem[w.item_id] = w; });
+  var countBadge = document.getElementById('checklist-count-badge');
+  if (countBadge) countBadge.textContent = weeklyList.length + (weeklyList.length===1 ? ' item on list' : ' items on list');
 
   var items = supplyItems.filter(function(it) {
     return !search || it.name.toLowerCase().indexOf(search) > -1;
@@ -2829,11 +2837,19 @@ function renderSupplyCatalog() {
     var onHandCell = '<input type="number" value="'+(it.on_hand!=null?it.on_hand:'')+'" style="width:64px;text-align:right;" onchange="updateOnHand(\''+it.id+'\',this.value)">';
     var need = (it.par_level!=null) ? Math.max(0, (it.par_level||0) - (it.on_hand||0)) : null;
     var needCell = need!=null ? (need>0 ? '<span class="badge badge-gold">'+need+'</span>' : '<span class="badge badge-green">0</span>') : '-';
+    var categoryCell = isSuppliesManager
+      ? '<select style="width:120px;font-size:12px;" onchange="updateItemCategory(\''+it.id+'\',this.value)">' +
+          Object.keys(CATEGORY_LABELS).map(function(k){return '<option value="'+k+'" '+(it.category===k?'selected':'')+'>'+CATEGORY_LABELS[k]+'</option>';}).join('') +
+        '</select>'
+      : '<span class="badge badge-gray">'+(CATEGORY_LABELS[it.category]||it.category)+'</span>';
+    var vendorCell = isSuppliesManager
+      ? '<input type="text" value="'+escHtml(it.vendor||'')+'" style="width:100px;" onchange="updateItemVendor(\''+it.id+'\',this.value)">'
+      : escHtml(it.vendor||'-');
     return '<tr>' +
       '<td style="font-weight:600;">'+escHtml(it.name)+'</td>' +
       '<td style="color:var(--ink3);font-size:12px;">'+escHtml(it.product_code||'-')+'</td>' +
-      '<td><span class="badge badge-gray">'+(CATEGORY_LABELS[it.category]||it.category)+'</span></td>' +
-      '<td style="color:var(--ink3);">'+escHtml(it.vendor||'-')+'</td>' +
+      '<td>'+categoryCell+'</td>' +
+      '<td style="color:var(--ink3);">'+vendorCell+'</td>' +
       '<td style="color:var(--ink3);">'+escHtml(it.unit||'-')+'</td>' +
       '<td class="num">'+parCell+'</td>' +
       '<td class="num">'+onHandCell+'</td>' +
@@ -2842,6 +2858,16 @@ function renderSupplyCatalog() {
       '<td><button class="btn btn-ghost btn-sm" onclick="quickAddToList(\''+it.id+'\')">+ Add to list</button></td>' +
       '</tr>';
   }).join('');
+}
+
+async function updateItemCategory(id, val) {
+  try { await dbFetch('supply_items?id=eq.'+id, {method:'PATCH', body:{category:val}, prefer:'return=minimal'}); await loadSupplies(); }
+  catch(e) { toast('Error updating category','error'); }
+}
+
+async function updateItemVendor(id, val) {
+  try { await dbFetch('supply_items?id=eq.'+id, {method:'PATCH', body:{vendor:val.trim()||null}, prefer:'return=minimal'}); await loadSupplies(); }
+  catch(e) { toast('Error updating vendor','error'); }
 }
 
 async function updateParLevel(id, val) {
