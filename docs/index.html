@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-07 — Supplies: added Review List view (copy per-vendor / copy complete list / print, Finalize moved here)
   2026-09-07 — Supplies: added visible list counter, made category/vendor editable in Manage Catalog, shrunk mobile checklist rows, shrunk fulfillment print sheet fonts
   2026-09-02 — Supplies rebuilt as two views (Build List checklist + Manage Catalog); fixed mobile cycle-bar overflow (Add Order/Fulfillment wrapping)
   2026-09-02 — Added optional product_code column to supply catalog (CSV + multi-add modal + table)
@@ -14,7 +15,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-09-07T21:34:51.550Z">
+<meta name="app-version" content="2026-09-07T21:59:37.693Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -673,14 +674,15 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <div><div class="section-title">Café Supplies</div><div class="section-sub" id="supplies-view-sub">Check off what's needed · quantity is optional</div></div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-ghost btn-sm supplies-view-btn active" id="btn-view-build" onclick="switchSuppliesView('build')">Build List</button>
+      <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-view-review" onclick="switchSuppliesView('review')">Review List</button>
       <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-view-manage" onclick="switchSuppliesView('manage')">Manage Catalog</button>
     </div>
   </div>
 
   <!-- ── BUILD LIST VIEW (daily use) ── -->
   <div id="supplies-view-build">
-    <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px;">
-      <input type="text" id="checklist-search" placeholder="Search…" oninput="renderChecklist()" style="margin:0;flex:1;">
+    <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <input type="text" id="checklist-search" placeholder="Search…" oninput="renderChecklist()" style="margin:0;flex:1;min-width:140px;">
       <div id="checklist-count-badge" style="font-size:13px;font-weight:700;color:var(--blue);white-space:nowrap;">0 on list</div>
     </div>
 
@@ -701,6 +703,18 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <textarea id="shopping-note" rows="6" style="width:100%;font-family:'DM Mono',monospace;font-size:13px;line-height:1.6;" oninput="scheduleSaveNote()" placeholder="Anything that comes up — bulk buys, vendor calls, notes for next order…"></textarea>
       <div class="section-sub" id="note-save-status" style="margin-top:6px;">-</div>
     </div>
+  </div>
+
+  <!-- ── REVIEW LIST VIEW (see it all, copy/print, finalize) ── -->
+  <div id="supplies-view-review" style="display:none;">
+    <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div id="review-count-badge" style="font-size:13px;font-weight:700;color:var(--blue);">0 items</div>
+      <div style="flex:1;"></div>
+      <button class="btn btn-ghost btn-sm" onclick="copyCompleteList()">📋 Copy Complete List</button>
+      <button class="btn btn-ghost btn-sm" onclick="printReviewList()">🖨 Print</button>
+    </div>
+
+    <div id="review-groups"><div class="checklist-empty">Nothing on the list yet.</div></div>
 
     <button class="btn btn-primary" id="finalize-list-btn" style="display:none;width:100%;" onclick="finalizeWeeklyList()">Finalize for the Week</button>
   </div>
@@ -862,7 +876,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-07 — Supplies list counter, editable category/vendor, compact mobile checklist, smaller fulfillment print sheet');
+console.log('Conduit Ops build: 2026-09-07c — Supplies Review List view (copy/print/finalize)');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -2676,11 +2690,12 @@ async function loadSupplies() {
   document.getElementById('supply-manager-actions').style.display = isSuppliesManager ? 'flex' : 'none';
   document.getElementById('supply-manager-actions-2').style.display = isSuppliesManager ? 'flex' : 'none';
   document.getElementById('btn-view-manage').style.display = isSuppliesManager ? 'inline-block' : 'none';
-  if (!isSuppliesManager) { document.getElementById('supply-csv-card').style.display = 'none'; switchSuppliesView('build'); }
+  if (!isSuppliesManager) { document.getElementById('supply-csv-card').style.display = 'none'; if (document.getElementById('supplies-view-manage').style.display !== 'none') switchSuppliesView('build'); }
   try { supplyItems = await dbFetch('supply_items?select=*&active=eq.true&order=name'); } catch(e) { supplyItems = []; console.log('loadSupplies items error:', e); }
   try { weeklyList = await dbFetch('supply_list_items?select=*&list_status=eq.open&order=created_at'); } catch(e) { weeklyList = []; console.log('loadSupplies list error:', e); }
   renderSupplyCatalog();
   renderChecklist();
+  renderReviewList();
   try {
     var note = await dbFetch('shared_notes?select=*&id=eq.shopping_list');
     document.getElementById('shopping-note').value = (note && note[0] && note[0].content) || '';
@@ -2689,14 +2704,15 @@ async function loadSupplies() {
 }
 
 function switchSuppliesView(view) {
-  var isBuild = view === 'build';
-  document.getElementById('supplies-view-build').style.display = isBuild ? 'block' : 'none';
-  document.getElementById('supplies-view-manage').style.display = isBuild ? 'none' : 'block';
-  document.getElementById('btn-view-build').classList.toggle('active', isBuild);
-  document.getElementById('btn-view-manage').classList.toggle('active', !isBuild);
-  document.getElementById('supplies-view-sub').textContent = isBuild
-    ? "Check off what's needed · quantity is optional"
-    : 'Par levels, vendor codes, bulk import';
+  document.getElementById('supplies-view-build').style.display = view==='build' ? 'block' : 'none';
+  document.getElementById('supplies-view-review').style.display = view==='review' ? 'block' : 'none';
+  document.getElementById('supplies-view-manage').style.display = view==='manage' ? 'block' : 'none';
+  document.getElementById('btn-view-build').classList.toggle('active', view==='build');
+  document.getElementById('btn-view-review').classList.toggle('active', view==='review');
+  document.getElementById('btn-view-manage').classList.toggle('active', view==='manage');
+  var subText = {build:"Check off what's needed · quantity is optional", review:'See everything on the list, copy or print it, then finalize', manage:'Par levels, vendor codes, bulk import'};
+  document.getElementById('supplies-view-sub').textContent = subText[view];
+  if (view === 'review') renderReviewList();
 }
 
 // ── CHECKLIST (Build List view) ──
@@ -2712,7 +2728,10 @@ function renderChecklist() {
   });
 
   var container = document.getElementById('checklist-groups');
-  if (!items.length) { container.innerHTML = '<div class="checklist-empty">No matching items.</div>'; return; }
+  if (!items.length) {
+    container.innerHTML = '<div class="checklist-empty">No matching items.</div>';
+    return;
+  }
 
   // group by category, then vendor within category
   var byCategory = {};
@@ -2814,6 +2833,123 @@ async function updateChecklistQty(itemId, val, existingListId) {
 async function removeAdHocListItem(id) {
   try { await dbFetch('supply_list_items?id=eq.'+id, {method:'DELETE', prefer:'return=minimal'}); await loadSupplies(); }
   catch(e) { toast('Error removing item','error'); }
+}
+
+// ── REVIEW LIST (see everything, copy/print, finalize) ──
+function itemLine(w) {
+  var name = w.custom_name || (supplyItems.find(function(i){return i.id===w.item_id;}) || {}).name || '(unknown item)';
+  var qty = (w.qty||'').toString().trim();
+  var unit = (w.unit||'').trim();
+  return '- ' + name + (qty ? ': ' + qty + (unit ? ' ' + unit : '') : '');
+}
+
+function groupListByVendor() {
+  var byVendor = {};
+  weeklyList.forEach(function(w) {
+    var ven = w.vendor || 'No vendor set';
+    byVendor[ven] = byVendor[ven] || [];
+    byVendor[ven].push(w);
+  });
+  return byVendor;
+}
+
+function renderReviewList() {
+  var countBadge = document.getElementById('review-count-badge');
+  if (countBadge) countBadge.textContent = weeklyList.length + (weeklyList.length===1 ? ' item' : ' items');
+
+  var container = document.getElementById('review-groups');
+  if (!weeklyList.length) { container.innerHTML = '<div class="checklist-empty">Nothing on the list yet — check items off in Build List.</div>'; return; }
+
+  // on-screen grouping stays category > vendor, same as Build List, for consistency.
+  var byCategory = {};
+  weeklyList.forEach(function(w) {
+    var cat = w.item_id ? (w.category || 'other') : 'adhoc';
+    byCategory[cat] = byCategory[cat] || {};
+    var ven = w.vendor || 'No vendor set';
+    byCategory[cat][ven] = byCategory[cat][ven] || [];
+    byCategory[cat][ven].push(w);
+  });
+
+  var catOrder = Object.keys(CATEGORY_LABELS).filter(function(c){ return byCategory[c]; });
+  Object.keys(byCategory).forEach(function(c){ if (c!=='adhoc' && catOrder.indexOf(c) === -1) catOrder.push(c); });
+  if (byCategory['adhoc']) catOrder.push('adhoc');
+
+  var seenVendorCopyBtn = {};
+  var html = '';
+  catOrder.forEach(function(cat) {
+    html += '<div class="checklist-category">' + (cat==='adhoc' ? 'Added This Week' : (CATEGORY_LABELS[cat]||cat)) + '</div>';
+    html += '<div class="checklist-card">';
+    var vendors = Object.keys(byCategory[cat]).sort();
+    vendors.forEach(function(ven) {
+      var showCopyBtn = !seenVendorCopyBtn[ven] && ven !== 'No vendor set';
+      seenVendorCopyBtn[ven] = true;
+      html += '<div class="checklist-vendor" style="display:flex;align-items:center;justify-content:space-between;">' +
+        '<span>'+escHtml(ven)+'</span>' +
+        (showCopyBtn ? '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="copyVendorList('+JSON.stringify(ven)+')">Copy</button>' : '') +
+        '</div>';
+      byCategory[cat][ven].forEach(function(w) {
+        var name = w.custom_name || (supplyItems.find(function(i){return i.id===w.item_id;}) || {}).name || '(unknown item)';
+        var qty = (w.qty||'').toString().trim();
+        html += '<div class="checklist-row">' +
+          '<span class="cl-name">'+escHtml(name)+'</span>' +
+          '<span style="font-size:13px;color:var(--ink3);min-width:60px;text-align:right;">'+(qty ? escHtml(qty)+(w.unit?' '+escHtml(w.unit):'') : '—')+'</span>' +
+          '</div>';
+      });
+    });
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function copyVendorList(vendorName) {
+  var lines = weeklyList.filter(function(w){ return (w.vendor||'No vendor set') === vendorName; }).map(itemLine);
+  var text = vendorName + '\n' + lines.join('\n');
+  navigator.clipboard.writeText(text).then(function() {
+    toast('Copied '+vendorName+'\'s list','success');
+  }).catch(function() { toast('Could not copy — try selecting the text manually','error'); });
+}
+
+function copyCompleteList() {
+  if (!weeklyList.length) { toast('List is empty','warn'); return; }
+  var byVendor = groupListByVendor();
+  var vendors = Object.keys(byVendor).sort(function(a,b){ return a==='No vendor set' ? 1 : b==='No vendor set' ? -1 : a.localeCompare(b); });
+  var text = vendors.map(function(ven) {
+    return ven + '\n' + byVendor[ven].map(itemLine).join('\n');
+  }).join('\n\n');
+  navigator.clipboard.writeText(text).then(function() {
+    toast('Complete list copied','success');
+  }).catch(function() { toast('Could not copy — try selecting the text manually','error'); });
+}
+
+function printReviewList() {
+  if (!weeklyList.length) { toast('List is empty','warn'); return; }
+  var byVendor = groupListByVendor();
+  var vendors = Object.keys(byVendor).sort(function(a,b){ return a==='No vendor set' ? 1 : b==='No vendor set' ? -1 : a.localeCompare(b); });
+  var bodyHtml = vendors.map(function(ven) {
+    var rows = byVendor[ven].map(function(w) {
+      var name = w.custom_name || (supplyItems.find(function(i){return i.id===w.item_id;}) || {}).name || '(unknown item)';
+      var qty = (w.qty||'').toString().trim();
+      return '<tr><td style="padding:6px 10px;border-bottom:1px solid #e8ddd0;">'+escHtml(name)+'</td>'+
+        '<td style="padding:6px 10px;border-bottom:1px solid #e8ddd0;text-align:right;">'+(qty ? escHtml(qty)+(w.unit?' '+escHtml(w.unit):'') : '—')+'</td>'+
+        '<td style="padding:6px 10px;border-bottom:1px solid #e8ddd0;text-align:center;width:24px;">☐</td></tr>';
+    }).join('');
+    return '<div style="margin-bottom:16px;page-break-inside:avoid;">'+
+      '<div style="font-family:\'Libre Baskerville\',serif;font-size:15px;font-weight:700;background:#1c1714;color:white;padding:6px 10px;">'+escHtml(ven)+'</div>'+
+      '<table style="width:100%;border-collapse:collapse;">'+rows+'</table>'+
+    '</div>';
+  }).join('');
+
+  var win = window.open('', '_blank', 'width=800,height=700');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@700&family=DM+Sans:wght@400;600&display=swap" rel="stylesheet">'+
+    '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:\'DM Sans\',sans-serif;color:#1c1714;padding:20px;}'+
+    '@media print{body{padding:8px;}@page{margin:1cm;}}</style></head><body>'+
+    '<div style="font-family:\'Libre Baskerville\',serif;font-size:18px;font-weight:700;margin-bottom:14px;">Shopping List — '+new Date().toLocaleDateString()+'</div>'+
+    bodyHtml+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>');
+  win.document.close();
 }
 
 function renderSupplyCatalog() {
