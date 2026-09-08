@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-09 — FIXED: auto-rollover for next week's cycle moved from Monday 5pm to Wednesday noon Pacific, and no longer hijacks your active view — it creates the new cycle in the background only, and the app now remembers whichever cycle you were last viewing (via localStorage) across refreshes and logins instead of always jumping to the newest one
   2026-09-08 — Review List now has a By Category / By Vendor toggle — By Vendor pulls every item that vendor supplies together regardless of category, for when you're actually placing orders
   2026-09-08 — Added Master Update (owner only): upload a master spreadsheet to sync the whole catalog by name — updates Category/Vendor/Unit/Code on matches, adds new items, deactivates anything missing from the sheet (never deletes, never touches par/on-hand/sticky). Shows a full preview before anything is committed.
   2026-09-08 — Item name is now editable inline in Manage Catalog (re-uploading a spreadsheet with different capitalization would only skip the "duplicate," never update it — this gives a direct way to fix names)
@@ -895,7 +896,7 @@ function isCycleClosed() {
   const pacific = getPacificNow();
   const dayOfWeek = pacific.getDay();
   const hours = pacific.getHours();
-  return (dayOfWeek === 1 && hours >= 17);
+  return (dayOfWeek === 3 && hours >= 12); // Wednesday, noon Pacific
 }
 
 function getNextMondayDate() {
@@ -908,7 +909,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-08g — Review List By Category/By Vendor toggle added');
+console.log('Conduit Ops build: 2026-09-09 — Cycle rollover moved to Wed noon, remembers last-viewed cycle');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -1120,6 +1121,8 @@ function coffeeOpts(filter) {
 }
 
 // ── CYCLES ──
+var LAST_CYCLE_KEY = 'conduit_last_cycle_id';
+
 async function loadCycles() {
   try { var data = await dbFetch('cycles?select=*&order=created_at.desc'); cycles = data || []; }
   catch(e) { cycles = []; }
@@ -1134,9 +1137,10 @@ async function loadCycles() {
     const nextName = 'Week of ' + nextMon.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     const alreadyExists = cycles.some(function(c){ return c.name === nextName; });
     if (!alreadyExists) {
-      toast("Cycle cutoff passed - creating next week's cycle...", 'info');
-      await _doCreateCycle(nextName);
-      return;
+      toast("Cycle cutoff passed - creating next week's cycle in the background...", 'info');
+      await _silentCreateCycle(nextName);
+      // Falls through — the new cycle now exists and is selectable, but whichever
+      // cycle you were actually viewing (see below) stays the active one.
     }
   }
 
@@ -1147,13 +1151,28 @@ async function loadCycles() {
     sel.appendChild(o);
   });
 
-  // Pick the most recent open cycle (first in list since sorted desc)
-  const openCycle = cycles.find(function(c){ return c.status !== 'closed'; }) || cycles[0];
+  // Prefer whichever cycle you were last viewing, if it still exists — otherwise
+  // fall back to the most recent non-closed cycle.
+  var rememberedId = localStorage.getItem(LAST_CYCLE_KEY);
+  var remembered = rememberedId ? cycles.find(function(c){ return c.id === rememberedId; }) : null;
+  const openCycle = remembered || cycles.find(function(c){ return c.status !== 'closed'; }) || cycles[0];
   currentCycleId = openCycle.id;
   sel.value = currentCycleId;
   document.getElementById('cycle-pill').textContent = openCycle.name;
   loadOnHandFromCycle(openCycle);
   updateRoastersChoiceSelector();
+  localStorage.setItem(LAST_CYCLE_KEY, currentCycleId);
+}
+
+// Creates a cycle in the background without switching the active view to it —
+// used only by the automatic Wednesday-noon rollover above.
+async function _silentCreateCycle(name) {
+  var newCycles;
+  try { newCycles = await dbFetch('cycles', {method:'POST', body:{name:name, created_by:currentUser.id}}); }
+  catch(e) { console.log('Error auto-creating cycle:', e); return null; }
+  var data = Array.isArray(newCycles) ? newCycles[0] : newCycles;
+  cycles.unshift(data);
+  return data;
 }
 
 async function createNewCycle(silent=false) {
@@ -1217,6 +1236,7 @@ async function _doCreateCycle(name) {
   catch(e) { toast('Error creating cycle','error'); return; }
   var data = Array.isArray(newCycles) ? newCycles[0] : newCycles;
   cycles.unshift(data); currentCycleId = data.id;
+  localStorage.setItem(LAST_CYCLE_KEY, currentCycleId);
   const sel = document.getElementById('cycle-select');
   const o = document.createElement('option'); o.value = data.id; o.textContent = data.name;
   sel.insertBefore(o, sel.firstChild); sel.value = data.id;
@@ -1253,6 +1273,7 @@ function updateRoastersChoiceSelector() {
 function onCycleChange() {
   const sel = document.getElementById('cycle-select');
   currentCycleId = sel.value;
+  localStorage.setItem(LAST_CYCLE_KEY, currentCycleId);
   const c = cycles.find(c => c.id===currentCycleId);
   if (c) document.getElementById('cycle-pill').textContent = c.name;
   loadOnHandFromCycle(c); // on-hand is per-cycle — loads saved values, or empty for a fresh cycle
