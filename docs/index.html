@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-09 — FIXED: Copy buttons on Review List were silently failing on some mobile browsers (navigator.clipboard not available) — now falls back to a compatible copy method everywhere, and always shows success/error feedback
   2026-09-09 — FIXED: auto-rollover for next week's cycle moved from Monday 5pm to Wednesday noon Pacific, and no longer hijacks your active view — it creates the new cycle in the background only, and the app now remembers whichever cycle you were last viewing (via localStorage) across refreshes and logins instead of always jumping to the newest one
   2026-09-08 — Review List now has a By Category / By Vendor toggle — By Vendor pulls every item that vendor supplies together regardless of category, for when you're actually placing orders
   2026-09-08 — Added Master Update (owner only): upload a master spreadsheet to sync the whole catalog by name — updates Category/Vendor/Unit/Code on matches, adds new items, deactivates anything missing from the sheet (never deletes, never touches par/on-hand/sticky). Shows a full preview before anything is committed.
@@ -24,7 +25,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-09-08T16:06:50.951Z">
+<meta name="app-version" content="2026-09-08T21:17:24.903Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -909,7 +910,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-09 — Cycle rollover moved to Wed noon, remembers last-viewed cycle');
+console.log('Conduit Ops build: 2026-09-09b — Copy buttons fixed with clipboard fallback');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -3070,12 +3071,41 @@ function renderReviewList() {
   container.innerHTML = html;
 }
 
+function copyTextToClipboard(text, successMsg) {
+  function fallback() {
+    // Works in browsers/webviews without the modern Clipboard API
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) toast(successMsg, 'success');
+      else toast('Could not copy — try selecting the text manually', 'error');
+    } catch(e) {
+      toast('Could not copy — try selecting the text manually', 'error');
+    }
+  }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        toast(successMsg, 'success');
+      }).catch(fallback);
+    } else {
+      fallback();
+    }
+  } catch(e) {
+    fallback();
+  }
+}
+
 function copyVendorList(vendorName) {
   var lines = weeklyList.filter(function(w){ return (w.vendor||'No vendor set') === vendorName; }).map(itemLine);
   var text = vendorName + '\n' + lines.join('\n');
-  navigator.clipboard.writeText(text).then(function() {
-    toast('Copied '+vendorName+'\'s list','success');
-  }).catch(function() { toast('Could not copy — try selecting the text manually','error'); });
+  copyTextToClipboard(text, 'Copied '+vendorName+'\'s list');
 }
 
 function copyCompleteList() {
@@ -3085,9 +3115,7 @@ function copyCompleteList() {
   var text = vendors.map(function(ven) {
     return ven + '\n' + byVendor[ven].map(itemLine).join('\n');
   }).join('\n\n');
-  navigator.clipboard.writeText(text).then(function() {
-    toast('Complete list copied','success');
-  }).catch(function() { toast('Could not copy — try selecting the text manually','error'); });
+  copyTextToClipboard(text, 'Complete list copied');
 }
 
 function printReviewList() {
