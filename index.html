@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-09 — Review List now has a "Done" checkbox for checking off items while shopping — Finalize only archives checked items, unchecked ones (like something out of stock) carry forward onto next week's list automatically, with sticky reseeding smart enough not to duplicate a carried-over item
   2026-09-09 — FIXED: Copy buttons on Review List were silently failing on some mobile browsers (navigator.clipboard not available) — now falls back to a compatible copy method everywhere, and always shows success/error feedback
   2026-09-09 — FIXED: auto-rollover for next week's cycle moved from Monday 5pm to Wednesday noon Pacific, and no longer hijacks your active view — it creates the new cycle in the background only, and the app now remembers whichever cycle you were last viewing (via localStorage) across refreshes and logins instead of always jumping to the newest one
   2026-09-08 — Review List now has a By Category / By Vendor toggle — By Vendor pulls every item that vendor supplies together regardless of category, for when you're actually placing orders
@@ -910,7 +911,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-09b — Copy buttons fixed with clipboard fallback');
+console.log('Conduit Ops build: 2026-09-09c — Review List Done checkbox + carry-forward on Finalize');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -2999,10 +3000,22 @@ function setReviewGroupMode(mode) {
 function reviewItemRowHtml(w) {
   var name = w.custom_name || (supplyItems.find(function(i){return i.id===w.item_id;}) || {}).name || '(unknown item)';
   var qty = (w.qty||'').toString().trim();
-  return '<div class="checklist-row">' +
+  return '<div class="checklist-row'+(w.fulfilled?' checked':'')+'">' +
     '<span class="cl-name">'+escHtml(name)+'</span>' +
     '<span style="font-size:13px;color:var(--ink3);min-width:60px;text-align:right;">'+(qty ? escHtml(qty)+(w.unit?' '+escHtml(w.unit):'') : '—')+'</span>' +
+    '<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink3);white-space:nowrap;">' +
+      '<input type="checkbox" '+(w.fulfilled?'checked':'')+' onchange="toggleReviewDone(\''+w.id+'\',this.checked)" style="width:18px;height:18px;accent-color:var(--green2);">Done' +
+    '</label>' +
     '</div>';
+}
+
+async function toggleReviewDone(id, checked) {
+  try {
+    await dbFetch('supply_list_items?id=eq.'+id, {method:'PATCH', body:{fulfilled:checked}, prefer:'return=minimal'});
+    var w = weeklyList.find(function(x){return x.id===id;});
+    if (w) w.fulfilled = checked; // keep local cache in sync
+    renderReviewList();
+  } catch(e) { toast('Error saving','error'); }
 }
 
 function renderReviewList() {
@@ -3257,18 +3270,27 @@ async function addAdHocListItem() {
 
 async function finalizeWeeklyList() {
   if (!weeklyList.length) { toast('List is already empty','info'); return; }
-  if (!confirm('Finalize this list? It will be archived and a fresh list will start, seeded with sticky items.')) return;
+  var doneItems = weeklyList.filter(function(w){ return w.fulfilled; });
+  var carryOver = weeklyList.filter(function(w){ return !w.fulfilled; });
+  var msg = 'Finalize this list? '+doneItems.length+' checked-off item(s) will be archived.';
+  if (carryOver.length) msg += ' '+carryOver.length+' unchecked item(s) will carry forward onto next week\'s list automatically.';
+  if (!confirm(msg)) return;
   var weekLabel = 'Week of ' + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   try {
-    var ids = weeklyList.map(function(w){return w.id;});
-    await dbFetch('supply_list_items?id=in.('+ids.join(',')+')', {method:'PATCH', body:{list_status:'finalized', week_label: weekLabel, finalized_at: new Date().toISOString()}, prefer:'return=minimal'});
-    // Reseed sticky items for the new open list
-    var stickyItems = supplyItems.filter(function(i){return i.sticky;});
+    if (doneItems.length) {
+      var doneIds = doneItems.map(function(w){return w.id;});
+      await dbFetch('supply_list_items?id=in.('+doneIds.join(',')+')', {method:'PATCH', body:{list_status:'finalized', week_label: weekLabel, finalized_at: new Date().toISOString()}, prefer:'return=minimal'});
+    }
+    // Reseed sticky items for the new open list — but skip any sticky item that's
+    // already carrying forward unchecked, so it doesn't end up listed twice.
+    var carryOverItemIds = {};
+    carryOver.forEach(function(w){ if (w.item_id) carryOverItemIds[w.item_id] = true; });
+    var stickyItems = supplyItems.filter(function(i){return i.sticky && !carryOverItemIds[i.id];});
     if (stickyItems.length) {
-      var inserts = stickyItems.map(function(i){ return {item_id:i.id, custom_name:null, category:i.category, vendor:i.vendor, unit:i.unit, qty:null, list_status:'open', added_by: currentUser.id}; });
+      var inserts = stickyItems.map(function(i){ return {item_id:i.id, custom_name:null, category:i.category, vendor:i.vendor, unit:i.unit, qty:null, list_status:'open', fulfilled:false, added_by: currentUser.id}; });
       await dbFetch('supply_list_items', {method:'POST', body:inserts, prefer:'return=minimal'});
     }
-    toast('List finalized · new list started','success');
+    toast('List finalized · '+carryOver.length+' item(s) carried forward','success');
     await loadSupplies();
   } catch(e) { toast('Error finalizing list: '+e.message,'error'); }
 }
