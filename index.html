@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-09 — Added Standing Orders (new tab, owner/manager only): a roster of café pickup subscribers and gift subscriptions with W/A/B/M cadence, a "This Cycle" checklist that computes who's due and adds checked names straight onto that cycle's Fulfillment, and a Manage Roster view for add/edit/deactivate. Wholesale accounts are untouched — this is a separate, parallel system that feeds the same Fulfillment sheet.
   2026-09-09 — Review List now has a "Done" checkbox for checking off items while shopping — Finalize only archives checked items, unchecked ones (like something out of stock) carry forward onto next week's list automatically, with sticky reseeding smart enough not to duplicate a carried-over item
   2026-09-09 — FIXED: Copy buttons on Review List were silently failing on some mobile browsers (navigator.clipboard not available) — now falls back to a compatible copy method everywhere, and always shows success/error feedback
   2026-09-09 — FIXED: auto-rollover for next week's cycle moved from Monday 5pm to Wednesday noon Pacific, and no longer hijacks your active view — it creates the new cycle in the background only, and the app now remembers whichever cycle you were last viewing (via localStorage) across refreshes and logins instead of always jumping to the newest one
@@ -291,7 +292,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   table{font-size:11px;}
   th,td{padding:5px 7px;}
   .panel{display:block!important;}
-  #panel-orders,#panel-roast,#panel-portal,#panel-admin,#panel-catalog,#panel-supplies{display:none!important;}
+  #panel-orders,#panel-roast,#panel-portal,#panel-admin,#panel-catalog,#panel-supplies,#panel-standing{display:none!important;}
   #panel-output{display:block!important;}
   .section-header{display:none!important;}
   /* Keep bagging grid on one page */
@@ -356,6 +357,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div class="tab hidden" data-tab="supplies" onclick="showTab('supplies',this)">Supplies</div>
   <div class="tab hidden" data-tab="portal" onclick="showTab('portal',this)">Place Order</div>
   <div class="tab hidden" data-tab="catalog" onclick="showTab('catalog',this)">Catalog</div>
+  <div class="tab hidden" data-tab="standing" onclick="showTab('standing',this)">Standing Orders</div>
   <div class="tab hidden" data-tab="admin" onclick="showTab('admin',this)">Admin</div>
 </div>
 
@@ -803,6 +805,43 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   </div>
 </div>
 
+<!-- ── STANDING ORDERS PANEL ── -->
+<div class="panel" id="panel-standing">
+  <div class="section-header">
+    <div><div class="section-title">Standing Orders</div><div class="section-sub" id="standing-view-sub">Café pickup subscribers and gift subscriptions — no login, staff-managed</div></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-ghost btn-sm supplies-view-btn active" id="btn-standing-view-cycle" onclick="switchStandingView('cycle')">This Cycle</button>
+      <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-standing-view-roster" onclick="switchStandingView('roster')">Manage Roster</button>
+    </div>
+  </div>
+
+  <!-- ── THIS CYCLE VIEW ── -->
+  <div id="standing-view-cycle">
+    <div class="card">
+      <div class="card-title">Due This Cycle</div>
+      <div class="section-sub" id="standing-cycle-label" style="margin-bottom:14px;">-</div>
+      <div id="standing-checklist"><div class="checklist-empty">Loading…</div></div>
+      <button class="btn btn-primary" id="standing-add-to-fulfillment-btn" style="margin-top:16px;width:100%;" onclick="addCheckedStandingOrders()">Add Checked to Fulfillment</button>
+    </div>
+  </div>
+
+  <!-- ── MANAGE ROSTER VIEW ── -->
+  <div id="standing-view-roster" style="display:none;">
+    <div class="section-header">
+      <div><div class="section-title" style="font-size:16px;">Manage Roster</div><div class="section-sub">Add, edit, or deactivate standing entries</div></div>
+      <button class="btn btn-primary btn-sm" onclick="showAddStandingOrderModal()">+ Add Entry</button>
+    </div>
+    <div class="card">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Type</th><th>Coffee</th><th>Size</th><th>Grind</th><th class="num">Qty</th><th>Cadence</th><th>Signup</th><th>End</th><th>Active</th><th></th></tr></thead>
+          <tbody id="standing-roster-tbody"><tr><td colspan="11" class="loading"><div class="spinner"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 </div><!-- /content -->
 </div><!-- /main-app -->
 
@@ -911,7 +950,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-09c — Review List Done checkbox + carry-forward on Finalize');
+console.log('Conduit Ops build: 2026-09-09d — Standing Orders (roster + cycle checklist) added');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -1087,6 +1126,7 @@ async function initApp(user) {
   document.querySelector('[data-tab="portal"]').classList.toggle('hidden',isInternal);
   document.querySelector('[data-tab="admin"]').classList.toggle('hidden',!isRoastingStaff);
   document.querySelector('[data-tab="catalog"]').classList.toggle('hidden',!isRoastingStaff);
+  document.querySelector('[data-tab="standing"]').classList.toggle('hidden',!isRoastingStaff);
   document.getElementById('btn-new-cycle').style.display = isRoastingStaff ? 'block' : 'none';
   document.getElementById('btn-add-order').style.display = isRoastingStaff ? 'inline-block' : 'none';
 
@@ -3582,6 +3622,239 @@ async function saveNote() {
   } catch(e) { document.getElementById('note-save-status').textContent = 'Error saving'; }
 }
 
+// ── STANDING ORDERS ──
+var standingOrders = [];
+var standingCycleDue = []; // computed each render: entries due this cycle, with already-added status
+
+function getCycleMonday(cycle) {
+  if (!cycle || !cycle.name) return new Date();
+  var parsed = new Date(cycle.name.replace('Week of ',''));
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function weekParityAB(date) {
+  // Stable global parity so every A-cadence entry and every B-cadence entry
+  // land on opposite weeks from each other, consistently, forever.
+  var epoch = new Date(2024,0,1);
+  var days = Math.floor((date - epoch) / 86400000);
+  var weeks = Math.floor(days / 7);
+  return weeks % 2 === 0 ? 'A' : 'B';
+}
+
+function weekOfMonth(date) {
+  return Math.ceil(date.getDate() / 7);
+}
+
+function isStandingDueThisCycle(so, cycleMonday) {
+  if (so.type === 'gift') {
+    var start = so.signup_date ? new Date(so.signup_date) : null;
+    var end = so.end_date ? new Date(so.end_date) : null;
+    if (start && cycleMonday < start) return false;
+    if (end && cycleMonday > end) return false;
+  }
+  if (so.cadence === 'W') return true;
+  if (so.cadence === 'A' || so.cadence === 'B') return weekParityAB(cycleMonday) === so.cadence;
+  if (so.cadence === 'M') {
+    var signup = so.signup_date ? new Date(so.signup_date) : cycleMonday;
+    return weekOfMonth(cycleMonday) === weekOfMonth(signup);
+  }
+  return false;
+}
+
+var CADENCE_LABELS = {W:'Weekly',A:'Every other week (A)',B:'Every other week (B)',M:'Monthly'};
+
+async function loadStandingOrders() {
+  try { standingOrders = await dbFetch('standing_orders?select=*&active=eq.true&order=name'); }
+  catch(e) { standingOrders = []; console.log('loadStandingOrders error:', e); }
+  renderStandingRoster();
+  await renderStandingChecklist();
+}
+
+function switchStandingView(view) {
+  document.getElementById('standing-view-cycle').style.display = view==='cycle' ? 'block' : 'none';
+  document.getElementById('standing-view-roster').style.display = view==='roster' ? 'block' : 'none';
+  document.getElementById('btn-standing-view-cycle').classList.toggle('active', view==='cycle');
+  document.getElementById('btn-standing-view-roster').classList.toggle('active', view==='roster');
+  document.getElementById('standing-view-sub').textContent = view==='cycle'
+    ? 'Check off who\'s actually getting fulfilled this cycle'
+    : 'Add, edit, or deactivate standing entries';
+}
+
+async function renderStandingChecklist() {
+  var container = document.getElementById('standing-checklist');
+  var addBtn = document.getElementById('standing-add-to-fulfillment-btn');
+  if (!currentCycleId) { container.innerHTML = '<div class="checklist-empty">No active cycle.</div>'; addBtn.style.display='none'; return; }
+  var cycle = cycles.find(function(c){return c.id===currentCycleId;});
+  var cycleMonday = getCycleMonday(cycle);
+  document.getElementById('standing-cycle-label').textContent = cycle ? cycle.name : '-';
+
+  var due = standingOrders.filter(function(so){ return isStandingDueThisCycle(so, cycleMonday); });
+
+  // Check which are already added to this cycle's Fulfillment (by our deterministic source_order_id pattern)
+  var existingSourceIds = {};
+  try {
+    var existing = await dbFetch('orders?select=source_order_id&cycle_id=eq.'+currentCycleId+'&source_order_id=like.standing-*');
+    existing.forEach(function(o){ existingSourceIds[o.source_order_id] = true; });
+  } catch(e) { console.log('checking existing standing orders error:', e); }
+
+  standingCycleDue = due.map(function(so) {
+    var sourceId = 'standing-'+so.id+'-'+currentCycleId;
+    return { so: so, alreadyAdded: !!existingSourceIds[sourceId], sourceId: sourceId };
+  });
+
+  if (!standingCycleDue.length) { container.innerHTML = '<div class="checklist-empty">Nobody is due this cycle.</div>'; addBtn.style.display='none'; return; }
+  addBtn.style.display = standingCycleDue.some(function(d){return !d.alreadyAdded;}) ? 'block' : 'none';
+
+  container.innerHTML = '<div class="checklist-card">' + standingCycleDue.map(function(d, i) {
+    var so = d.so;
+    var coffee = getCoffee(so.coffee_sku);
+    var typeTag = so.type === 'gift' ? '<span class="badge badge-gold" style="margin-left:6px;">Gift</span>' : '';
+    if (d.alreadyAdded) {
+      return '<div class="checklist-row checked">' +
+        '<input type="checkbox" checked disabled style="opacity:0.5;">' +
+        '<span class="cl-name">'+escHtml(so.name)+typeTag+'<span class="cl-need">'+(coffee?escHtml(coffee.name):so.coffee_sku)+' · '+escHtml(so.size)+' · '+escHtml(GRIND_L[so.grind]||so.grind)+'</span></span>' +
+        '<span style="font-size:11px;color:var(--green2);font-weight:600;">On Fulfillment ✓</span>' +
+        '</div>';
+    }
+    return '<div class="checklist-row" id="standing-row-'+i+'">' +
+      '<input type="checkbox" id="standing-check-'+i+'" checked>' +
+      '<span class="cl-name">'+escHtml(so.name)+typeTag+'<span class="cl-need">'+(coffee?escHtml(coffee.name):so.coffee_sku)+' · '+escHtml(so.size)+' · '+escHtml(GRIND_L[so.grind]||so.grind)+'</span></span>' +
+      '<span style="font-size:13px;color:var(--ink3);">×'+so.qty+'</span>' +
+      '</div>';
+  }).join('') + '</div>';
+}
+
+async function addCheckedStandingOrders() {
+  var toInsert = [];
+  standingCycleDue.forEach(function(d, i) {
+    if (d.alreadyAdded) return;
+    var cb = document.getElementById('standing-check-'+i);
+    if (!cb || !cb.checked) return;
+    var so = d.so;
+    var coffee = getCoffee(so.coffee_sku);
+    toInsert.push({
+      cycle_id: currentCycleId, profile_id: currentUser.id,
+      customer_name: so.name, order_type: 'subscription', region: 'pickup',
+      coffee_sku: so.coffee_sku, coffee_name: coffee ? coffee.name : so.coffee_sku,
+      qty: so.qty, size: so.size, grind: so.grind,
+      notes: so.type==='gift' ? ('Gift subscription'+(so.gifter_name?' from '+so.gifter_name:'')) : 'Standing order',
+      source_order_id: d.sourceId
+    });
+  });
+  if (!toInsert.length) { toast('Nothing checked to add','warn'); return; }
+  try {
+    await dbFetch('orders', {method:'POST', body: toInsert.length===1 ? toInsert[0] : toInsert, prefer:'return=minimal'});
+    toast(toInsert.length+' added to Fulfillment','success');
+    await loadOrders();
+    await renderStandingChecklist();
+  } catch(e) { toast('Error adding to fulfillment: '+e.message,'error'); }
+}
+
+function renderStandingRoster() {
+  var tbody = document.getElementById('standing-roster-tbody');
+  if (!standingOrders.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">No standing entries yet.</td></tr>'; return; }
+  tbody.innerHTML = standingOrders.map(function(so) {
+    var coffee = getCoffee(so.coffee_sku);
+    return '<tr>' +
+      '<td style="font-weight:600;">'+escHtml(so.name)+'</td>' +
+      '<td>'+(so.type==='gift' ? '<span class="badge badge-gold">Gift</span>' : '<span class="badge badge-gray">Standing</span>')+'</td>' +
+      '<td>'+(coffee?escHtml(coffee.name):escHtml(so.coffee_sku))+'</td>' +
+      '<td>'+escHtml(so.size)+'</td>' +
+      '<td>'+escHtml(GRIND_L[so.grind]||so.grind)+'</td>' +
+      '<td class="num">'+so.qty+'</td>' +
+      '<td>'+(CADENCE_LABELS[so.cadence]||so.cadence)+'</td>' +
+      '<td style="font-size:12px;color:var(--ink3);">'+(so.signup_date||'-')+'</td>' +
+      '<td style="font-size:12px;color:var(--ink3);">'+(so.end_date||'-')+'</td>' +
+      '<td><input type="checkbox" checked onchange="deactivateStandingOrder(\''+so.id+'\')" style="width:auto;accent-color:var(--blue);"></td>' +
+      '<td><button class="btn btn-ghost btn-sm" onclick="showAddStandingOrderModal(\''+so.id+'\')">Edit</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+async function deactivateStandingOrder(id) {
+  if (!confirm('Deactivate this entry? It will stop appearing on future cycles.')) { await loadStandingOrders(); return; }
+  try { await dbFetch('standing_orders?id=eq.'+id, {method:'PATCH', body:{active:false}, prefer:'return=minimal'}); await loadStandingOrders(); }
+  catch(e) { toast('Error deactivating','error'); }
+}
+
+function showAddStandingOrderModal(editId) {
+  var editing = editId ? standingOrders.find(function(s){return s.id===editId;}) : null;
+  var modal = document.createElement('div');
+  modal.id = 'standing-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML =
+    '<div style="background:white;border-radius:12px;padding:32px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">' +
+      '<div style="font-family:\'Libre Baskerville\',serif;font-size:20px;font-weight:700;color:var(--ink);margin-bottom:20px;">'+(editing?'Edit':'Add')+' Standing Entry</div>' +
+      '<div class="form-row"><div class="form-group"><label>Name</label><input type="text" id="so-name" value="'+(editing?escHtml(editing.name):'')+'" placeholder="Recipient name"></div></div>' +
+      '<div class="form-row c2">' +
+        '<div class="form-group"><label>Type</label><select id="so-type" onchange="toggleGiftFields()">' +
+          '<option value="standing" '+(editing&&editing.type==='standing'?'selected':'')+'>Standing</option>' +
+          '<option value="gift" '+(editing&&editing.type==='gift'?'selected':'')+'>Gift Subscription</option>' +
+        '</select></div>' +
+        '<div class="form-group"><label>Cadence</label><select id="so-cadence">' +
+          Object.keys(CADENCE_LABELS).map(function(k){return '<option value="'+k+'" '+(editing&&editing.cadence===k?'selected':'')+'>'+CADENCE_LABELS[k]+'</option>';}).join('') +
+        '</select></div>' +
+      '</div>' +
+      '<div class="form-row c2">' +
+        '<div class="form-group"><label>Coffee</label><select id="so-coffee">'+coffeeOpts()+'</select></div>' +
+        '<div class="form-group"><label>Size</label><select id="so-size">' +
+          Object.keys(BAG_W).map(function(k){return '<option value="'+k+'" '+(editing&&editing.size===k?'selected':'')+'>'+k+'</option>';}).join('') +
+        '</select></div>' +
+      '</div>' +
+      '<div class="form-row c2">' +
+        '<div class="form-group"><label>Grind</label><select id="so-grind">' +
+          Object.keys(GRIND_L).map(function(k){return '<option value="'+k+'" '+(editing&&editing.grind===k?'selected':'')+'>'+GRIND_L[k]+'</option>';}).join('') +
+        '</select></div>' +
+        '<div class="form-group"><label>Qty</label><input type="number" id="so-qty" min="1" value="'+(editing?editing.qty:1)+'"></div>' +
+      '</div>' +
+      '<div class="form-row c2">' +
+        '<div class="form-group"><label>Signup Date</label><input type="date" id="so-signup" value="'+(editing&&editing.signup_date?editing.signup_date:new Date().toISOString().split('T')[0])+'"></div>' +
+        '<div class="form-group" id="so-end-group" style="display:'+(editing&&editing.type==='gift'?'block':'none')+';"><label>End Date</label><input type="date" id="so-end" value="'+(editing&&editing.end_date?editing.end_date:'')+'"></div>' +
+      '</div>' +
+      '<div class="form-row" id="so-gifter-group" style="display:'+(editing&&editing.type==='gift'?'block':'none')+';"><div class="form-group"><label>Gifter Name</label><input type="text" id="so-gifter" value="'+(editing&&editing.gifter_name?escHtml(editing.gifter_name):'')+'" placeholder="Who purchased this gift"></div></div>' +
+      '<div class="form-row"><div class="form-group"><label>Notes</label><input type="text" id="so-notes" value="'+(editing&&editing.notes?escHtml(editing.notes):'')+'"></div></div>' +
+      '<div style="display:flex;gap:10px;margin-top:8px;">' +
+        '<button class="btn btn-primary" style="flex:1;" onclick="saveStandingOrderModal('+(editing?"'"+editing.id+"'":'null')+')">Save</button>' +
+        '<button class="btn btn-ghost" onclick="document.getElementById(\'standing-modal\').remove()">Cancel</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+function toggleGiftFields() {
+  var isGift = document.getElementById('so-type').value === 'gift';
+  document.getElementById('so-end-group').style.display = isGift ? 'block' : 'none';
+  document.getElementById('so-gifter-group').style.display = isGift ? 'block' : 'none';
+}
+
+async function saveStandingOrderModal(editId) {
+  var name = document.getElementById('so-name').value.trim();
+  if (!name) { toast('Name is required','warn'); return; }
+  var type = document.getElementById('so-type').value;
+  var body = {
+    name: name,
+    type: type,
+    coffee_sku: document.getElementById('so-coffee').value,
+    size: document.getElementById('so-size').value,
+    grind: document.getElementById('so-grind').value,
+    qty: parseInt(document.getElementById('so-qty').value) || 1,
+    cadence: document.getElementById('so-cadence').value,
+    signup_date: document.getElementById('so-signup').value || null,
+    end_date: type==='gift' ? (document.getElementById('so-end').value || null) : null,
+    gifter_name: type==='gift' ? (document.getElementById('so-gifter').value.trim() || null) : null,
+    notes: document.getElementById('so-notes').value.trim() || null,
+    active: true
+  };
+  try {
+    if (editId) await dbFetch('standing_orders?id=eq.'+editId, {method:'PATCH', body:body, prefer:'return=minimal'});
+    else await dbFetch('standing_orders', {method:'POST', body:body, prefer:'return=minimal'});
+    var modal = document.getElementById('standing-modal');
+    if (modal) modal.remove();
+    toast('Saved','success');
+    await loadStandingOrders();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
+}
+
 // ── TABS ──
 function showTab(name, el) {
   document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
@@ -3593,6 +3866,7 @@ function showTab(name, el) {
   if (name==='catalog') loadCatalog();
   if (name==='portal') { loadPortalCoffees(); loadPortalHistory(); }
   if (name==='supplies') loadSupplies();
+  if (name==='standing') loadStandingOrders();
 }
 
 // ── TOAST ──
