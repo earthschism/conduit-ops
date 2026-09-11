@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-09 — Standing tab renamed to "Standing" and moved next to Orders. Added Account Templates: a "Save as this account's standing order" checkbox in Add Order captures the whole multi-line order as a reusable template; a new "Standing Accounts" checklist lets you check off which accounts are ordering this cycle and adds their saved lines straight onto Fulfillment, where you edit as normal if anything's different
   2026-09-09 — Added Standing Orders (new tab, owner/manager only): a roster of café pickup subscribers and gift subscriptions with W/A/B/M cadence, a "This Cycle" checklist that computes who's due and adds checked names straight onto that cycle's Fulfillment, and a Manage Roster view for add/edit/deactivate. Wholesale accounts are untouched — this is a separate, parallel system that feeds the same Fulfillment sheet.
   2026-09-09 — Review List now has a "Done" checkbox for checking off items while shopping — Finalize only archives checked items, unchecked ones (like something out of stock) carry forward onto next week's list automatically, with sticky reseeding smart enough not to duplicate a carried-over item
   2026-09-09 — FIXED: Copy buttons on Review List were silently failing on some mobile browsers (navigator.clipboard not available) — now falls back to a compatible copy method everywhere, and always shows success/error feedback
@@ -352,12 +353,12 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 
 <div class="tabs">
   <div class="tab active" data-tab="orders" onclick="showTab('orders',this)">Orders</div>
+  <div class="tab hidden" data-tab="standing" onclick="showTab('standing',this)">Standing</div>
   <div class="tab" data-tab="roast" onclick="showTab('roast',this)">Roast Schedule</div>
   <div class="tab" data-tab="output" onclick="showTab('output',this)">Print &amp; Export</div>
   <div class="tab hidden" data-tab="supplies" onclick="showTab('supplies',this)">Supplies</div>
   <div class="tab hidden" data-tab="portal" onclick="showTab('portal',this)">Place Order</div>
   <div class="tab hidden" data-tab="catalog" onclick="showTab('catalog',this)">Catalog</div>
-  <div class="tab hidden" data-tab="standing" onclick="showTab('standing',this)">Standing Orders</div>
   <div class="tab hidden" data-tab="admin" onclick="showTab('admin',this)">Admin</div>
 </div>
 
@@ -422,7 +423,11 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     </div>
     <div id="line-items-container"></div>
     <div style="margin:10px 0 14px;"><button class="btn btn-ghost btn-sm" onclick="addLineItem()">+ Add Another Coffee</button></div>
-    <div class="form-group" style="margin-bottom:14px;"><label>Notes</label><input type="text" id="f-notes" placeholder="Special instructions, pickup notes..."></div>
+    <div class="form-group" style="margin-bottom:10px;"><label>Notes</label><input type="text" id="f-notes" placeholder="Special instructions, pickup notes..."></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);margin-bottom:14px;cursor:pointer;">
+      <input type="checkbox" id="f-save-template" style="width:auto;accent-color:var(--blue);">
+      Save as this account's standing order (for the Standing tab's account checklist)
+    </label>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-primary" onclick="saveOrder()">Save Order</button>
       <button class="btn btn-ghost" onclick="toggleAddOrder()">Cancel</button>
@@ -808,9 +813,10 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 <!-- ── STANDING ORDERS PANEL ── -->
 <div class="panel" id="panel-standing">
   <div class="section-header">
-    <div><div class="section-title">Standing Orders</div><div class="section-sub" id="standing-view-sub">Café pickup subscribers and gift subscriptions — no login, staff-managed</div></div>
-    <div style="display:flex;gap:8px;">
+    <div><div class="section-title">Standing</div><div class="section-sub" id="standing-view-sub">Café pickup subscribers, gift subscriptions, and saved account orders</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-ghost btn-sm supplies-view-btn active" id="btn-standing-view-cycle" onclick="switchStandingView('cycle')">This Cycle</button>
+      <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-standing-view-accounts" onclick="switchStandingView('accounts')">Standing Accounts</button>
       <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-standing-view-roster" onclick="switchStandingView('roster')">Manage Roster</button>
     </div>
   </div>
@@ -822,6 +828,16 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <div class="section-sub" id="standing-cycle-label" style="margin-bottom:14px;">-</div>
       <div id="standing-checklist"><div class="checklist-empty">Loading…</div></div>
       <button class="btn btn-primary" id="standing-add-to-fulfillment-btn" style="margin-top:16px;width:100%;" onclick="addCheckedStandingOrders()">Add Checked to Fulfillment</button>
+    </div>
+  </div>
+
+  <!-- ── STANDING ACCOUNTS VIEW ── -->
+  <div id="standing-view-accounts" style="display:none;">
+    <div class="card">
+      <div class="card-title">Accounts With a Saved Order</div>
+      <div class="section-sub" style="margin-bottom:14px;">Check off which accounts are ordering this cycle. Each one adds its saved lines straight onto this cycle's Fulfillment — edit as usual from there if anything's different this time.</div>
+      <div id="account-templates-checklist"><div class="checklist-empty">Loading…</div></div>
+      <button class="btn btn-primary" id="account-templates-add-btn" style="margin-top:16px;width:100%;" onclick="addCheckedAccountTemplates()">Add Checked to Fulfillment</button>
     </div>
   </div>
 
@@ -950,7 +966,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-09d — Standing Orders (roster + cycle checklist) added');
+console.log('Conduit Ops build: 2026-09-09e — Standing renamed/moved, Account Templates added');
 let currentUser=null, currentProfile=null;
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
@@ -1630,31 +1646,58 @@ async function saveOrder() {
   if (!customer) { toast('Please enter a customer name','warn'); return; }
   var rows = document.querySelectorAll('[id^="li-"]');
   var toInsert = [];
+  var templateLines = [];
   rows.forEach(function(row) {
     var id = row.id.replace('li-','');
     var sku = document.getElementById('li-coffee-'+id) && document.getElementById('li-coffee-'+id).value;
     if (!sku) return;
     var coffee = getCoffee(sku);
+    var size = document.getElementById('li-size-'+id).value;
+    var grind = document.getElementById('li-grind-'+id).value;
+    var qty = parseInt(document.getElementById('li-qty-'+id).value)||1;
     toInsert.push({
       cycle_id:currentCycleId, profile_id:currentUser.id,
       customer_name:customer, order_type:document.getElementById('f-type').value,
       region:document.getElementById('f-region').value,
       coffee_sku:sku, coffee_name:coffee.name,
-      qty:parseInt(document.getElementById('li-qty-'+id).value)||1,
-      size:document.getElementById('li-size-'+id).value,
-      grind:document.getElementById('li-grind-'+id).value,
+      qty:qty, size:size, grind:grind,
       notes:document.getElementById('f-notes').value,
       source_order_id:'manual-'+Date.now()
     });
+    templateLines.push({coffee_sku:sku, size:size, grind:grind, qty:qty});
   });
   if (!toInsert.length) { toast('Add at least one coffee','warn'); return; }
   try { await dbFetch('orders', {method:'POST', body: toInsert.length === 1 ? toInsert[0] : toInsert, prefer:'return=minimal'}); }
   catch(e) { toast('Error saving: '+e.message,'error'); return; }
-  toast(toInsert.length+' line'+(toInsert.length>1?'s':'')+' saved','success');
+  var savedTemplate = document.getElementById('f-save-template').checked;
+  if (savedTemplate) {
+    try {
+      await saveAccountTemplate(customer, document.getElementById('f-type').value, document.getElementById('f-region').value, templateLines);
+    } catch(e) { toast('Order saved, but saving the standing template failed: '+e.message,'error'); }
+  }
+  toast(toInsert.length+' line'+(toInsert.length>1?'s':'')+' saved'+(savedTemplate?' · standing order updated':''),'success');
   document.getElementById('f-customer').value = '';
   document.getElementById('f-notes').value = '';
+  document.getElementById('f-save-template').checked = false;
   toggleAddOrder();
   await loadOrders();
+}
+
+async function saveAccountTemplate(customerName, orderType, region, lines) {
+  var existing;
+  try { existing = await dbFetch('account_templates?select=id&customer_name=eq.'+encodeURIComponent(customerName)+'&active=eq.true'); }
+  catch(e) { existing = []; }
+  var templateId;
+  if (existing && existing.length) {
+    templateId = existing[0].id;
+    await dbFetch('account_templates?id=eq.'+templateId, {method:'PATCH', body:{order_type:orderType, region:region, updated_at:new Date().toISOString()}, prefer:'return=minimal'});
+    await dbFetch('account_template_items?template_id=eq.'+templateId, {method:'DELETE', prefer:'return=minimal'});
+  } else {
+    var created = await dbFetch('account_templates', {method:'POST', body:{customer_name:customerName, order_type:orderType, region:region}, prefer:'return=representation'});
+    templateId = (Array.isArray(created) ? created[0] : created).id;
+  }
+  var items = lines.map(function(l){ return {template_id:templateId, coffee_sku:l.coffee_sku, size:l.size, grind:l.grind, qty:l.qty}; });
+  await dbFetch('account_template_items', {method:'POST', body: items.length===1?items[0]:items, prefer:'return=minimal'});
 }
 
 async function deleteOrder(id) {
@@ -3668,16 +3711,22 @@ async function loadStandingOrders() {
   catch(e) { standingOrders = []; console.log('loadStandingOrders error:', e); }
   renderStandingRoster();
   await renderStandingChecklist();
+  await renderAccountTemplatesChecklist();
 }
 
 function switchStandingView(view) {
   document.getElementById('standing-view-cycle').style.display = view==='cycle' ? 'block' : 'none';
+  document.getElementById('standing-view-accounts').style.display = view==='accounts' ? 'block' : 'none';
   document.getElementById('standing-view-roster').style.display = view==='roster' ? 'block' : 'none';
   document.getElementById('btn-standing-view-cycle').classList.toggle('active', view==='cycle');
+  document.getElementById('btn-standing-view-accounts').classList.toggle('active', view==='accounts');
   document.getElementById('btn-standing-view-roster').classList.toggle('active', view==='roster');
-  document.getElementById('standing-view-sub').textContent = view==='cycle'
-    ? 'Check off who\'s actually getting fulfilled this cycle'
-    : 'Add, edit, or deactivate standing entries';
+  var subText = {
+    cycle: 'Check off who\'s actually getting fulfilled this cycle',
+    accounts: 'Saved multi-line orders for accounts with a regular setup',
+    roster: 'Add, edit, or deactivate standing entries'
+  };
+  document.getElementById('standing-view-sub').textContent = subText[view];
 }
 
 async function renderStandingChecklist() {
@@ -3748,6 +3797,102 @@ async function addCheckedStandingOrders() {
     await loadOrders();
     await renderStandingChecklist();
   } catch(e) { toast('Error adding to fulfillment: '+e.message,'error'); }
+}
+
+// ── ACCOUNT TEMPLATES (Standing Accounts view) ──
+var accountTemplates = [];
+var accountTemplateCycleState = []; // computed each render: {template, items, alreadyAdded}
+
+async function renderAccountTemplatesChecklist() {
+  var container = document.getElementById('account-templates-checklist');
+  var addBtn = document.getElementById('account-templates-add-btn');
+  if (!currentCycleId) { container.innerHTML = '<div class="checklist-empty">No active cycle.</div>'; addBtn.style.display='none'; return; }
+
+  try { accountTemplates = await dbFetch('account_templates?select=*&active=eq.true&order=customer_name'); }
+  catch(e) { accountTemplates = []; console.log('load account_templates error:', e); }
+
+  if (!accountTemplates.length) {
+    container.innerHTML = '<div class="checklist-empty">No saved account orders yet — check "Save as this account\'s standing order" next time you add one in Orders.</div>';
+    addBtn.style.display = 'none';
+    return;
+  }
+
+  var itemsByTemplate = {};
+  try {
+    var templateIds = accountTemplates.map(function(t){return t.id;}).join(',');
+    var allItems = await dbFetch('account_template_items?select=*&template_id=in.('+templateIds+')');
+    allItems.forEach(function(it){ (itemsByTemplate[it.template_id] = itemsByTemplate[it.template_id]||[]).push(it); });
+  } catch(e) { console.log('load account_template_items error:', e); }
+
+  var existingSourceIds = {};
+  try {
+    var existing = await dbFetch('orders?select=source_order_id&cycle_id=eq.'+currentCycleId+'&source_order_id=like.account-*');
+    existing.forEach(function(o){ existingSourceIds[o.source_order_id] = true; });
+  } catch(e) { console.log('checking existing account orders error:', e); }
+
+  accountTemplateCycleState = accountTemplates.map(function(t) {
+    var items = itemsByTemplate[t.id] || [];
+    var alreadyAdded = items.length>0 && items.every(function(it,i){ return existingSourceIds['account-'+t.id+'-'+currentCycleId+'-'+i]; });
+    return { template: t, items: items, alreadyAdded: alreadyAdded };
+  });
+
+  addBtn.style.display = accountTemplateCycleState.some(function(s){return !s.alreadyAdded;}) ? 'block' : 'none';
+
+  container.innerHTML = '<div class="checklist-card">' + accountTemplateCycleState.map(function(s, i) {
+    var t = s.template;
+    var summary = s.items.map(function(it) {
+      var coffee = getCoffee(it.coffee_sku);
+      return (coffee?coffee.name:it.coffee_sku)+' ('+it.size+', '+(GRIND_L[it.grind]||it.grind)+') ×'+it.qty;
+    }).join(' · ');
+    if (!s.items.length) return ''; // nothing to show for an empty template
+    if (s.alreadyAdded) {
+      return '<div class="checklist-row checked">' +
+        '<input type="checkbox" checked disabled style="opacity:0.5;">' +
+        '<span class="cl-name">'+escHtml(t.customer_name)+'<span class="cl-need">'+escHtml(summary)+'</span></span>' +
+        '<span style="font-size:11px;color:var(--green2);font-weight:600;">On Fulfillment ✓</span>' +
+        '</div>';
+    }
+    return '<div class="checklist-row">' +
+      '<input type="checkbox" id="acct-check-'+i+'">' +
+      '<span class="cl-name">'+escHtml(t.customer_name)+'<span class="cl-need">'+escHtml(summary)+'</span></span>' +
+      '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="deactivateAccountTemplate(\''+t.id+'\')">Remove</button>' +
+      '</div>';
+  }).join('') + '</div>';
+}
+
+async function addCheckedAccountTemplates() {
+  var toInsert = [];
+  accountTemplateCycleState.forEach(function(s, i) {
+    if (s.alreadyAdded || !s.items.length) return;
+    var cb = document.getElementById('acct-check-'+i);
+    if (!cb || !cb.checked) return;
+    s.items.forEach(function(it, n) {
+      var coffee = getCoffee(it.coffee_sku);
+      toInsert.push({
+        cycle_id: currentCycleId, profile_id: currentUser.id,
+        customer_name: s.template.customer_name, order_type: s.template.order_type, region: s.template.region,
+        coffee_sku: it.coffee_sku, coffee_name: coffee ? coffee.name : it.coffee_sku,
+        qty: it.qty, size: it.size, grind: it.grind,
+        notes: s.template.notes || 'Standing account order',
+        source_order_id: 'account-'+s.template.id+'-'+currentCycleId+'-'+n
+      });
+    });
+  });
+  if (!toInsert.length) { toast('Nothing checked to add','warn'); return; }
+  try {
+    await dbFetch('orders', {method:'POST', body: toInsert.length===1 ? toInsert[0] : toInsert, prefer:'return=minimal'});
+    toast(toInsert.length+' line(s) added to Fulfillment','success');
+    await loadOrders();
+    await renderAccountTemplatesChecklist();
+  } catch(e) { toast('Error adding to fulfillment: '+e.message,'error'); }
+}
+
+async function deactivateAccountTemplate(id) {
+  if (!confirm('Remove this account\'s saved standing order? It will stop showing up on the checklist.')) return;
+  try {
+    await dbFetch('account_templates?id=eq.'+id, {method:'PATCH', body:{active:false}, prefer:'return=minimal'});
+    await renderAccountTemplatesChecklist();
+  } catch(e) { toast('Error removing','error'); }
 }
 
 function renderStandingRoster() {
