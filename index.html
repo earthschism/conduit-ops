@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-09 — FIXED real bug: portal's size/grind dropdown (after clicking a coffee card) was built from a completely different, more permissive filter than the coffee grid itself — ignored per-account whitelists entirely, so wholesale accounts with a restricted coffee list could see/order coffees outside their whitelist, while some of their actual whitelisted coffees could be missing from that dropdown. Now both use the exact same list.
   2026-09-09 — Standing tab renamed to "Standing" and moved next to Orders. Added Account Templates: a "Save as this account's standing order" checkbox in Add Order captures the whole multi-line order as a reusable template; a new "Standing Accounts" checklist lets you check off which accounts are ordering this cycle and adds their saved lines straight onto Fulfillment, where you edit as normal if anything's different
   2026-09-09 — Added Standing Orders (new tab, owner/manager only): a roster of café pickup subscribers and gift subscriptions with W/A/B/M cadence, a "This Cycle" checklist that computes who's due and adds checked names straight onto that cycle's Fulfillment, and a Manage Roster view for add/edit/deactivate. Wholesale accounts are untouched — this is a separate, parallel system that feeds the same Fulfillment sheet.
   2026-09-09 — Review List now has a "Done" checkbox for checking off items while shopping — Finalize only archives checked items, unchecked ones (like something out of stock) carry forward onto next week's list automatically, with sticky reseeding smart enough not to duplicate a carried-over item
@@ -966,8 +967,9 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-09e — Standing renamed/moved, Account Templates added');
+console.log('Conduit Ops build: 2026-09-09f — FIX: portal size/grind dropdown now respects account whitelist');
 let currentUser=null, currentProfile=null;
+let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
 let lineItemCount=0, portalLineId=0;
@@ -2438,6 +2440,7 @@ async function loadPortalCoffees() {
 
   var grid = document.getElementById('portal-coffee-grid');
   if (!data.length) { grid.innerHTML='<div class="empty">No coffees available. Please contact us at orders@conduitcoffee.com</div>'; return; }
+  portalAvailableCoffees = data; // so the size/grind dropdown below shows exactly this same set — never a separate, wrong list
   grid.innerHTML = data.map(function(c) {
     return '<div class="coffee-card" onclick="selectPortalCoffee(\''+c.sku+'\')">' +
       '<div class="coffee-card-name">'+c.name+'</div>' +
@@ -2466,11 +2469,12 @@ function selectPortalCoffee(sku) {
 
 function addPortalLine(preselect) {
   var id = portalLineId++;
-  var role = currentProfile && currentProfile.role;
   var container = document.getElementById('portal-line-items');
   var div = document.createElement('div');
   div.className='line-item-row'; div.id='pl-'+id;
-  var opts = coffeeOpts(function(c){return c.customer_facing&&(role==='wholesale'||['retail','both'].indexOf(c.visibility)>-1);});
+  // Use the exact same whitelisted list the coffee grid above already computed —
+  // never re-derive this from a separate, more permissive filter.
+  var opts = portalAvailableCoffees.map(function(c){return '<option value="'+c.sku+'" '+(preselect===c.sku?'selected':'')+'>'+c.name+'</option>';}).join('');
   div.innerHTML =
     '<div class="form-group">'+(id===0?'<label>Coffee</label>':'')+'<select id="pl-coffee-'+id+'">'+opts+'</select></div>' +
     '<div class="form-group">'+(id===0?'<label>Size</label>':'')+'<select id="pl-size-'+id+'"><option value="2lb" selected>2 lb</option><option value="1lb">1 lb</option><option value="5lb">5 lb</option><option value="12oz">12 oz</option><option value="4oz">4oz Sample</option><option value="20lb">Bulk</option></select></div>' +
