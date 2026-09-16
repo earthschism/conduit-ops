@@ -1,5 +1,9 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-14 — FIXED: Orders mobile card view had no way to select multiple lines — bulk-delete only existed on desktop. Added matching checkboxes to mobile cards (per-line and per-customer), and moved the "Delete Selected" bar so it's shared between both views instead of hidden inside the desktop-only table.
+  2026-09-14 — Build List now has a By Category/By Vendor toggle, matching Review List
+  2026-09-14 — Ad-hoc "add something not in the catalog" now has an optional Vendor field with autocomplete
+  2026-09-14 — FIXED: Copy still silently failing specifically on mobile Safari — the earlier fallback's .select() doesn't reliably select text in an input on iOS, so execCommand('copy') was failing without throwing. Now uses setSelectionRange plus other iOS-specific handling.
   2026-09-09 — FIXED real bug: portal's size/grind dropdown (after clicking a coffee card) was built from a completely different, more permissive filter than the coffee grid itself — ignored per-account whitelists entirely, so wholesale accounts with a restricted coffee list could see/order coffees outside their whitelist, while some of their actual whitelisted coffees could be missing from that dropdown. Now both use the exact same list.
   2026-09-09 — Standing tab renamed to "Standing" and moved next to Orders. Added Account Templates: a "Save as this account's standing order" checkbox in Add Order captures the whole multi-line order as a reusable template; a new "Standing Accounts" checklist lets you check off which accounts are ordering this cycle and adds their saved lines straight onto Fulfillment, where you edit as normal if anything's different
   2026-09-09 — Added Standing Orders (new tab, owner/manager only): a roster of café pickup subscribers and gift subscriptions with W/A/B/M cadence, a "This Cycle" checklist that computes who's due and adds checked names straight onto that cycle's Fulfillment, and a Manage Roster view for add/edit/deactivate. Wholesale accounts are untouched — this is a separate, parallel system that feeds the same Fulfillment sheet.
@@ -436,14 +440,14 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   </div>
 
   <!-- Desktop grouped table -->
-  <div class="card orders-desktop-table">
-    <div class="card-title" style="justify-content:space-between;">
-      <span style="display:flex;align-items:center;gap:8px;"><span style="content:'';display:block;width:3px;height:16px;background:var(--blue);border-radius:2px;flex-shrink:0;"></span>Current Cycle Orders</span>
-      <div id="bulk-actions" style="display:none;gap:8px;align-items:center;">
-        <span id="bulk-count" style="font-size:12px;color:var(--ink3);font-family:'DM Sans',sans-serif;font-weight:400;"></span>
-        <button class="btn btn-danger btn-sm" onclick="bulkDelete()">✕ Delete Selected</button>
-      </div>
+  <div class="card-title" style="justify-content:space-between;margin-bottom:12px;">
+    <span style="display:flex;align-items:center;gap:8px;"><span style="content:'';display:block;width:3px;height:16px;background:var(--blue);border-radius:2px;flex-shrink:0;"></span>Current Cycle Orders</span>
+    <div id="bulk-actions" style="display:none;gap:8px;align-items:center;">
+      <span id="bulk-count" style="font-size:12px;color:var(--ink3);font-family:'DM Sans',sans-serif;font-weight:400;"></span>
+      <button class="btn btn-danger btn-sm" onclick="bulkDelete()">✕ Delete Selected</button>
     </div>
+  </div>
+  <div class="card orders-desktop-table">
     <div class="tbl-wrap">
       <table>
         <thead><tr>
@@ -709,6 +713,10 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <select id="checklist-category-filter" onchange="renderChecklist()" style="margin:0;width:auto;min-width:140px;">
         <option value="">All categories</option>
       </select>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm supplies-view-btn active" id="btn-build-group-category" onclick="setBuildGroupMode('category')">By Category</button>
+        <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-build-group-vendor" onclick="setBuildGroupMode('vendor')">By Vendor</button>
+      </div>
       <div id="checklist-count-badge" style="font-size:13px;font-weight:700;color:var(--blue);white-space:nowrap;">0 on list</div>
     </div>
 
@@ -716,8 +724,9 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 
     <div class="card">
       <div class="card-title" style="margin-bottom:10px;">Something not in the list?</div>
-      <div style="display:flex;gap:10px;">
-        <input type="text" id="adhoc-item-name" placeholder="Add something not in the catalog…" style="flex:1;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <input type="text" id="adhoc-item-name" placeholder="Add something not in the catalog…" style="flex:1;min-width:140px;">
+        <input type="text" id="adhoc-item-vendor" list="vendor-datalist" placeholder="Vendor (optional)" style="width:150px;">
         <input type="text" id="adhoc-item-qty" placeholder="Qty" style="width:90px;">
         <button class="btn btn-secondary btn-sm" onclick="addAdHocListItem()">Add</button>
       </div>
@@ -768,6 +777,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
             <option value="">All categories</option>
           </select>
           <datalist id="category-datalist"></datalist>
+          <datalist id="vendor-datalist"></datalist>
         </div>
       </div>
       <div class="tbl-wrap">
@@ -967,7 +977,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-09f — FIX: portal size/grind dropdown now respects account whitelist');
+console.log('Conduit Ops build: 2026-09-14b — Mobile bulk-delete, Build List vendor sort, ad-hoc vendor field');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -1569,12 +1579,15 @@ function renderOrderCardsMobile() {
 
     html += '<div class="order-card">' +
       '<div class="order-card-header">' +
-        '<div>' +
-          '<div class="order-card-name">'+escHtml(customerName)+'</div>' +
-          '<div class="order-card-meta">' +
-            '<span class="badge '+typeClass+'">'+(TYPE_L[firstLine.order_type]||firstLine.order_type)+'</span>' +
-            '<span class="badge '+regionClass+'">'+(REGION_L[firstLine.region]||firstLine.region)+'</span>' +
-            (firstLine.city ? '<span style="font-size:11px;color:var(--ink3);">'+firstLine.city+'</span>' : '') +
+        '<div style="display:flex;align-items:flex-start;gap:10px;">' +
+          '<input type="checkbox" class="order-select-group" data-ids="'+escHtml(JSON.stringify(lines.map(function(o){return o.id;})))+'" onchange="onGroupCheck(this)" style="width:20px;height:20px;accent-color:var(--blue);cursor:pointer;margin-top:2px;flex-shrink:0;">' +
+          '<div>' +
+            '<div class="order-card-name">'+escHtml(customerName)+'</div>' +
+            '<div class="order-card-meta">' +
+              '<span class="badge '+typeClass+'">'+(TYPE_L[firstLine.order_type]||firstLine.order_type)+'</span>' +
+              '<span class="badge '+regionClass+'">'+(REGION_L[firstLine.region]||firstLine.region)+'</span>' +
+              (firstLine.city ? '<span style="font-size:11px;color:var(--ink3);">'+firstLine.city+'</span>' : '') +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<div style="text-align:right;">' +
@@ -1586,12 +1599,15 @@ function renderOrderCardsMobile() {
 
     lines.forEach(function(o) {
       html += '<div class="order-card-line">' +
-        '<div>' +
-          '<div class="order-card-coffee">'+escHtml(o.coffee_name)+'</div>' +
-          '<div class="order-card-detail">' +
-            '<span class="sku">'+o.coffee_sku+'</span> · ' +
-            o.size+' · '+(GRIND_L[o.grind]||o.grind)+' · qty '+o.qty +
-            (o.notes ? ' · <em>'+escHtml(o.notes)+'</em>' : '') +
+        '<div style="display:flex;gap:8px;align-items:flex-start;flex:1;">' +
+          '<input type="checkbox" class="order-select-line" data-id="'+o.id+'" onchange="onLineCheck()" style="width:20px;height:20px;accent-color:var(--blue);cursor:pointer;flex-shrink:0;margin-top:2px;">' +
+          '<div>' +
+            '<div class="order-card-coffee">'+escHtml(o.coffee_name)+'</div>' +
+            '<div class="order-card-detail">' +
+              '<span class="sku">'+o.coffee_sku+'</span> · ' +
+              o.size+' · '+(GRIND_L[o.grind]||o.grind)+' · qty '+o.qty +
+              (o.notes ? ' · <em>'+escHtml(o.notes)+'</em>' : '') +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<button class="btn btn-danger btn-sm" onclick="deleteOrder(\''+o.id+'\')">✕</button>' +
@@ -2883,6 +2899,14 @@ function refreshCategoryDatalist() {
   dl.innerHTML = knownCategories().map(function(c){ return '<option value="'+escHtml(c)+'">'; }).join('');
 }
 
+function refreshVendorDatalist() {
+  var dl = document.getElementById('vendor-datalist');
+  if (!dl) return;
+  var set = {};
+  supplyItems.forEach(function(it){ if (it.vendor) set[it.vendor] = true; });
+  dl.innerHTML = Object.keys(set).sort().map(function(v){ return '<option value="'+escHtml(v)+'">'; }).join('');
+}
+
 function refreshCategoryFilterOptions() {
   var cats = knownCategories();
   ['supply-category-filter','checklist-category-filter'].forEach(function(id) {
@@ -2908,6 +2932,7 @@ async function loadSupplies() {
   try { supplyItems = await dbFetch('supply_items?select=*&active=eq.true&order=name'); } catch(e) { supplyItems = []; console.log('loadSupplies items error:', e); }
   try { weeklyList = await dbFetch('supply_list_items?select=*&list_status=eq.open&order=created_at'); } catch(e) { weeklyList = []; console.log('loadSupplies list error:', e); }
   refreshCategoryDatalist();
+  refreshVendorDatalist();
   refreshCategoryFilterOptions();
   renderSupplyCatalog();
   renderChecklist();
@@ -2952,44 +2977,68 @@ function renderChecklist() {
     return;
   }
 
-  // group by category (normalized so old slugs and new freeform names merge), then vendor within category
-  var byCategory = {};
-  items.forEach(function(it) {
-    var cat = displayCategory(it.category);
-    byCategory[cat] = byCategory[cat] || {};
-    var ven = it.vendor || 'No vendor set';
-    byCategory[cat][ven] = byCategory[cat][ven] || [];
-    byCategory[cat][ven].push(it);
-  });
-
-  var catOrder = Object.keys(byCategory).sort(function(a,b) {
-    if (a==='Other') return 1;
-    if (b==='Other') return -1;
-    return a.localeCompare(b);
-  });
+  function checklistItemRowHtml(it) {
+    var listRow = listByItem[it.id];
+    var checked = !!listRow;
+    var qtyVal = listRow ? (listRow.qty || '') : '';
+    var need = (it.par_level!=null) ? Math.max(0, (it.par_level||0) - (it.on_hand||0)) : null;
+    var cbId = 'ccb-'+it.id, qtyId = 'cqty-'+it.id;
+    return '<div class="checklist-row'+(checked?' checked':'')+'" id="crow-'+it.id+'">' +
+      '<input type="checkbox" id="'+cbId+'" '+(checked?'checked':'')+' onchange="toggleChecklistItem(\''+it.id+'\',this.checked)">' +
+      '<span class="cl-name">'+escHtml(it.name)+(need>0?'<span class="cl-need">suggested: '+need+'</span>':'')+'</span>' +
+      '<input type="text" class="cl-qty" id="'+qtyId+'" placeholder="qty" value="'+escHtml(qtyVal)+'" onchange="updateChecklistQty(\''+it.id+'\',this.value)">' +
+      '</div>';
+  }
 
   var html = '';
-  catOrder.forEach(function(cat) {
-    html += '<div class="checklist-category">' + escHtml(cat) + '</div>';
-    html += '<div class="checklist-card">';
-    var vendors = Object.keys(byCategory[cat]).sort();
-    vendors.forEach(function(ven, vi) {
-      html += '<div class="checklist-vendor">' + escHtml(ven) + '</div>';
-      byCategory[cat][ven].forEach(function(it) {
-        var listRow = listByItem[it.id];
-        var checked = !!listRow;
-        var qtyVal = listRow ? (listRow.qty || '') : '';
-        var need = (it.par_level!=null) ? Math.max(0, (it.par_level||0) - (it.on_hand||0)) : null;
-        var cbId = 'ccb-'+it.id, qtyId = 'cqty-'+it.id;
-        html += '<div class="checklist-row'+(checked?' checked':'')+'" id="crow-'+it.id+'">' +
-          '<input type="checkbox" id="'+cbId+'" '+(checked?'checked':'')+' onchange="toggleChecklistItem(\''+it.id+'\',this.checked)">' +
-          '<span class="cl-name">'+escHtml(it.name)+(need>0?'<span class="cl-need">suggested: '+need+'</span>':'')+'</span>' +
-          '<input type="text" class="cl-qty" id="'+qtyId+'" placeholder="qty" value="'+escHtml(qtyVal)+'" onchange="updateChecklistQty(\''+it.id+'\',this.value)">' +
-          '</div>';
-      });
+
+  if (buildGroupMode === 'vendor') {
+    // Grouped by vendor first — everything a vendor supplies together, regardless of category.
+    var byVendor = {};
+    items.forEach(function(it) {
+      var ven = it.vendor || 'No vendor set';
+      byVendor[ven] = byVendor[ven] || [];
+      byVendor[ven].push(it);
     });
-    html += '</div>';
-  });
+    var vendorOrder = Object.keys(byVendor).sort(function(a,b) {
+      if (a==='No vendor set') return 1;
+      if (b==='No vendor set') return -1;
+      return a.localeCompare(b);
+    });
+    vendorOrder.forEach(function(ven) {
+      html += '<div class="checklist-category">' + escHtml(ven) + '</div>';
+      html += '<div class="checklist-card">';
+      byVendor[ven].forEach(function(it) { html += checklistItemRowHtml(it); });
+      html += '</div>';
+    });
+  } else {
+    // Grouped by category (normalized so old slugs and new freeform names merge), then vendor within category.
+    var byCategory = {};
+    items.forEach(function(it) {
+      var cat = displayCategory(it.category);
+      byCategory[cat] = byCategory[cat] || {};
+      var ven = it.vendor || 'No vendor set';
+      byCategory[cat][ven] = byCategory[cat][ven] || [];
+      byCategory[cat][ven].push(it);
+    });
+
+    var catOrder = Object.keys(byCategory).sort(function(a,b) {
+      if (a==='Other') return 1;
+      if (b==='Other') return -1;
+      return a.localeCompare(b);
+    });
+
+    catOrder.forEach(function(cat) {
+      html += '<div class="checklist-category">' + escHtml(cat) + '</div>';
+      html += '<div class="checklist-card">';
+      var vendors = Object.keys(byCategory[cat]).sort();
+      vendors.forEach(function(ven) {
+        html += '<div class="checklist-vendor">' + escHtml(ven) + '</div>';
+        byCategory[cat][ven].forEach(function(it) { html += checklistItemRowHtml(it); });
+      });
+      html += '</div>';
+    });
+  }
 
   // ad-hoc (non-catalog) items already on the list
   var adhoc = weeklyList.filter(function(w) { return !w.item_id; });
@@ -2998,7 +3047,7 @@ function renderChecklist() {
     adhoc.forEach(function(w) {
       html += '<div class="checklist-row checked">' +
         '<input type="checkbox" checked onchange="removeAdHocListItem(\''+w.id+'\')">' +
-        '<span class="cl-name">'+escHtml(w.custom_name)+'</span>' +
+        '<span class="cl-name">'+escHtml(w.custom_name)+(w.vendor?'<span class="cl-need">'+escHtml(w.vendor)+'</span>':'')+'</span>' +
         '<input type="text" class="cl-qty" value="'+escHtml(w.qty||'')+'" onchange="updateChecklistQty(null,this.value,\''+w.id+'\')">' +
         '</div>';
     });
@@ -3006,6 +3055,15 @@ function renderChecklist() {
   }
 
   container.innerHTML = html;
+}
+
+var buildGroupMode = 'category';
+
+function setBuildGroupMode(mode) {
+  buildGroupMode = mode;
+  document.getElementById('btn-build-group-category').classList.toggle('active', mode==='category');
+  document.getElementById('btn-build-group-vendor').classList.toggle('active', mode==='vendor');
+  renderChecklist();
 }
 
 async function toggleChecklistItem(itemId, checked) {
@@ -3178,9 +3236,14 @@ function copyTextToClipboard(text, successMsg) {
       var ta = document.createElement('textarea');
       ta.value = text;
       ta.style.position = 'fixed';
+      ta.style.top = '0';
       ta.style.left = '-9999px';
+      ta.style.fontSize = '16px'; // stops iOS Safari auto-zooming on focus, which can break selection
+      ta.setAttribute('readonly', ''); // avoids the keyboard popping up on iOS
       document.body.appendChild(ta);
-      ta.focus(); ta.select();
+      ta.contentEditable = true;
+      ta.focus();
+      ta.setSelectionRange(0, text.length); // iOS Safari needs this — .select() alone often silently fails there
       var ok = document.execCommand('copy');
       document.body.removeChild(ta);
       if (ok) toast(successMsg, 'success');
@@ -3341,14 +3404,16 @@ async function quickAddToList(itemId) {
 
 async function addAdHocListItem() {
   var name = document.getElementById('adhoc-item-name').value.trim();
+  var vendor = document.getElementById('adhoc-item-vendor').value.trim();
   var qty = document.getElementById('adhoc-item-qty').value.trim();
   if (!name) { toast('Enter an item name','warn'); return; }
   try {
     await dbFetch('supply_list_items', {method:'POST', body:{
-      item_id: null, custom_name: name, category: 'other', vendor: null, unit: null,
+      item_id: null, custom_name: name, category: 'other', vendor: vendor || null, unit: null,
       qty: qty || null, list_status: 'open', added_by: currentUser.id
     }, prefer:'return=minimal'});
     document.getElementById('adhoc-item-name').value = '';
+    document.getElementById('adhoc-item-vendor').value = '';
     document.getElementById('adhoc-item-qty').value = '';
     toast('Added to list','success');
     await loadSupplies();
