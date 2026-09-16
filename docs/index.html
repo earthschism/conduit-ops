@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-14 — Standing roster now has a Download/Upload Master List (same sync-with-preview pattern as Supplies' Master Update): download the current roster, edit it, re-upload to sync by name — matched entries update, new ones get added, missing ones get deactivated, nothing commits until you confirm the preview
   2026-09-14 — FIXED: Orders mobile card view had no way to select multiple lines — bulk-delete only existed on desktop. Added matching checkboxes to mobile cards (per-line and per-customer), and moved the "Delete Selected" bar so it's shared between both views instead of hidden inside the desktop-only table.
   2026-09-14 — Build List now has a By Category/By Vendor toggle, matching Review List
   2026-09-14 — Ad-hoc "add something not in the catalog" now has an optional Vendor field with autocomplete
@@ -33,7 +34,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-09-16T20:24:04.702Z">
+<meta name="app-version" content="2026-09-16T20:38:25.489Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -856,8 +857,25 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div id="standing-view-roster" style="display:none;">
     <div class="section-header">
       <div><div class="section-title" style="font-size:16px;">Manage Roster</div><div class="section-sub">Add, edit, or deactivate standing entries</div></div>
-      <button class="btn btn-primary btn-sm" onclick="showAddStandingOrderModal()">+ Add Entry</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="downloadStandingRosterCSV()">⬇ Download Master List</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('standing-upload-card').style.display=document.getElementById('standing-upload-card').style.display==='none'?'block':'none';">⬆ Upload</button>
+        <button class="btn btn-primary btn-sm" onclick="showAddStandingOrderModal()">+ Add Entry</button>
+      </div>
     </div>
+
+    <div class="card" id="standing-upload-card" style="display:none;">
+      <div class="card-title">Master List Sync</div>
+      <div class="section-sub" style="margin-bottom:14px;">
+        Download the current list, edit it, and re-upload to sync. Matched by name: existing entries update to match the sheet, new names get added, and anything active but missing from the sheet gets deactivated. Nothing happens until you review the preview and confirm.
+      </div>
+      <div class="upload-zone" onclick="document.getElementById('standing-csv-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleStandingCSVDrop(event)">
+        <input type="file" id="standing-csv-input" accept=".csv" style="display:none" onchange="handleStandingCSVFile(this.files[0])">
+        <div style="font-size:13px;color:var(--ink3);">Drop your master list spreadsheet here, or click to browse</div>
+      </div>
+      <div id="standing-csv-preview" style="margin-top:16px;"></div>
+    </div>
+
     <div class="card">
       <div class="tbl-wrap">
         <table>
@@ -977,7 +995,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-14b — Mobile bulk-delete, Build List vendor sort, ad-hoc vendor field');
+console.log('Conduit Ops build: 2026-09-14c — Standing roster Master List download/upload sync added');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -4070,6 +4088,159 @@ async function saveStandingOrderModal(editId) {
     toast('Saved','success');
     await loadStandingOrders();
   } catch(e) { toast('Error saving: '+e.message,'error'); }
+}
+
+// ── STANDING ROSTER MASTER LIST (download/upload sync) ──
+function downloadStandingRosterCSV() {
+  var header = 'Name,Type,Coffee SKU,Size,Grind,Qty,Cadence,Signup Date,End Date,Gifter Name,Notes\n';
+  var rows = standingOrders.map(function(so) {
+    return [so.name, so.type, so.coffee_sku, so.size, so.grind, so.qty, so.cadence, so.signup_date||'', so.end_date||'', so.gifter_name||'', so.notes||'']
+      .map(function(v){ v = (v==null?'':String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; })
+      .join(',');
+  });
+  var csv = header + rows.join('\n') + '\n';
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = 'standing-orders-master-list.csv';
+  a.click();
+}
+
+function handleStandingCSVDrop(e) {
+  e.preventDefault(); e.currentTarget.classList.remove('drag');
+  var f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith('.csv')) handleStandingCSVFile(f);
+  else toast('Please drop a .csv file','warn');
+}
+
+var standingCSVPlan = null;
+
+function handleStandingCSVFile(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var lines = e.target.result.split('\n').filter(function(l){return l.trim();});
+    if (lines.length < 2) { toast('CSV has no data rows','warn'); return; }
+    var headers = parseCSVLine(lines[0]);
+    function col(n) { return headers.findIndex(function(h){return h.trim().toLowerCase()===n.toLowerCase();}); }
+    var C = { name:col('Name'), type:col('Type'), sku:col('Coffee SKU'), size:col('Size'), grind:col('Grind'), qty:col('Qty'),
+               cadence:col('Cadence'), signup:col('Signup Date'), end:col('End Date'), gifter:col('Gifter Name'), notes:col('Notes') };
+    if (C.name === -1) { toast('CSV needs a "Name" column','error'); return; }
+
+    var sheetRows = [], seenLower = {};
+    for (var i=1; i<lines.length; i++) {
+      var row = parseCSVLine(lines[i]);
+      var name = (row[C.name]||'').trim();
+      if (!name) continue;
+      if (seenLower[name.toLowerCase()]) continue;
+      seenLower[name.toLowerCase()] = true;
+      sheetRows.push({
+        name: name,
+        type: C.type>-1 ? ((row[C.type]||'').trim().toLowerCase()==='gift' ? 'gift' : 'standing') : 'standing',
+        coffee_sku: C.sku>-1 ? (row[C.sku]||'').trim() : '',
+        size: C.size>-1 ? ((row[C.size]||'').trim() || '12oz') : '12oz',
+        grind: C.grind>-1 ? ((row[C.grind]||'').trim() || 'wb') : 'wb',
+        qty: C.qty>-1 ? (parseInt(row[C.qty])||1) : 1,
+        cadence: C.cadence>-1 ? ((row[C.cadence]||'').trim().toUpperCase() || 'W') : 'W',
+        signup_date: C.signup>-1 ? ((row[C.signup]||'').trim() || null) : null,
+        end_date: C.end>-1 ? ((row[C.end]||'').trim() || null) : null,
+        gifter_name: C.gifter>-1 ? ((row[C.gifter]||'').trim() || null) : null,
+        notes: C.notes>-1 ? ((row[C.notes]||'').trim() || null) : null
+      });
+    }
+    if (!sheetRows.length) { toast('No valid rows found in that file','warn'); return; }
+
+    var existingByLower = {};
+    standingOrders.forEach(function(so){ existingByLower[so.name.trim().toLowerCase()] = so; });
+
+    var toUpdate = [], toAdd = [], matchedIds = {};
+    sheetRows.forEach(function(row) {
+      var existing = existingByLower[row.name.toLowerCase()];
+      if (existing) {
+        matchedIds[existing.id] = true;
+        var coffee = getCoffee(row.coffee_sku);
+        var changes = {};
+        if (row.type !== existing.type) changes.type = row.type;
+        if (row.coffee_sku && row.coffee_sku !== existing.coffee_sku) { changes.coffee_sku = row.coffee_sku; changes.coffee_name = coffee ? coffee.name : row.coffee_sku; }
+        if (row.size !== existing.size) changes.size = row.size;
+        if (row.grind !== existing.grind) changes.grind = row.grind;
+        if (row.qty !== existing.qty) changes.qty = row.qty;
+        if (row.cadence !== existing.cadence) changes.cadence = row.cadence;
+        if (row.signup_date !== existing.signup_date) changes.signup_date = row.signup_date;
+        if (row.end_date !== existing.end_date) changes.end_date = row.end_date;
+        if (row.gifter_name !== existing.gifter_name) changes.gifter_name = row.gifter_name;
+        if (row.notes !== existing.notes) changes.notes = row.notes;
+        if (Object.keys(changes).length) toUpdate.push({id: existing.id, name: existing.name, changes: changes});
+      } else {
+        toAdd.push(row);
+      }
+    });
+
+    var toDeactivate = standingOrders.filter(function(so){ return !matchedIds[so.id]; });
+
+    standingCSVPlan = { toUpdate: toUpdate, toAdd: toAdd, toDeactivate: toDeactivate };
+    renderStandingCSVPreview();
+  };
+  reader.readAsText(file);
+}
+
+function renderStandingCSVPreview() {
+  var p = standingCSVPlan;
+  var container = document.getElementById('standing-csv-preview');
+  if (!p) { container.innerHTML=''; return; }
+  var html = '<div class="section-sub" style="margin-bottom:10px;font-weight:600;color:var(--ink);">Preview — nothing has changed yet</div>';
+  html += '<div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap;">' +
+    '<div><span class="badge badge-green">'+p.toAdd.length+'</span> new</div>' +
+    '<div><span class="badge badge-gold">'+p.toUpdate.length+'</span> updated</div>' +
+    '<div><span class="badge badge-gray">'+p.toDeactivate.length+'</span> deactivated</div>' +
+  '</div>';
+  if (p.toDeactivate.length) {
+    html += '<div class="section-sub" style="margin-bottom:6px;"><strong>Will be deactivated</strong> (not in the sheet):</div>';
+    html += '<div style="font-size:12px;color:var(--ink3);margin-bottom:14px;">'+p.toDeactivate.map(function(so){return escHtml(so.name);}).join(', ')+'</div>';
+  }
+  if (p.toAdd.length) {
+    html += '<div class="section-sub" style="margin-bottom:6px;"><strong>Will be added</strong>:</div>';
+    html += '<div style="font-size:12px;color:var(--ink3);margin-bottom:14px;">'+p.toAdd.map(function(r){return escHtml(r.name);}).join(', ')+'</div>';
+  }
+  html += '<div style="display:flex;gap:10px;">' +
+    '<button class="btn btn-danger" onclick="commitStandingCSVSync()">Confirm Sync</button>' +
+    '<button class="btn btn-ghost" onclick="cancelStandingCSVSync()">Cancel</button>' +
+  '</div>';
+  container.innerHTML = html;
+}
+
+function cancelStandingCSVSync() {
+  standingCSVPlan = null;
+  document.getElementById('standing-csv-input').value = '';
+  document.getElementById('standing-csv-preview').innerHTML = '';
+}
+
+async function commitStandingCSVSync() {
+  var p = standingCSVPlan;
+  if (!p) return;
+  if (!confirm('This will update '+p.toUpdate.length+', add '+p.toAdd.length+', and deactivate '+p.toDeactivate.length+' entr'+(p.toDeactivate.length===1?'y':'ies')+'. Continue?')) return;
+  try {
+    for (var i=0; i<p.toUpdate.length; i++) {
+      await dbFetch('standing_orders?id=eq.'+p.toUpdate[i].id, {method:'PATCH', body:p.toUpdate[i].changes, prefer:'return=minimal'});
+    }
+    if (p.toAdd.length) {
+      var inserts = p.toAdd.map(function(r) {
+        var coffee = getCoffee(r.coffee_sku);
+        return {
+          name:r.name, type:r.type, coffee_sku:r.coffee_sku, coffee_name: coffee ? coffee.name : r.coffee_sku,
+          size:r.size, grind:r.grind, qty:r.qty, cadence:r.cadence,
+          signup_date: r.signup_date || new Date().toISOString().split('T')[0],
+          end_date:r.end_date, gifter_name:r.gifter_name, notes:r.notes, active:true
+        };
+      });
+      await dbFetch('standing_orders', {method:'POST', body: inserts.length===1?inserts[0]:inserts, prefer:'return=minimal'});
+    }
+    for (var j=0; j<p.toDeactivate.length; j++) {
+      await dbFetch('standing_orders?id=eq.'+p.toDeactivate[j].id, {method:'PATCH', body:{active:false}, prefer:'return=minimal'});
+    }
+    toast('Master list synced','success');
+    cancelStandingCSVSync();
+    await loadStandingOrders();
+  } catch(e) { toast('Error syncing: '+e.message,'error'); }
 }
 
 // ── TABS ──
