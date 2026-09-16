@@ -29,7 +29,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-09-11T14:25:01.846Z">
+<meta name="app-version" content="2026-09-16T00:34:30.039Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -3980,10 +3980,13 @@ async function saveStandingOrderModal(editId) {
   var name = document.getElementById('so-name').value.trim();
   if (!name) { toast('Name is required','warn'); return; }
   var type = document.getElementById('so-type').value;
+  var coffeeSku = document.getElementById('so-coffee').value;
+  var coffee = getCoffee(coffeeSku);
   var body = {
     name: name,
     type: type,
-    coffee_sku: document.getElementById('so-coffee').value,
+    coffee_sku: coffeeSku,
+    coffee_name: coffee ? coffee.name : coffeeSku,
     size: document.getElementById('so-size').value,
     grind: document.getElementById('so-grind').value,
     qty: parseInt(document.getElementById('so-qty').value) || 1,
