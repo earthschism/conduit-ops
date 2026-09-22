@@ -1,5 +1,8 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-21 — Standing order entries now go onto Fulfillment as a single grouped "Subscriptions" line instead of each person appearing as their own separate customer — the individual's name (and gift/gifter info) moves into the Notes field on each line instead
+  2026-09-21 — FIXED real bug: A/B cadence for Standing Orders was computed with raw millisecond date subtraction, which breaks across DST transitions — for anyone in a US timezone, the daylight-saving shift between the Jan 2024 reference point and later dates could flip A and B entirely, hiding correctly-due entries. Now uses DST-proof UTC calendar-date math.
+  2026-09-14 — Standing Orders can now use "Roaster's Choice" as an entry's coffee — resolves dynamically to whatever that cycle's actual Roaster's Choice is when checked off, rather than a fixed coffee. Shows a clear warning and blocks adding to Fulfillment if the cycle hasn't had one set yet. Also fixed: editing an existing standing entry never pre-selected its saved coffee in the dropdown.
   2026-09-14 — Standing roster now has a Download/Upload Master List (same sync-with-preview pattern as Supplies' Master Update): download the current roster, edit it, re-upload to sync by name — matched entries update, new ones get added, missing ones get deactivated, nothing commits until you confirm the preview
   2026-09-14 — FIXED: Orders mobile card view had no way to select multiple lines — bulk-delete only existed on desktop. Added matching checkboxes to mobile cards (per-line and per-customer), and moved the "Delete Selected" bar so it's shared between both views instead of hidden inside the desktop-only table.
   2026-09-14 — Build List now has a By Category/By Vendor toggle, matching Review List
@@ -995,7 +998,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-14c — Standing roster Master List download/upload sync added');
+console.log('Conduit Ops build: 2026-09-21b — Standing orders grouped as one "Subscriptions" line, names in notes');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -3765,8 +3768,11 @@ function getCycleMonday(cycle) {
 function weekParityAB(date) {
   // Stable global parity so every A-cadence entry and every B-cadence entry
   // land on opposite weeks from each other, consistently, forever.
-  var epoch = new Date(2024,0,1);
-  var days = Math.floor((date - epoch) / 86400000);
+  // Uses UTC-anchored calendar-date math (not raw ms subtraction) so DST
+  // transitions between the epoch and the target date never shift the count.
+  var epoch = Date.UTC(2024,0,1);
+  var d = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  var days = Math.round((d - epoch) / 86400000);
   var weeks = Math.floor(days / 7);
   return weeks % 2 === 0 ? 'A' : 'B';
 }
@@ -3816,6 +3822,15 @@ function switchStandingView(view) {
   document.getElementById('standing-view-sub').textContent = subText[view];
 }
 
+function resolveStandingCoffee(so, cycle) {
+  if (so.coffee_sku !== '__roasters_choice__') {
+    return { sku: so.coffee_sku, coffee: getCoffee(so.coffee_sku), unresolved: false };
+  }
+  var rcSku = cycle && cycle.roasters_choice_sku;
+  if (!rcSku) return { sku: null, coffee: null, unresolved: true };
+  return { sku: rcSku, coffee: getCoffee(rcSku), unresolved: false };
+}
+
 async function renderStandingChecklist() {
   var container = document.getElementById('standing-checklist');
   var addBtn = document.getElementById('standing-add-to-fulfillment-btn');
@@ -3843,44 +3858,55 @@ async function renderStandingChecklist() {
 
   container.innerHTML = '<div class="checklist-card">' + standingCycleDue.map(function(d, i) {
     var so = d.so;
-    var coffee = getCoffee(so.coffee_sku);
+    var resolved = resolveStandingCoffee(so, cycle);
+    var coffeeLabel = resolved.unresolved
+      ? '<span style="color:#c0392b;font-weight:600;">⚠ Roaster\'s Choice not set for this cycle</span>'
+      : (resolved.coffee ? escHtml(resolved.coffee.name) : escHtml(resolved.sku)) + (so.coffee_sku==='__roasters_choice__' ? ' (Roaster\'s Choice)' : '');
     var typeTag = so.type === 'gift' ? '<span class="badge badge-gold" style="margin-left:6px;">Gift</span>' : '';
     if (d.alreadyAdded) {
       return '<div class="checklist-row checked">' +
         '<input type="checkbox" checked disabled style="opacity:0.5;">' +
-        '<span class="cl-name">'+escHtml(so.name)+typeTag+'<span class="cl-need">'+(coffee?escHtml(coffee.name):so.coffee_sku)+' · '+escHtml(so.size)+' · '+escHtml(GRIND_L[so.grind]||so.grind)+'</span></span>' +
+        '<span class="cl-name">'+escHtml(so.name)+typeTag+'<span class="cl-need">'+coffeeLabel+' · '+escHtml(so.size)+' · '+escHtml(GRIND_L[so.grind]||so.grind)+'</span></span>' +
         '<span style="font-size:11px;color:var(--green2);font-weight:600;">On Fulfillment ✓</span>' +
         '</div>';
     }
     return '<div class="checklist-row" id="standing-row-'+i+'">' +
-      '<input type="checkbox" id="standing-check-'+i+'" checked>' +
-      '<span class="cl-name">'+escHtml(so.name)+typeTag+'<span class="cl-need">'+(coffee?escHtml(coffee.name):so.coffee_sku)+' · '+escHtml(so.size)+' · '+escHtml(GRIND_L[so.grind]||so.grind)+'</span></span>' +
+      '<input type="checkbox" id="standing-check-'+i+'" '+(resolved.unresolved?'disabled':'checked')+'>' +
+      '<span class="cl-name">'+escHtml(so.name)+typeTag+'<span class="cl-need">'+coffeeLabel+' · '+escHtml(so.size)+' · '+escHtml(GRIND_L[so.grind]||so.grind)+'</span></span>' +
       '<span style="font-size:13px;color:var(--ink3);">×'+so.qty+'</span>' +
       '</div>';
   }).join('') + '</div>';
 }
 
 async function addCheckedStandingOrders() {
+  var cycle = cycles.find(function(c){return c.id===currentCycleId;});
   var toInsert = [];
+  var skippedUnresolved = 0;
   standingCycleDue.forEach(function(d, i) {
     if (d.alreadyAdded) return;
     var cb = document.getElementById('standing-check-'+i);
     if (!cb || !cb.checked) return;
     var so = d.so;
-    var coffee = getCoffee(so.coffee_sku);
+    var resolved = resolveStandingCoffee(so, cycle);
+    if (resolved.unresolved) { skippedUnresolved++; return; }
     toInsert.push({
       cycle_id: currentCycleId, profile_id: currentUser.id,
-      customer_name: so.name, order_type: 'subscription', region: 'pickup',
-      coffee_sku: so.coffee_sku, coffee_name: coffee ? coffee.name : so.coffee_sku,
+      customer_name: 'Subscriptions', order_type: 'subscription', region: 'pickup',
+      coffee_sku: resolved.sku, coffee_name: resolved.coffee ? resolved.coffee.name : resolved.sku,
       qty: so.qty, size: so.size, grind: so.grind,
-      notes: so.type==='gift' ? ('Gift subscription'+(so.gifter_name?' from '+so.gifter_name:'')) : 'Standing order',
+      notes: so.name + (so.type==='gift' ? ' — Gift subscription'+(so.gifter_name?' from '+so.gifter_name:'') : ''),
       source_order_id: d.sourceId
     });
   });
-  if (!toInsert.length) { toast('Nothing checked to add','warn'); return; }
+  if (!toInsert.length) {
+    toast(skippedUnresolved ? "Set this cycle's Roaster's Choice first (on the Orders tab) — that's blocking "+skippedUnresolved+" entr"+(skippedUnresolved===1?'y':'ies') : 'Nothing checked to add', 'warn');
+    return;
+  }
   try {
     await dbFetch('orders', {method:'POST', body: toInsert.length===1 ? toInsert[0] : toInsert, prefer:'return=minimal'});
-    toast(toInsert.length+' added to Fulfillment','success');
+    var msg = toInsert.length+' added to Fulfillment';
+    if (skippedUnresolved) msg += ' · '+skippedUnresolved+" skipped (Roaster's Choice not set)";
+    toast(msg,'success');
     await loadOrders();
     await renderStandingChecklist();
   } catch(e) { toast('Error adding to fulfillment: '+e.message,'error'); }
@@ -3987,10 +4013,11 @@ function renderStandingRoster() {
   if (!standingOrders.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">No standing entries yet.</td></tr>'; return; }
   tbody.innerHTML = standingOrders.map(function(so) {
     var coffee = getCoffee(so.coffee_sku);
+    var coffeeCell = so.coffee_sku === '__roasters_choice__' ? "☕ Roaster's Choice" : (coffee?escHtml(coffee.name):escHtml(so.coffee_sku));
     return '<tr>' +
       '<td style="font-weight:600;">'+escHtml(so.name)+'</td>' +
       '<td>'+(so.type==='gift' ? '<span class="badge badge-gold">Gift</span>' : '<span class="badge badge-gray">Standing</span>')+'</td>' +
-      '<td>'+(coffee?escHtml(coffee.name):escHtml(so.coffee_sku))+'</td>' +
+      '<td>'+coffeeCell+'</td>' +
       '<td>'+escHtml(so.size)+'</td>' +
       '<td>'+escHtml(GRIND_L[so.grind]||so.grind)+'</td>' +
       '<td class="num">'+so.qty+'</td>' +
@@ -4028,7 +4055,7 @@ function showAddStandingOrderModal(editId) {
         '</select></div>' +
       '</div>' +
       '<div class="form-row c2">' +
-        '<div class="form-group"><label>Coffee</label><select id="so-coffee">'+coffeeOpts()+'</select></div>' +
+        '<div class="form-group"><label>Coffee</label><select id="so-coffee"><option value="__roasters_choice__" '+(editing&&editing.coffee_sku==='__roasters_choice__'?'selected':'')+'>☕ Roaster\'s Choice (whatever that cycle\'s pick is)</option>'+coffeeOpts()+'</select></div>' +
         '<div class="form-group"><label>Size</label><select id="so-size">' +
           Object.keys(BAG_W).map(function(k){return '<option value="'+k+'" '+(editing&&editing.size===k?'selected':'')+'>'+k+'</option>';}).join('') +
         '</select></div>' +
@@ -4051,6 +4078,7 @@ function showAddStandingOrderModal(editId) {
       '</div>' +
     '</div>';
   document.body.appendChild(modal);
+  if (editing) document.getElementById('so-coffee').value = editing.coffee_sku;
 }
 
 function toggleGiftFields() {
@@ -4064,12 +4092,13 @@ async function saveStandingOrderModal(editId) {
   if (!name) { toast('Name is required','warn'); return; }
   var type = document.getElementById('so-type').value;
   var coffeeSku = document.getElementById('so-coffee').value;
-  var coffee = getCoffee(coffeeSku);
+  var isRoastersChoice = coffeeSku === '__roasters_choice__';
+  var coffee = isRoastersChoice ? null : getCoffee(coffeeSku);
   var body = {
     name: name,
     type: type,
     coffee_sku: coffeeSku,
-    coffee_name: coffee ? coffee.name : coffeeSku,
+    coffee_name: isRoastersChoice ? "Roaster's Choice" : (coffee ? coffee.name : coffeeSku),
     size: document.getElementById('so-size').value,
     grind: document.getElementById('so-grind').value,
     qty: parseInt(document.getElementById('so-qty').value) || 1,
