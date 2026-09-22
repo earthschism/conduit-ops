@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-21 — Added a Remove action to each row in Manage Catalog (owner/manager only) — there was previously no way to delete a single supply item at all, only bulk-deactivate via Master Update. Soft-removes (marks inactive) so anything already on this week's list is untouched.
   2026-09-21 — FIXED real bug in the shared dbFetch helper: it unconditionally returned an empty result for any HTTP 201 response, even when Prefer: return=representation was requested — meaning the created row's data was silently discarded before ever being read. This broke "Save as standing order" for any brand-new account (the template row was created successfully, but the app couldn't get its id back to attach line items to). Also fixed the misleading success toast that still said "standing order updated" even when that step had actually failed.
   2026-09-21 — Standing order entries now go onto Fulfillment as a single grouped "Subscriptions" line instead of each person appearing as their own separate customer — the individual's name (and gift/gifter info) moves into the Notes field on each line instead
   2026-09-21 — FIXED real bug: A/B cadence for Standing Orders was computed with raw millisecond date subtraction, which breaks across DST transitions — for anyone in a US timezone, the daylight-saving shift between the Jan 2024 reference point and later dates could flip A and B entirely, hiding correctly-due entries. Now uses DST-proof UTC calendar-date math.
@@ -999,7 +1000,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-21c — FIX: dbFetch discarded 201 response bodies, broke new-account templates');
+console.log('Conduit Ops build: 2026-09-21d — Added Remove action to Manage Catalog rows');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -3374,7 +3375,10 @@ function renderSupplyCatalog() {
       '<td class="num">'+onHandCell+'</td>' +
       '<td class="num">'+needCell+'</td>' +
       '<td>'+stickyToggle+'</td>' +
-      '<td><button class="btn btn-ghost btn-sm" onclick="quickAddToList(\''+it.id+'\')">+ Add to list</button></td>' +
+      '<td style="display:flex;gap:6px;">' +
+        '<button class="btn btn-ghost btn-sm" onclick="quickAddToList(\''+it.id+'\')">+ Add to list</button>' +
+        (isSuppliesManager ? '<button class="btn btn-ghost btn-sm" style="color:#c0392b;" onclick="removeSupplyItem(\''+it.id+'\',\''+escHtml(it.name).replace(/'/g,"\\'")+'\')" title="Remove from catalog">✕</button>' : '') +
+      '</td>' +
       '</tr>';
   }).join('');
 }
@@ -3395,6 +3399,12 @@ async function updateItemName(id, val) {
   if (!val) { toast('Name cannot be empty','warn'); await loadSupplies(); return; }
   try { await dbFetch('supply_items?id=eq.'+id, {method:'PATCH', body:{name:val}, prefer:'return=minimal'}); await loadSupplies(); }
   catch(e) { toast('Error updating name','error'); }
+}
+
+async function removeSupplyItem(id, name) {
+  if (!confirm('Remove "'+name+'" from the catalog? It\'ll disappear from browsing and future imports — if it\'s already on this week\'s list, that entry is untouched.')) return;
+  try { await dbFetch('supply_items?id=eq.'+id, {method:'PATCH', body:{active:false}, prefer:'return=minimal'}); toast('Removed from catalog','success'); await loadSupplies(); }
+  catch(e) { toast('Error removing item','error'); }
 }
 
 async function updateParLevel(id, val) {
