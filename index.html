@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-21 — FIXED real bug in the shared dbFetch helper: it unconditionally returned an empty result for any HTTP 201 response, even when Prefer: return=representation was requested — meaning the created row's data was silently discarded before ever being read. This broke "Save as standing order" for any brand-new account (the template row was created successfully, but the app couldn't get its id back to attach line items to). Also fixed the misleading success toast that still said "standing order updated" even when that step had actually failed.
   2026-09-21 — Standing order entries now go onto Fulfillment as a single grouped "Subscriptions" line instead of each person appearing as their own separate customer — the individual's name (and gift/gifter info) moves into the Notes field on each line instead
   2026-09-21 — FIXED real bug: A/B cadence for Standing Orders was computed with raw millisecond date subtraction, which breaks across DST transitions — for anyone in a US timezone, the daylight-saving shift between the Jan 2024 reference point and later dates could flip A and B entirely, hiding correctly-due entries. Now uses DST-proof UTC calendar-date math.
   2026-09-14 — Standing Orders can now use "Roaster's Choice" as an entry's coffee — resolves dynamically to whatever that cycle's actual Roaster's Choice is when checked off, rather than a fixed coffee. Shows a clear warning and blocks adding to Fulfillment if the cycle hasn't had one set yet. Also fixed: editing an existing standing entry never pre-selected its saved coffee in the dropdown.
@@ -932,7 +933,7 @@ async function dbFetch(path, options) {
   if (token) headers['Authorization'] = 'Bearer ' + token;
   var res = await fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) { var err = await res.text(); throw new Error('DB error ' + res.status + ': ' + err); }
-  if (res.status === 204 || res.status === 201) return [];
+  if (res.status === 204) return [];
   var ct = res.headers.get('content-type') || '';
   if (!ct.includes('json')) return [];
   var text = await res.text();
@@ -998,7 +999,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-21b — Standing orders grouped as one "Subscriptions" line, names in notes');
+console.log('Conduit Ops build: 2026-09-21c — FIX: dbFetch discarded 201 response bodies, broke new-account templates');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -1709,12 +1710,13 @@ async function saveOrder() {
   try { await dbFetch('orders', {method:'POST', body: toInsert.length === 1 ? toInsert[0] : toInsert, prefer:'return=minimal'}); }
   catch(e) { toast('Error saving: '+e.message,'error'); return; }
   var savedTemplate = document.getElementById('f-save-template').checked;
+  var templateSaveFailed = false;
   if (savedTemplate) {
     try {
       await saveAccountTemplate(customer, document.getElementById('f-type').value, document.getElementById('f-region').value, templateLines);
-    } catch(e) { toast('Order saved, but saving the standing template failed: '+e.message,'error'); }
+    } catch(e) { templateSaveFailed = true; toast('Order saved, but saving the standing template failed: '+e.message,'error'); }
   }
-  toast(toInsert.length+' line'+(toInsert.length>1?'s':'')+' saved'+(savedTemplate?' · standing order updated':''),'success');
+  toast(toInsert.length+' line'+(toInsert.length>1?'s':'')+' saved'+(savedTemplate&&!templateSaveFailed?' · standing order updated':''),'success');
   document.getElementById('f-customer').value = '';
   document.getElementById('f-notes').value = '';
   document.getElementById('f-save-template').checked = false;
