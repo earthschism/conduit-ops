@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-23 — Added "⬇ Export All" button to Manage Catalog — downloads the full current supply catalog (Name, Code, Category, Vendor, Unit, Sticky, Par, On Hand) as a CSV, same download pattern as the Standing roster's Master List export.
   2026-09-21 — Added a Remove action to each row in Manage Catalog (owner/manager only) — there was previously no way to delete a single supply item at all, only bulk-deactivate via Master Update. Soft-removes (marks inactive) so anything already on this week's list is untouched.
   2026-09-21 — FIXED real bug in the shared dbFetch helper: it unconditionally returned an empty result for any HTTP 201 response, even when Prefer: return=representation was requested — meaning the created row's data was silently discarded before ever being read. This broke "Save as standing order" for any brand-new account (the template row was created successfully, but the app couldn't get its id back to attach line items to). Also fixed the misleading success toast that still said "standing order updated" even when that step had actually failed.
   2026-09-21 — Standing order entries now go onto Fulfillment as a single grouped "Subscriptions" line instead of each person appearing as their own separate customer — the individual's name (and gift/gifter info) moves into the Notes field on each line instead
@@ -770,6 +771,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <div class="section-header">
       <div><div class="section-title" style="font-size:16px;">Manage Catalog</div><div class="section-sub">Par levels, vendor codes, bulk import</div></div>
       <div id="supply-manager-actions" style="display:flex;gap:10px;">
+        <button class="btn btn-ghost btn-sm" onclick="downloadSupplyCatalogCSV()">⬇ Export All</button>
         <button class="btn btn-primary btn-sm" onclick="showAddSupplyItemsModal()">+ Add Catalog Items</button>
       </div>
     </div>
@@ -1000,7 +1002,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-21d — Added Remove action to Manage Catalog rows');
+console.log('Conduit Ops build: 2026-09-23 — Added Export All button to Manage Catalog');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -3575,6 +3577,20 @@ function downloadSupplyCSVTemplate() {
   var a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download = 'supply-catalog-template.csv';
+  a.click();
+}
+
+function downloadSupplyCatalogCSV() {
+  var header = 'Name,Code,Category,Vendor,Unit,Sticky,Par,On Hand\n';
+  var rows = supplyItems.map(function(i) {
+    return [i.name, i.code, i.category, i.vendor, i.unit, (i.sticky?'yes':'no'), (i.par_level!=null?i.par_level:''), (i.on_hand!=null?i.on_hand:'')]
+      .map(function(v){ v = (v==null?'':String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; })
+      .join(',');
+  });
+  var csv = header + rows.join('\n') + '\n';
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = 'supply-catalog-export.csv';
   a.click();
 }
 
