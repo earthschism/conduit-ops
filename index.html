@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-09-23b — Standing subscribers: added Pickup/Shipping Location (freeform with autocomplete, seeded with Cafe Pickup/Local Delivery/Ship — surfaced on the roster, This Cycle checklist, and the Fulfillment note line) and support for multiple coffees per subscriber ("+ Add another coffee" on the Add/Edit modal, backed by a new standing_order_items table). REQUIRES a one-time SQL migration — see message. Master List CSV now includes a Location column; extra coffees are in-app-only for now (not part of CSV sync).
   2026-09-23 — Added "⬇ Export All" button to Manage Catalog — downloads the full current supply catalog (Name, Code, Category, Vendor, Unit, Sticky, Par, On Hand) as a CSV, same download pattern as the Standing roster's Master List export.
   2026-09-21 — Added a Remove action to each row in Manage Catalog (owner/manager only) — there was previously no way to delete a single supply item at all, only bulk-deactivate via Master Update. Soft-removes (marks inactive) so anything already on this week's list is untouched.
   2026-09-21 — FIXED real bug in the shared dbFetch helper: it unconditionally returned an empty result for any HTTP 201 response, even when Prefer: return=representation was requested — meaning the created row's data was silently discarded before ever being read. This broke "Save as standing order" for any brand-new account (the template row was created successfully, but the app couldn't get its id back to attach line items to). Also fixed the misleading success toast that still said "standing order updated" even when that step had actually failed.
@@ -886,9 +887,10 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <div class="card">
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>Name</th><th>Type</th><th>Coffee</th><th>Size</th><th>Grind</th><th class="num">Qty</th><th>Cadence</th><th>Signup</th><th>End</th><th>Active</th><th></th></tr></thead>
-          <tbody id="standing-roster-tbody"><tr><td colspan="11" class="loading"><div class="spinner"></div></td></tr></tbody>
+          <thead><tr><th>Name</th><th>Type</th><th>Coffee</th><th>Size</th><th>Grind</th><th class="num">Qty</th><th>Location</th><th>Cadence</th><th>Signup</th><th>End</th><th>Active</th><th></th></tr></thead>
+          <tbody id="standing-roster-tbody"><tr><td colspan="12" class="loading"><div class="spinner"></div></td></tr></tbody>
         </table>
+        <datalist id="pickup-location-datalist"></datalist>
       </div>
     </div>
   </div>
@@ -1002,7 +1004,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-23 — Added Export All button to Manage Catalog');
+console.log('Conduit Ops build: 2026-09-23b — Standing: pickup/shipping location + multiple coffees per subscriber');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -3786,6 +3788,15 @@ async function saveNote() {
 // ── STANDING ORDERS ──
 var standingOrders = [];
 var standingCycleDue = []; // computed each render: entries due this cycle, with already-added status
+var standingOrderItems = {}; // map: standing_order_id -> array of extra coffee lines {id, coffee_sku, coffee_name, size, grind, qty}
+
+function refreshPickupLocationDatalist() {
+  var dl = document.getElementById('pickup-location-datalist');
+  if (!dl) return;
+  var set = {'Cafe Pickup':true, 'Local Delivery':true, 'Ship':true};
+  standingOrders.forEach(function(so){ if (so.pickup_location) set[so.pickup_location] = true; });
+  dl.innerHTML = Object.keys(set).sort().map(function(v){ return '<option value="'+escHtml(v)+'">'; }).join('');
+}
 
 function getCycleMonday(cycle) {
   if (!cycle || !cycle.name) return new Date();
@@ -3830,6 +3841,18 @@ var CADENCE_LABELS = {W:'Weekly',A:'Every other week (A)',B:'Every other week (B
 async function loadStandingOrders() {
   try { standingOrders = await dbFetch('standing_orders?select=*&active=eq.true&order=name'); }
   catch(e) { standingOrders = []; console.log('loadStandingOrders error:', e); }
+  standingOrderItems = {};
+  if (standingOrders.length) {
+    try {
+      var ids = standingOrders.map(function(so){return so.id;}).join(',');
+      var items = await dbFetch('standing_order_items?select=*&standing_order_id=in.('+ids+')');
+      items.forEach(function(it) {
+        if (!standingOrderItems[it.standing_order_id]) standingOrderItems[it.standing_order_id] = [];
+        standingOrderItems[it.standing_order_id].push(it);
+      });
+    } catch(e) { console.log('loadStandingOrderItems error:', e); }
+  }
+  refreshPickupLocationDatalist();
   renderStandingRoster();
   await renderStandingChecklist();
   await renderAccountTemplatesChecklist();
@@ -3877,8 +3900,12 @@ async function renderStandingChecklist() {
   } catch(e) { console.log('checking existing standing orders error:', e); }
 
   standingCycleDue = due.map(function(so) {
-    var sourceId = 'standing-'+so.id+'-'+currentCycleId;
-    return { so: so, alreadyAdded: !!existingSourceIds[sourceId], sourceId: sourceId };
+    var lines = [{isPrimary:true, coffee_sku:so.coffee_sku, size:so.size, grind:so.grind, qty:so.qty, sourceId:'standing-'+so.id+'-'+currentCycleId}]
+      .concat((standingOrderItems[so.id]||[]).map(function(it) {
+        return {isPrimary:false, coffee_sku:it.coffee_sku, size:it.size, grind:it.grind, qty:it.qty, sourceId:'standing-'+so.id+'-item-'+it.id+'-'+currentCycleId};
+      }));
+    lines.forEach(function(l){ l.alreadyAdded = !!existingSourceIds[l.sourceId]; });
+    return { so: so, lines: lines, alreadyAdded: lines.every(function(l){return l.alreadyAdded;}) };
   });
 
   if (!standingCycleDue.length) { container.innerHTML = '<div class="checklist-empty">Nobody is due this cycle.</div>'; addBtn.style.display='none'; return; }
@@ -3886,22 +3913,27 @@ async function renderStandingChecklist() {
 
   container.innerHTML = '<div class="checklist-card">' + standingCycleDue.map(function(d, i) {
     var so = d.so;
-    var resolved = resolveStandingCoffee(so, cycle);
-    var coffeeLabel = resolved.unresolved
-      ? '<span style="color:#c0392b;font-weight:600;">⚠ Roaster\'s Choice not set for this cycle</span>'
-      : (resolved.coffee ? escHtml(resolved.coffee.name) : escHtml(resolved.sku)) + (so.coffee_sku==='__roasters_choice__' ? ' (Roaster\'s Choice)' : '');
+    var locationTag = '<span class="badge badge-gray" style="margin-left:6px;">'+escHtml(so.pickup_location||'Cafe Pickup')+'</span>';
     var typeTag = so.type === 'gift' ? '<span class="badge badge-gold" style="margin-left:6px;">Gift</span>' : '';
+    var anyUnresolved = false;
+    var linesHtml = d.lines.map(function(l) {
+      var resolved = resolveStandingCoffee(l, cycle);
+      if (resolved.unresolved) anyUnresolved = true;
+      var coffeeLabel = resolved.unresolved
+        ? '<span style="color:#c0392b;font-weight:600;">⚠ Roaster\'s Choice not set for this cycle</span>'
+        : (resolved.coffee ? escHtml(resolved.coffee.name) : escHtml(resolved.sku)) + (l.coffee_sku==='__roasters_choice__' ? ' (Roaster\'s Choice)' : '');
+      return coffeeLabel + ' · ' + escHtml(l.size) + ' · ' + escHtml(GRIND_L[l.grind]||l.grind) + ' ×'+l.qty;
+    }).join('<br>');
     if (d.alreadyAdded) {
       return '<div class="checklist-row checked">' +
         '<input type="checkbox" checked disabled style="opacity:0.5;">' +
-        '<span class="cl-name">'+escHtml(so.name)+typeTag+'<span class="cl-need">'+coffeeLabel+' · '+escHtml(so.size)+' · '+escHtml(GRIND_L[so.grind]||so.grind)+'</span></span>' +
+        '<span class="cl-name">'+escHtml(so.name)+typeTag+locationTag+'<span class="cl-need">'+linesHtml+'</span></span>' +
         '<span style="font-size:11px;color:var(--green2);font-weight:600;">On Fulfillment ✓</span>' +
         '</div>';
     }
     return '<div class="checklist-row" id="standing-row-'+i+'">' +
-      '<input type="checkbox" id="standing-check-'+i+'" '+(resolved.unresolved?'disabled':'checked')+'>' +
-      '<span class="cl-name">'+escHtml(so.name)+typeTag+'<span class="cl-need">'+coffeeLabel+' · '+escHtml(so.size)+' · '+escHtml(GRIND_L[so.grind]||so.grind)+'</span></span>' +
-      '<span style="font-size:13px;color:var(--ink3);">×'+so.qty+'</span>' +
+      '<input type="checkbox" id="standing-check-'+i+'" '+(anyUnresolved?'disabled':'checked')+'>' +
+      '<span class="cl-name">'+escHtml(so.name)+typeTag+locationTag+'<span class="cl-need">'+linesHtml+'</span></span>' +
       '</div>';
   }).join('') + '</div>';
 }
@@ -3915,15 +3947,19 @@ async function addCheckedStandingOrders() {
     var cb = document.getElementById('standing-check-'+i);
     if (!cb || !cb.checked) return;
     var so = d.so;
-    var resolved = resolveStandingCoffee(so, cycle);
-    if (resolved.unresolved) { skippedUnresolved++; return; }
-    toInsert.push({
-      cycle_id: currentCycleId, profile_id: currentUser.id,
-      customer_name: 'Subscriptions', order_type: 'subscription', region: 'pickup',
-      coffee_sku: resolved.sku, coffee_name: resolved.coffee ? resolved.coffee.name : resolved.sku,
-      qty: so.qty, size: so.size, grind: so.grind,
-      notes: so.name + (so.type==='gift' ? ' — Gift subscription'+(so.gifter_name?' from '+so.gifter_name:'') : ''),
-      source_order_id: d.sourceId
+    var noteBase = so.name + ' — ' + (so.pickup_location||'Cafe Pickup') + (so.type==='gift' ? ' — Gift subscription'+(so.gifter_name?' from '+so.gifter_name:'') : '');
+    d.lines.forEach(function(l) {
+      if (l.alreadyAdded) return;
+      var resolved = resolveStandingCoffee(l, cycle);
+      if (resolved.unresolved) { skippedUnresolved++; return; }
+      toInsert.push({
+        cycle_id: currentCycleId, profile_id: currentUser.id,
+        customer_name: 'Subscriptions', order_type: 'subscription', region: 'pickup',
+        coffee_sku: resolved.sku, coffee_name: resolved.coffee ? resolved.coffee.name : resolved.sku,
+        qty: l.qty, size: l.size, grind: l.grind,
+        notes: noteBase,
+        source_order_id: l.sourceId
+      });
     });
   });
   if (!toInsert.length) {
@@ -4038,10 +4074,17 @@ async function deactivateAccountTemplate(id) {
 
 function renderStandingRoster() {
   var tbody = document.getElementById('standing-roster-tbody');
-  if (!standingOrders.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">No standing entries yet.</td></tr>'; return; }
+  if (!standingOrders.length) { tbody.innerHTML = '<tr><td colspan="12" class="empty">No standing entries yet.</td></tr>'; return; }
   tbody.innerHTML = standingOrders.map(function(so) {
     var coffee = getCoffee(so.coffee_sku);
     var coffeeCell = so.coffee_sku === '__roasters_choice__' ? "☕ Roaster's Choice" : (coffee?escHtml(coffee.name):escHtml(so.coffee_sku));
+    var extras = standingOrderItems[so.id] || [];
+    if (extras.length) {
+      coffeeCell += '<div style="font-size:11px;color:var(--ink3);margin-top:2px;">+ '+extras.map(function(it){
+        var c = getCoffee(it.coffee_sku);
+        return escHtml((c?c.name:it.coffee_sku) + ' (' + (it.size||'') + ')');
+      }).join(', ')+'</div>';
+    }
     return '<tr>' +
       '<td style="font-weight:600;">'+escHtml(so.name)+'</td>' +
       '<td>'+(so.type==='gift' ? '<span class="badge badge-gold">Gift</span>' : '<span class="badge badge-gray">Standing</span>')+'</td>' +
@@ -4049,6 +4092,7 @@ function renderStandingRoster() {
       '<td>'+escHtml(so.size)+'</td>' +
       '<td>'+escHtml(GRIND_L[so.grind]||so.grind)+'</td>' +
       '<td class="num">'+so.qty+'</td>' +
+      '<td>'+escHtml(so.pickup_location||'Cafe Pickup')+'</td>' +
       '<td>'+(CADENCE_LABELS[so.cadence]||so.cadence)+'</td>' +
       '<td style="font-size:12px;color:var(--ink3);">'+(so.signup_date||'-')+'</td>' +
       '<td style="font-size:12px;color:var(--ink3);">'+(so.end_date||'-')+'</td>' +
@@ -4064,8 +4108,12 @@ async function deactivateStandingOrder(id) {
   catch(e) { toast('Error deactivating','error'); }
 }
 
+var soExtraLines = [];
+var soExtraLineSeq = 0;
+
 function showAddStandingOrderModal(editId) {
   var editing = editId ? standingOrders.find(function(s){return s.id===editId;}) : null;
+  soExtraLines = editing ? (standingOrderItems[editing.id]||[]).map(function(it){ return {key:'x'+(soExtraLineSeq++), coffee_sku:it.coffee_sku, size:it.size, grind:it.grind, qty:it.qty}; }) : [];
   var modal = document.createElement('div');
   modal.id = 'standing-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -4082,6 +4130,7 @@ function showAddStandingOrderModal(editId) {
           Object.keys(CADENCE_LABELS).map(function(k){return '<option value="'+k+'" '+(editing&&editing.cadence===k?'selected':'')+'>'+CADENCE_LABELS[k]+'</option>';}).join('') +
         '</select></div>' +
       '</div>' +
+      '<div class="form-row"><div class="form-group"><label>Pickup / Shipping</label><input type="text" id="so-location" list="pickup-location-datalist" value="'+(editing&&editing.pickup_location?escHtml(editing.pickup_location):'Cafe Pickup')+'" placeholder="e.g. Cafe Pickup"></div></div>' +
       '<div class="form-row c2">' +
         '<div class="form-group"><label>Coffee</label><select id="so-coffee"><option value="__roasters_choice__" '+(editing&&editing.coffee_sku==='__roasters_choice__'?'selected':'')+'>☕ Roaster\'s Choice (whatever that cycle\'s pick is)</option>'+coffeeOpts()+'</select></div>' +
         '<div class="form-group"><label>Size</label><select id="so-size">' +
@@ -4094,6 +4143,8 @@ function showAddStandingOrderModal(editId) {
         '</select></div>' +
         '<div class="form-group"><label>Qty</label><input type="number" id="so-qty" min="1" value="'+(editing?editing.qty:1)+'"></div>' +
       '</div>' +
+      '<div id="so-extra-lines"></div>' +
+      '<div class="form-row"><button type="button" class="btn btn-ghost btn-sm" onclick="addStandingExtraLine()">+ Add another coffee</button></div>' +
       '<div class="form-row c2">' +
         '<div class="form-group"><label>Signup Date</label><input type="date" id="so-signup" value="'+(editing&&editing.signup_date?editing.signup_date:new Date().toISOString().split('T')[0])+'"></div>' +
         '<div class="form-group" id="so-end-group" style="display:'+(editing&&editing.type==='gift'?'block':'none')+';"><label>End Date</label><input type="date" id="so-end" value="'+(editing&&editing.end_date?editing.end_date:'')+'"></div>' +
@@ -4107,6 +4158,39 @@ function showAddStandingOrderModal(editId) {
     '</div>';
   document.body.appendChild(modal);
   if (editing) document.getElementById('so-coffee').value = editing.coffee_sku;
+  renderStandingExtraLines();
+}
+
+function renderStandingExtraLines() {
+  var c = document.getElementById('so-extra-lines');
+  if (!c) return;
+  c.innerHTML = soExtraLines.map(function(line) {
+    return '<div class="form-row c2" style="align-items:end;">' +
+      '<div class="form-group"><label>Coffee</label><select id="so-x-coffee-'+line.key+'"><option value="__roasters_choice__" '+(line.coffee_sku==='__roasters_choice__'?'selected':'')+'>☕ Roaster\'s Choice</option>'+coffeeOpts()+'</select></div>' +
+      '<div class="form-group"><label>Size</label><select id="so-x-size-'+line.key+'">' +
+        Object.keys(BAG_W).map(function(k){return '<option value="'+k+'" '+(line.size===k?'selected':'')+'>'+k+'</option>';}).join('') +
+      '</select></div>' +
+      '<div class="form-group"><label>Grind</label><select id="so-x-grind-'+line.key+'">' +
+        Object.keys(GRIND_L).map(function(k){return '<option value="'+k+'" '+(line.grind===k?'selected':'')+'>'+GRIND_L[k]+'</option>';}).join('') +
+      '</select></div>' +
+      '<div class="form-group" style="display:flex;gap:6px;align-items:end;"><div style="flex:1;"><label>Qty</label><input type="number" id="so-x-qty-'+line.key+'" min="1" value="'+(line.qty||1)+'"></div>' +
+        '<button type="button" class="btn btn-ghost btn-sm" onclick="removeStandingExtraLine(\''+line.key+'\')" style="margin-bottom:2px;">✕</button></div>' +
+    '</div>';
+  }).join('');
+  soExtraLines.forEach(function(line) {
+    var sel = document.getElementById('so-x-coffee-'+line.key);
+    if (sel && line.coffee_sku) sel.value = line.coffee_sku;
+  });
+}
+
+function addStandingExtraLine() {
+  soExtraLines.push({key:'x'+(soExtraLineSeq++), coffee_sku:'', size:'12oz', grind:'wb', qty:1});
+  renderStandingExtraLines();
+}
+
+function removeStandingExtraLine(key) {
+  soExtraLines = soExtraLines.filter(function(l){return l.key!==key;});
+  renderStandingExtraLines();
 }
 
 function toggleGiftFields() {
@@ -4130,6 +4214,7 @@ async function saveStandingOrderModal(editId) {
     size: document.getElementById('so-size').value,
     grind: document.getElementById('so-grind').value,
     qty: parseInt(document.getElementById('so-qty').value) || 1,
+    pickup_location: document.getElementById('so-location').value.trim() || 'Cafe Pickup',
     cadence: document.getElementById('so-cadence').value,
     signup_date: document.getElementById('so-signup').value || null,
     end_date: type==='gift' ? (document.getElementById('so-end').value || null) : null,
@@ -4137,9 +4222,31 @@ async function saveStandingOrderModal(editId) {
     notes: document.getElementById('so-notes').value.trim() || null,
     active: true
   };
+  var extraItems = soExtraLines.map(function(line) {
+    var sku = document.getElementById('so-x-coffee-'+line.key).value;
+    var isRC = sku === '__roasters_choice__';
+    var c = isRC ? null : getCoffee(sku);
+    return {
+      coffee_sku: sku,
+      coffee_name: isRC ? "Roaster's Choice" : (c ? c.name : sku),
+      size: document.getElementById('so-x-size-'+line.key).value,
+      grind: document.getElementById('so-x-grind-'+line.key).value,
+      qty: parseInt(document.getElementById('so-x-qty-'+line.key).value) || 1
+    };
+  }).filter(function(l){ return l.coffee_sku; });
   try {
+    var soId = editId;
     if (editId) await dbFetch('standing_orders?id=eq.'+editId, {method:'PATCH', body:body, prefer:'return=minimal'});
-    else await dbFetch('standing_orders', {method:'POST', body:body, prefer:'return=minimal'});
+    else {
+      var created = await dbFetch('standing_orders', {method:'POST', body:body, prefer:'return=representation'});
+      soId = (Array.isArray(created) ? created[0] : created).id;
+    }
+    // Replace extra coffee lines wholesale (same pattern as account template items)
+    await dbFetch('standing_order_items?standing_order_id=eq.'+soId, {method:'DELETE', prefer:'return=minimal'});
+    if (extraItems.length) {
+      var items = extraItems.map(function(l){ return Object.assign({standing_order_id: soId}, l); });
+      await dbFetch('standing_order_items', {method:'POST', body: items.length===1?items[0]:items, prefer:'return=minimal'});
+    }
     var modal = document.getElementById('standing-modal');
     if (modal) modal.remove();
     toast('Saved','success');
@@ -4149,9 +4256,9 @@ async function saveStandingOrderModal(editId) {
 
 // ── STANDING ROSTER MASTER LIST (download/upload sync) ──
 function downloadStandingRosterCSV() {
-  var header = 'Name,Type,Coffee SKU,Size,Grind,Qty,Cadence,Signup Date,End Date,Gifter Name,Notes\n';
+  var header = 'Name,Type,Coffee SKU,Size,Grind,Qty,Location,Cadence,Signup Date,End Date,Gifter Name,Notes\n';
   var rows = standingOrders.map(function(so) {
-    return [so.name, so.type, so.coffee_sku, so.size, so.grind, so.qty, so.cadence, so.signup_date||'', so.end_date||'', so.gifter_name||'', so.notes||'']
+    return [so.name, so.type, so.coffee_sku, so.size, so.grind, so.qty, so.pickup_location||'Cafe Pickup', so.cadence, so.signup_date||'', so.end_date||'', so.gifter_name||'', so.notes||'']
       .map(function(v){ v = (v==null?'':String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; })
       .join(',');
   });
@@ -4179,7 +4286,7 @@ function handleStandingCSVFile(file) {
     if (lines.length < 2) { toast('CSV has no data rows','warn'); return; }
     var headers = parseCSVLine(lines[0]);
     function col(n) { return headers.findIndex(function(h){return h.trim().toLowerCase()===n.toLowerCase();}); }
-    var C = { name:col('Name'), type:col('Type'), sku:col('Coffee SKU'), size:col('Size'), grind:col('Grind'), qty:col('Qty'),
+    var C = { name:col('Name'), type:col('Type'), sku:col('Coffee SKU'), size:col('Size'), grind:col('Grind'), qty:col('Qty'), location:col('Location'),
                cadence:col('Cadence'), signup:col('Signup Date'), end:col('End Date'), gifter:col('Gifter Name'), notes:col('Notes') };
     if (C.name === -1) { toast('CSV needs a "Name" column','error'); return; }
 
@@ -4197,6 +4304,7 @@ function handleStandingCSVFile(file) {
         size: C.size>-1 ? ((row[C.size]||'').trim() || '12oz') : '12oz',
         grind: C.grind>-1 ? ((row[C.grind]||'').trim() || 'wb') : 'wb',
         qty: C.qty>-1 ? (parseInt(row[C.qty])||1) : 1,
+        pickup_location: C.location>-1 ? ((row[C.location]||'').trim() || 'Cafe Pickup') : 'Cafe Pickup',
         cadence: C.cadence>-1 ? ((row[C.cadence]||'').trim().toUpperCase() || 'W') : 'W',
         signup_date: C.signup>-1 ? ((row[C.signup]||'').trim() || null) : null,
         end_date: C.end>-1 ? ((row[C.end]||'').trim() || null) : null,
@@ -4221,6 +4329,7 @@ function handleStandingCSVFile(file) {
         if (row.size !== existing.size) changes.size = row.size;
         if (row.grind !== existing.grind) changes.grind = row.grind;
         if (row.qty !== existing.qty) changes.qty = row.qty;
+        if (row.pickup_location !== (existing.pickup_location||'Cafe Pickup')) changes.pickup_location = row.pickup_location;
         if (row.cadence !== existing.cadence) changes.cadence = row.cadence;
         if (row.signup_date !== existing.signup_date) changes.signup_date = row.signup_date;
         if (row.end_date !== existing.end_date) changes.end_date = row.end_date;
@@ -4284,7 +4393,7 @@ async function commitStandingCSVSync() {
         var coffee = getCoffee(r.coffee_sku);
         return {
           name:r.name, type:r.type, coffee_sku:r.coffee_sku, coffee_name: coffee ? coffee.name : r.coffee_sku,
-          size:r.size, grind:r.grind, qty:r.qty, cadence:r.cadence,
+          size:r.size, grind:r.grind, qty:r.qty, pickup_location:r.pickup_location, cadence:r.cadence,
           signup_date: r.signup_date || new Date().toISOString().split('T')[0],
           end_date:r.end_date, gifter_name:r.gifter_name, notes:r.notes, active:true
         };
