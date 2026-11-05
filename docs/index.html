@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-11-05d — Orders (desktop): the order note now lives in the Notes column of the customer's header row (placeholder just "Notes"), and the redundant "Current Cycle Orders" title above the table is gone (bulk-delete bar kept).
   2026-11-05c — (1) NOTES: orders now have ONE order-level note (new orders.order_note column) shown once per customer — editable under the customer name on Orders (desktop + mobile), and as a highlighted banner on the Fulfillment sheet/print — plus optional per-line notes that are never copied to other lines. Standing account checklist no longer auto-fills "Standing account order". (2) PORTAL: customer's order wins — if they've already ordered this cycle their order loads for editing and saving REPLACES it (lines staff added by hand are untouched); wholesale accounts with no order yet get a "Reorder last order" button that prefills the form (never auto-submits). REQUIRES SQL: orders.order_note column + customer select/delete policies on own portal orders.
   2026-11-05b — Standing: Manage Roster now has an "Add this cycle" button on every row (for someone who's up next week but needs their coffee this week — pick "Add & switch" for A/B people so their schedule moves with them); Manage Roster also stacks into cards on phones.
   2026-11-05 — (1) STANDING: anyone on the roster who isn't due this cycle now appears in a new "Not Due This Cycle" list with an "Add this cycle" button (for early/late pickups) — for A/B people you can also choose "Add & switch to the other week" so their schedule shifts with them; every person (due or not) has a Schedule button to change cadence (and the monthly pickup week) with a preview of their next due weeks. (2) FIXED real bug: the "✕ all" button on Orders (desktop and mobile) did nothing — its click handler was built with unescaped quotes so the browser discarded it. Same bug was behind the Supplies "Copy" buttons doing nothing. Delete Selected now deletes line-by-line and reports failures instead of failing silently. (3) MOBILE: orders can now be edited on a phone (Edit button per line: coffee/size/qty/grind/notes, plus + Line per customer); Roast Schedule, Green list, and all Print & Export sheets now stack into readable cards on phones. (4) FIXED real bug: the Fulfillment and Shipping Summary sheets on Print & Export never filled in (a table-body tag sat outside any table, so the page crashed while building them).
@@ -44,7 +45,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-11-05T23:12:41.116Z">
+<meta name="app-version" content="2026-11-05T23:26:20.270Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -476,9 +477,8 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   </div>
 
   <!-- Desktop grouped table -->
-  <div class="card-title" style="justify-content:space-between;margin-bottom:12px;">
-    <span style="display:flex;align-items:center;gap:8px;"><span style="content:'';display:block;width:3px;height:16px;background:var(--blue);border-radius:2px;flex-shrink:0;"></span>Current Cycle Orders</span>
-    <div id="bulk-actions" style="display:none;gap:8px;align-items:center;">
+  <div id="orders-bulk-bar-wrap" style="display:flex;justify-content:flex-end;">
+    <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-bottom:12px;">
       <span id="bulk-count" style="font-size:12px;color:var(--ink3);font-family:'DM Sans',sans-serif;font-weight:400;"></span>
       <button class="btn btn-danger btn-sm" onclick="bulkDelete()">✕ Delete Selected</button>
     </div>
@@ -1038,7 +1038,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-11-05c — order notes + portal edit/reorder');
+console.log('Conduit Ops build: 2026-11-05d — order notes in Notes column');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -1464,12 +1464,11 @@ function renderOrdersTable() {
     html += '<tr class="order-customer-row">' +
       '<td style="text-align:center;"><input type="checkbox" class="order-select-group" data-ids="'+escHtml(JSON.stringify(allIds))+'" onchange="onGroupCheck(this)" style="width:auto;accent-color:var(--blue);cursor:pointer;"></td>' +
       '<td><div style="font-weight:700;font-size:14px;">'+escHtml(customerName)+'</div>' +
-        '<div style="font-size:11px;color:var(--ink3);margin-top:2px;">'+(locationStr?locationStr+' · ':'')+totalBags+' bag'+(totalBags!==1?'s':'')+' · '+totalLbs.toFixed(1)+' lb</div>' +
-        orderNoteInput(allIds, orderNoteOf(lines), false) + '</td>' +
+        '<div style="font-size:11px;color:var(--ink3);margin-top:2px;">'+(locationStr?locationStr+' · ':'')+totalBags+' bag'+(totalBags!==1?'s':'')+' · '+totalLbs.toFixed(1)+' lb</div></td>' +
       '<td><span class="badge '+typeClass+'">'+(TYPE_L[firstLine.order_type]||firstLine.order_type)+'</span></td>' +
       '<td></td><td></td><td></td><td></td><td></td>' +
       '<td><span class="badge '+regionClass+'">'+(REGION_L[firstLine.region]||firstLine.region)+'</span></td>' +
-      '<td></td>' +
+      '<td>'+orderNoteInput(allIds, orderNoteOf(lines), false, 'Notes')+'</td>' +
       '<td style="white-space:nowrap;">' +
         '<button class="btn btn-ghost btn-sm" onclick="addLineToCustomer(\''+escHtml(customerName)+'\',\''+firstLine.order_type+'\',\''+firstLine.region+'\')" style="font-size:11px;">+ Line</button> ' +
         '<button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+escHtml(JSON.stringify(allIds))+',event)" style="font-size:11px;">✕ all</button>' +
@@ -1805,10 +1804,10 @@ async function saveOrderNote(ids, value) {
     renderOrderCardsMobile();
   } catch(e) { toast('Error saving note: '+e.message,'error'); }
 }
-function orderNoteInput(ids, note, big) {
-  return '<input type="text" value="'+escHtml(note||'')+'" placeholder="＋ Order note (shows once for the whole order)" ' +
+function orderNoteInput(ids, note, big, ph) {
+  return '<input type="text" value="'+escHtml(note||'')+'" placeholder="'+escHtml(ph||'＋ Order note (shows once for the whole order)')+'" ' +
     'onclick="event.stopPropagation()" onchange="saveOrderNote('+escHtml(JSON.stringify(ids))+',this.value)" ' +
-    'style="margin-top:6px;width:100%;font-size:'+(big?'13':'12')+'px;padding:4px 8px;border:1px dashed var(--rule);border-radius:5px;background:var(--paper2);color:var(--ink);">';
+    'style="margin-top:'+(ph?'0':'6px')+';width:100%;font-size:'+(big?'13':'12')+'px;padding:4px 8px;border:1px dashed var(--rule);border-radius:5px;background:var(--paper2);color:var(--ink);">';
 }
 function orderNoteBanner(note, big) {
   if (!note) return '';
