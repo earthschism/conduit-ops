@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-11-05 — (1) STANDING: anyone on the roster who isn't due this cycle now appears in a new "Not Due This Cycle" list with an "Add this cycle" button (for early/late pickups) — for A/B people you can also choose "Add & switch to the other week" so their schedule shifts with them; every person (due or not) has a Schedule button to change cadence (and the monthly pickup week) with a preview of their next due weeks. (2) FIXED real bug: the "✕ all" button on Orders (desktop and mobile) did nothing — its click handler was built with unescaped quotes so the browser discarded it. Same bug was behind the Supplies "Copy" buttons doing nothing. Delete Selected now deletes line-by-line and reports failures instead of failing silently. (3) MOBILE: orders can now be edited on a phone (Edit button per line: coffee/size/qty/grind/notes, plus + Line per customer); Roast Schedule, Green list, and all Print & Export sheets now stack into readable cards on phones. (4) FIXED real bug: the Fulfillment and Shipping Summary sheets on Print & Export never filled in (a table-body tag sat outside any table, so the page crashed while building them).
   2026-09-23b — Standing subscribers: added Pickup/Shipping Location (freeform with autocomplete, seeded with Cafe Pickup/Local Delivery/Ship — surfaced on the roster, This Cycle checklist, and the Fulfillment note line) and support for multiple coffees per subscriber ("+ Add another coffee" on the Add/Edit modal, backed by a new standing_order_items table). REQUIRES a one-time SQL migration — see message. Master List CSV now includes a Location column; extra coffees are in-app-only for now (not part of CSV sync).
   2026-09-23 — Added "⬇ Export All" button to Manage Catalog — downloads the full current supply catalog (Name, Code, Category, Vendor, Unit, Sticky, Par, On Hand) as a CSV, same download pattern as the Standing roster's Master List export.
   2026-09-21 — Added a Remove action to each row in Manage Catalog (owner/manager only) — there was previously no way to delete a single supply item at all, only bulk-deactivate via Master Update. Soft-removes (marks inactive) so anything already on this week's list is untouched.
@@ -41,7 +42,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-09-23T20:18:02.239Z">
+<meta name="app-version" content="2026-11-05T22:36:48.113Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -297,6 +298,31 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   .auth-card{padding:28px 20px;}
 }
 
+
+/* ── MOBILE: stacked tables for roasting / print sheets (screen only) ── */
+@media screen and (max-width:640px){
+  table.stack-m, table.stack-m tbody, table.stack-m tr, table.stack-m td{display:block;width:100%;}
+  table.stack-m thead{display:none;}
+  table.stack-m tr{border:1px solid var(--rule);border-radius:8px;margin-bottom:10px;padding:4px 0;background:white;}
+  table.stack-m td{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:5px 12px !important;border-bottom:none;text-align:right !important;font-size:13px;}
+  table.stack-m td::before{content:attr(data-label);font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink3);text-align:left;flex-shrink:0;}
+  table.stack-m td:empty{display:none;}
+  table.stack-m td[colspan]{display:block;text-align:center !important;}
+  table.stack-m td[colspan]::before{display:none;}
+  #standing-notdue .checklist-row{flex-wrap:wrap;}
+  #standing-notdue .cl-name{flex-basis:100%;}
+  table.stack-m td[data-first]{background:var(--paper2);border-radius:8px 8px 0 0;font-size:15px;font-weight:700;justify-content:flex-start;margin-bottom:4px;}
+  table.stack-m td[data-first]::before{display:none;}
+  table.stack-m td input{max-width:110px;}
+  table.stack-m td input[type="text"]{max-width:none;flex:1;text-align:left;}
+  #roast-print-tbody td[data-label="#"]{display:none;}
+  .print-header{flex-wrap:wrap;gap:10px;}
+  .print-title{font-size:17px !important;}
+  .print-sheet div[style*="grid-template-columns:1fr 1fr 1fr"]{grid-template-columns:1fr !important;gap:14px !important;}
+  #bag-grid-table{font-size:12px !important;}
+  #bag-grid-table td,#bag-grid-table th{padding:6px 6px !important;}
+}
+
 /* ── PRINT ── */
 @media print{
   .header,.tabs,.sheet-actions,.cycle-bar,.btn,#btn-add-order,#csv-card,#add-order-card{display:none!important;}
@@ -495,7 +521,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div class="card">
     <div class="card-title">Batch Requirements</div>
     <div class="tbl-wrap">
-      <table>
+      <table class="stack-m">
         <thead>
           <tr>
             <th>Roast</th>
@@ -516,7 +542,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div class="card" id="green-card" style="display:none;">
     <div class="card-title">Green Bean Requirements by Origin</div>
     <div class="tbl-wrap">
-      <table>
+      <table class="stack-m">
         <thead><tr><th>Origin</th><th style="text-align:right;">Total Needed (lb)</th><th>Used In</th></tr></thead>
         <tbody id="green-tbody"></tbody>
       </table>
@@ -547,7 +573,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     </div>
     <div class="print-section">
       <div class="print-section-title">Batch List</div>
-      <table>
+      <table class="stack-m">
         <thead><tr><th>#</th><th>Roast</th><th style="text-align:right;">Total Need (lb)</th><th style="text-align:right;">Water Loss %</th><th style="text-align:right;">On Hand (lb)</th><th style="text-align:right;">Green to Pull (lb)</th><th style="text-align:right;">Batches</th><th>Notes</th><th style="text-align:right;">Output (lb)</th><th style="text-align:right;">Surplus (lb)</th></tr></thead>
         <tbody id="roast-print-tbody"><tr><td colspan="10" class="empty">Calculate schedule first.</td></tr></tbody>
       </table>
@@ -564,7 +590,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <div><div class="print-title">Conduit Coffee — Green Bean Pull List</div><div class="print-meta" id="green-sheet-meta">-</div></div>
     </div>
     <div class="print-section">
-      <table>
+      <table class="stack-m">
         <thead><tr><th>Origin / Green</th><th style="text-align:right;">Lbs to Pull</th><th>Used In</th></tr></thead>
         <tbody id="green-print-tbody"></tbody>
       </table>
@@ -595,7 +621,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     </div>
     <div class="print-section" style="margin-top:28px;">
       <div class="print-section-title" style="color:#2121d4;">Grinding Tasks — By Account</div>
-      <table style="font-size:14px;">
+      <table class="stack-m" style="font-size:14px;">
         <thead><tr><th style="width:28px;"></th><th>Account</th><th>Coffee</th><th>Grind</th><th style="text-align:right;">Qty</th><th>Size</th></tr></thead>
         <tbody id="grind-task-tbody"><tr><td colspan="6" class="empty">Calculate schedule first.</td></tr></tbody>
       </table>
@@ -616,9 +642,9 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
     <div class="print-header">
       <div><div class="print-title">Conduit Coffee — Account Fulfillment</div><div class="print-meta" id="fulfillment-sheet-meta">-</div></div>
     </div>
-    <tbody id="fulfillment-tbody">
+    <div id="fulfillment-tbody">
       <div class="empty">Calculate schedule first.</div>
-    </tbody>
+    </div>
   </div>
 
   <!-- SHIPPING SHEET -->
@@ -631,7 +657,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <div><div class="print-title">Conduit Coffee — Shipping Summary</div><div class="print-meta" id="shipping-sheet-meta">-</div></div>
     </div>
     <div class="print-section">
-      <table>
+      <table class="stack-m">
         <thead><tr><th>Box Type</th><th style="text-align:right;">Count</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Subtotal</th></tr></thead>
         <tbody id="shipping-tbody"></tbody>
       </table>
@@ -849,6 +875,11 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <div id="standing-checklist"><div class="checklist-empty">Loading…</div></div>
       <button class="btn btn-primary" id="standing-add-to-fulfillment-btn" style="margin-top:16px;width:100%;" onclick="addCheckedStandingOrders()">Add Checked to Fulfillment</button>
     </div>
+    <div class="card" id="standing-notdue-card" style="display:none;">
+      <div class="card-title">Not Due This Cycle</div>
+      <div class="section-sub" style="margin-bottom:14px;">Coming early or late? Add anyone from here to this week's Fulfillment, or change their schedule.</div>
+      <div id="standing-notdue"></div>
+    </div>
   </div>
 
   <!-- ── STANDING ACCOUNTS VIEW ── -->
@@ -1004,7 +1035,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-09-23b — Standing: pickup/shipping location + multiple coffees per subscriber');
+console.log('Conduit Ops build: 2026-11-05 — Standing add-early/schedule, ✕ all + Copy fix, mobile editing & roast layout, print sheets fix');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -1437,7 +1468,7 @@ function renderOrdersTable() {
       '<td></td>' +
       '<td style="white-space:nowrap;">' +
         '<button class="btn btn-ghost btn-sm" onclick="addLineToCustomer(\''+escHtml(customerName)+'\',\''+firstLine.order_type+'\',\''+firstLine.region+'\')" style="font-size:11px;">+ Line</button> ' +
-        '<button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+JSON.stringify(allIds)+',event)" style="font-size:11px;">✕ all</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteCustomerOrders('+escHtml(JSON.stringify(allIds))+',event)" style="font-size:11px;">✕ all</button>' +
       '</td>' +
       '</tr>';
 
@@ -1529,11 +1560,17 @@ async function bulkDelete() {
   if (!checked.length) return;
   if (!confirm('Delete '+checked.length+' selected line'+(checked.length!==1?'s':'')+' ?')) return;
   var ids = Array.from(checked).map(function(c){ return c.dataset.id; });
-  try {
-    await dbFetch('orders?id=in.('+ids.join(',')+')', {method:'DELETE', prefer:'return=minimal'});
-    toast('Deleted '+ids.length+' lines','success');
-    await loadOrders();
-  } catch(e) { toast('Error: '+e.message,'error'); }
+  // One request per line (same proven path as the single-line delete) so a long list never hits URL limits,
+  // and a failure on one line is reported instead of silently losing the whole batch.
+  var failed = 0, firstError = '';
+  for (var i=0; i<ids.length; i++) {
+    try { await dbFetch('orders?id=eq.'+ids[i], {method:'DELETE', prefer:'return=minimal'}); }
+    catch(e) { failed++; if (!firstError) firstError = e.message; }
+  }
+  var sa = document.getElementById('select-all-orders'); if (sa) sa.checked = false;
+  if (failed) toast('Deleted '+(ids.length-failed)+' of '+ids.length+' — '+firstError,'error');
+  else toast('Deleted '+ids.length+' line'+(ids.length!==1?'s':''),'success');
+  await loadOrders();
 }
 
 async function patchOrder(id, field, value) {
@@ -1620,7 +1657,10 @@ function renderOrderCardsMobile() {
         '<div style="text-align:right;">' +
           '<div style="font-family:\'DM Mono\',monospace;font-weight:700;font-size:16px;color:var(--blue);">'+totalBags+' bag'+(totalBags!==1?'s':'')+'</div>' +
           '<div style="font-size:11px;color:var(--ink3);">'+totalLbs.toFixed(1)+' lb</div>' +
-          '<button class="btn btn-danger btn-sm" style="margin-top:6px;font-size:11px;" onclick="deleteCustomerOrders('+JSON.stringify(lines.map(function(o){return o.id;}))+',event)">✕ all</button>' +
+          '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">' +
+            '<button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="addLineToCustomer('+escHtml(JSON.stringify(customerName))+','+escHtml(JSON.stringify(firstLine.order_type))+','+escHtml(JSON.stringify(firstLine.region))+')">+ Line</button>' +
+            '<button class="btn btn-danger btn-sm" style="font-size:11px;" onclick="deleteCustomerOrders('+escHtml(JSON.stringify(lines.map(function(o){return o.id;})))+',event)">✕ all</button>' +
+          '</div>' +
         '</div>' +
       '</div>';
 
@@ -1637,7 +1677,10 @@ function renderOrderCardsMobile() {
             '</div>' +
           '</div>' +
         '</div>' +
-        '<button class="btn btn-danger btn-sm" onclick="deleteOrder(\''+o.id+'\')">✕</button>' +
+        '<div style="display:flex;gap:6px;flex-shrink:0;">' +
+          '<button class="btn btn-ghost btn-sm" onclick="showEditOrderLineModal(\''+o.id+'\')">Edit</button>' +
+          '<button class="btn btn-danger btn-sm" onclick="deleteOrder(\''+o.id+'\')">✕</button>' +
+        '</div>' +
       '</div>';
     });
 
@@ -1645,6 +1688,59 @@ function renderOrderCardsMobile() {
   });
 
   container.innerHTML = html;
+}
+
+// Edit one order line (used on mobile, where the desktop's inline-edit table isn't available)
+function showEditOrderLineModal(id) {
+  var o = orders.find(function(x){return x.id===id;});
+  if (!o) return;
+  var SIZE_LABELS = {'4oz':'4oz Sample','12oz':'12 oz','1lb':'1 lb','2lb':'2 lb','5lb':'5 lb','20lb':'Bulk'};
+  var sizeOpts = ['4oz','12oz','1lb','2lb','5lb','20lb'].map(function(s){
+    return '<option value="'+s+'"'+(o.size===s?' selected':'')+'>'+SIZE_LABELS[s]+'</option>';
+  }).join('');
+  var grindOpts = [['wb','Whole Bean'],['drip','Drip'],['coarse','Coarse'],['fine','Fine']].map(function(g){
+    return '<option value="'+g[0]+'"'+(o.grind===g[0]?' selected':'')+'>'+g[1]+'</option>';
+  }).join('');
+  var modal = document.createElement('div');
+  modal.id = 'edit-order-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML =
+    '<div style="background:white;border-radius:12px;padding:24px;max-width:420px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">' +
+      '<div style="font-family:\'Libre Baskerville\',serif;font-size:18px;font-weight:700;color:var(--ink);margin-bottom:2px;">Edit line</div>' +
+      '<div class="section-sub" style="margin-bottom:14px;">'+escHtml(o.customer_name)+'</div>' +
+      '<div class="form-row"><div class="form-group"><label>Coffee</label><select id="eo-coffee">'+coffeeOpts()+'</select></div></div>' +
+      '<div class="form-row c2">' +
+        '<div class="form-group"><label>Size</label><select id="eo-size">'+sizeOpts+'</select></div>' +
+        '<div class="form-group"><label>Qty</label><input type="number" id="eo-qty" min="1" value="'+o.qty+'"></div>' +
+      '</div>' +
+      '<div class="form-row"><div class="form-group"><label>Grind</label><select id="eo-grind">'+grindOpts+'</select></div></div>' +
+      '<div class="form-row"><div class="form-group"><label>Notes</label><input type="text" id="eo-notes" value="'+escHtml(o.notes||'')+'"></div></div>' +
+      '<div style="display:flex;gap:10px;margin-top:6px;">' +
+        '<button class="btn btn-primary" style="flex:1;" onclick="saveEditOrderLine(\''+o.id+'\')">Save</button>' +
+        '<button class="btn btn-ghost" onclick="document.getElementById(\'edit-order-modal\').remove()">Cancel</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  document.getElementById('eo-coffee').value = o.coffee_sku;
+}
+
+async function saveEditOrderLine(id) {
+  var sku = document.getElementById('eo-coffee').value;
+  var coffee = getCoffee(sku);
+  var body = {
+    coffee_sku: sku,
+    coffee_name: coffee ? coffee.name : sku,
+    size: document.getElementById('eo-size').value,
+    grind: document.getElementById('eo-grind').value,
+    qty: parseInt(document.getElementById('eo-qty').value) || 1,
+    notes: document.getElementById('eo-notes').value.trim()
+  };
+  try {
+    await dbFetch('orders?id=eq.'+id, {method:'PATCH', body:body, prefer:'return=minimal'});
+    var m = document.getElementById('edit-order-modal'); if (m) m.remove();
+    toast('Line updated','success');
+    await loadOrders();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
 }
 
 function escHtml(str) {
@@ -2011,6 +2107,7 @@ async function generateSchedule() {
   }).join('');
   document.getElementById('green-card').style.display = 'block';
 
+  applyStackLabels();
   buildPrintSheets(rows, originTotals);
 }
 
@@ -2065,7 +2162,7 @@ function printFulfillmentDirect() {
           '<span style="font-family:\'DM Mono\',monospace;font-size:12px;font-weight:700;">'+totalBags+' bag'+(totalBags!==1?'s':'')+'</span>' +
         '</div>' +
       '</div>' +
-      '<table style="width:100%;border-collapse:collapse;">' +
+      '<table class="stack-m" style="width:100%;border-collapse:collapse;">' +
         '<thead><tr style="background:var(--paper2);">' +
           '<th style="padding:3px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink3);">Coffee</th>' +
           '<th style="padding:3px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink3);">SKU</th>' +
@@ -2137,6 +2234,22 @@ function loadOnHandFromCycle(cycle) {
 }
 
 // ── PRINT SHEETS ──
+// Label every cell of the stacked (mobile card) tables from its column header so each value shows its name on phones
+function applyStackLabels() {
+  document.querySelectorAll('table.stack-m').forEach(function(tbl) {
+    var heads = Array.from(tbl.querySelectorAll('thead th')).map(function(th){ return th.textContent.trim(); });
+    tbl.querySelectorAll('tbody tr').forEach(function(tr) {
+      var cells = Array.from(tr.children);
+      var firstSet = false;
+      cells.forEach(function(td, i) {
+        if (td.hasAttribute('colspan')) return;
+        if (heads[i]) td.setAttribute('data-label', heads[i]);
+        if (!firstSet && td.textContent.trim() && heads[i] !== '#' && heads[i] !== '') { td.setAttribute('data-first',''); firstSet = true; }
+      });
+    });
+  });
+}
+
 function buildPrintSheets(rows, originTotals) {
   var cycle = cycles.find(function(c){return c.id===currentCycleId;});
   var cycleName = cycle ? cycle.name : 'Current Cycle';
@@ -2335,7 +2448,7 @@ function buildPrintSheets(rows, originTotals) {
           '<span style="font-family:\'DM Mono\',monospace;font-size:18px;font-weight:700;">'+totalBags+' bag'+(totalBags!==1?'s':'')+'</span>' +
         '</div>' +
       '</div>' +
-      '<table style="width:100%;border-collapse:collapse;">' +
+      '<table class="stack-m" style="width:100%;border-collapse:collapse;">' +
         '<thead><tr style="background:var(--paper2);">' +
           '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Coffee</th>' +
           '<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">SKU</th>' +
@@ -2368,6 +2481,7 @@ function buildPrintSheets(rows, originTotals) {
     var sub = c*b.rate; shipTotal += sub;
     return '<tr><td>'+b.type+'</td><td class="num mono">'+c+'</td><td class="num mono">$'+b.rate+'</td><td class="num mono" style="font-weight:700;">$'+sub.toFixed(2)+'</td></tr>';
   }).join('') + '<tr style="border-top:2px solid var(--rule2);"><td colspan="3" style="font-weight:700;text-align:right;padding-right:10px;">Total Postage Est.</td><td class="num mono" style="font-weight:700;color:var(--blue);">$'+shipTotal.toFixed(2)+'</td></tr>';
+  applyStackLabels();
 }
 
 function printSheet(type) {
@@ -3212,7 +3326,7 @@ function renderReviewList() {
     vendors.forEach(function(ven) {
       html += '<div class="checklist-category" style="display:flex;align-items:center;justify-content:space-between;">' +
         '<span>'+escHtml(ven)+'</span>' +
-        (ven !== 'No vendor set' ? '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="copyVendorList('+JSON.stringify(ven)+')">Copy</button>' : '') +
+        (ven !== 'No vendor set' ? '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="copyVendorList('+escHtml(JSON.stringify(ven))+')">Copy</button>' : '') +
         '</div>';
       html += '<div class="checklist-card">';
       byVendor[ven].forEach(function(w) { html += reviewItemRowHtml(w); });
@@ -3246,7 +3360,7 @@ function renderReviewList() {
         seenVendorCopyBtn[ven] = true;
         html += '<div class="checklist-vendor" style="display:flex;align-items:center;justify-content:space-between;">' +
           '<span>'+escHtml(ven)+'</span>' +
-          (showCopyBtn ? '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="copyVendorList('+JSON.stringify(ven)+')">Copy</button>' : '') +
+          (showCopyBtn ? '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="copyVendorList('+escHtml(JSON.stringify(ven))+')">Copy</button>' : '') +
           '</div>';
         byCategory[cat][ven].forEach(function(w) { html += reviewItemRowHtml(w); });
       });
@@ -3900,13 +4014,16 @@ async function renderStandingChecklist() {
   } catch(e) { console.log('checking existing standing orders error:', e); }
 
   standingCycleDue = due.map(function(so) {
-    var lines = [{isPrimary:true, coffee_sku:so.coffee_sku, size:so.size, grind:so.grind, qty:so.qty, sourceId:'standing-'+so.id+'-'+currentCycleId}]
-      .concat((standingOrderItems[so.id]||[]).map(function(it) {
-        return {isPrimary:false, coffee_sku:it.coffee_sku, size:it.size, grind:it.grind, qty:it.qty, sourceId:'standing-'+so.id+'-item-'+it.id+'-'+currentCycleId};
-      }));
-    lines.forEach(function(l){ l.alreadyAdded = !!existingSourceIds[l.sourceId]; });
+    var lines = standingLinesFor(so, existingSourceIds);
     return { so: so, lines: lines, alreadyAdded: lines.every(function(l){return l.alreadyAdded;}) };
   });
+
+  // Everyone on the roster who ISN'T due this cycle (coming early / late, or just needs a schedule change)
+  var notDue = standingOrders.filter(function(so){ return !isStandingDueThisCycle(so, cycleMonday); }).map(function(so) {
+    var lines = standingLinesFor(so, existingSourceIds);
+    return { so: so, lines: lines, alreadyAdded: lines.every(function(l){return l.alreadyAdded;}) };
+  });
+  renderStandingNotDue(notDue, cycle);
 
   if (!standingCycleDue.length) { container.innerHTML = '<div class="checklist-empty">Nobody is due this cycle.</div>'; addBtn.style.display='none'; return; }
   addBtn.style.display = standingCycleDue.some(function(d){return !d.alreadyAdded;}) ? 'block' : 'none';
@@ -3915,27 +4032,212 @@ async function renderStandingChecklist() {
     var so = d.so;
     var locationTag = '<span class="badge badge-gray" style="margin-left:6px;">'+escHtml(so.pickup_location||'Cafe Pickup')+'</span>';
     var typeTag = so.type === 'gift' ? '<span class="badge badge-gold" style="margin-left:6px;">Gift</span>' : '';
-    var anyUnresolved = false;
-    var linesHtml = d.lines.map(function(l) {
-      var resolved = resolveStandingCoffee(l, cycle);
-      if (resolved.unresolved) anyUnresolved = true;
-      var coffeeLabel = resolved.unresolved
-        ? '<span style="color:#c0392b;font-weight:600;">⚠ Roaster\'s Choice not set for this cycle</span>'
-        : (resolved.coffee ? escHtml(resolved.coffee.name) : escHtml(resolved.sku)) + (l.coffee_sku==='__roasters_choice__' ? ' (Roaster\'s Choice)' : '');
-      return coffeeLabel + ' · ' + escHtml(l.size) + ' · ' + escHtml(GRIND_L[l.grind]||l.grind) + ' ×'+l.qty;
-    }).join('<br>');
+    var rendered = standingLinesHtml(d.lines, cycle);
+    var schedBtn = '<button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="showStandingScheduleModal(\''+so.id+'\')">Schedule</button>';
     if (d.alreadyAdded) {
       return '<div class="checklist-row checked">' +
         '<input type="checkbox" checked disabled style="opacity:0.5;">' +
-        '<span class="cl-name">'+escHtml(so.name)+typeTag+locationTag+'<span class="cl-need">'+linesHtml+'</span></span>' +
+        '<span class="cl-name">'+escHtml(so.name)+typeTag+locationTag+'<span class="cl-need">'+rendered.html+'</span></span>' +
         '<span style="font-size:11px;color:var(--green2);font-weight:600;">On Fulfillment ✓</span>' +
+        schedBtn +
         '</div>';
     }
     return '<div class="checklist-row" id="standing-row-'+i+'">' +
-      '<input type="checkbox" id="standing-check-'+i+'" '+(anyUnresolved?'disabled':'checked')+'>' +
-      '<span class="cl-name">'+escHtml(so.name)+typeTag+locationTag+'<span class="cl-need">'+linesHtml+'</span></span>' +
+      '<input type="checkbox" id="standing-check-'+i+'" '+(rendered.anyUnresolved?'disabled':'checked')+'>' +
+      '<span class="cl-name">'+escHtml(so.name)+typeTag+locationTag+'<span class="cl-need">'+rendered.html+'</span></span>' +
+      schedBtn +
       '</div>';
   }).join('') + '</div>';
+}
+
+// All the Fulfillment lines a standing entry produces for the current cycle (primary coffee + any extra coffees)
+function standingLinesFor(so, existingSourceIds) {
+  var lines = [{isPrimary:true, coffee_sku:so.coffee_sku, size:so.size, grind:so.grind, qty:so.qty, sourceId:'standing-'+so.id+'-'+currentCycleId}]
+    .concat((standingOrderItems[so.id]||[]).map(function(it) {
+      return {isPrimary:false, coffee_sku:it.coffee_sku, size:it.size, grind:it.grind, qty:it.qty, sourceId:'standing-'+so.id+'-item-'+it.id+'-'+currentCycleId};
+    }));
+  lines.forEach(function(l){ l.alreadyAdded = !!existingSourceIds[l.sourceId]; });
+  return lines;
+}
+
+function standingLinesHtml(lines, cycle) {
+  var anyUnresolved = false;
+  var html = lines.map(function(l) {
+    var resolved = resolveStandingCoffee(l, cycle);
+    if (resolved.unresolved) anyUnresolved = true;
+    var coffeeLabel = resolved.unresolved
+      ? '<span style="color:#c0392b;font-weight:600;">⚠ Roaster\'s Choice not set for this cycle</span>'
+      : (resolved.coffee ? escHtml(resolved.coffee.name) : escHtml(resolved.sku)) + (l.coffee_sku==='__roasters_choice__' ? ' (Roaster\'s Choice)' : '');
+    return coffeeLabel + ' · ' + escHtml(l.size) + ' · ' + escHtml(GRIND_L[l.grind]||l.grind) + ' ×'+l.qty;
+  }).join('<br>');
+  return { html: html, anyUnresolved: anyUnresolved };
+}
+
+// Builds the Fulfillment rows for one standing entry (skips lines already on this cycle's Fulfillment)
+function buildStandingInserts(so, lines, cycle) {
+  var rows = [], skipped = 0;
+  var noteBase = so.name + ' — ' + (so.pickup_location||'Cafe Pickup') + (so.type==='gift' ? ' — Gift subscription'+(so.gifter_name?' from '+so.gifter_name:'') : '');
+  lines.forEach(function(l) {
+    if (l.alreadyAdded) return;
+    var resolved = resolveStandingCoffee(l, cycle);
+    if (resolved.unresolved) { skipped++; return; }
+    rows.push({
+      cycle_id: currentCycleId, profile_id: currentUser.id,
+      customer_name: 'Subscriptions', order_type: 'subscription', region: 'pickup',
+      coffee_sku: resolved.sku, coffee_name: resolved.coffee ? resolved.coffee.name : resolved.sku,
+      qty: l.qty, size: l.size, grind: l.grind,
+      notes: noteBase,
+      source_order_id: l.sourceId
+    });
+  });
+  return { rows: rows, skipped: skipped };
+}
+
+// ── NOT-DUE LIST (add early/late pickups, change schedule) ──
+var standingNotDueState = [];
+
+function renderStandingNotDue(notDue, cycle) {
+  standingNotDueState = notDue;
+  var card = document.getElementById('standing-notdue-card');
+  var box = document.getElementById('standing-notdue');
+  if (!card || !box) return;
+  if (!notDue.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  box.innerHTML = '<div class="checklist-card">' + notDue.map(function(d) {
+    var so = d.so;
+    var typeTag = so.type === 'gift' ? '<span class="badge badge-gold" style="margin-left:6px;">Gift</span>' : '';
+    var locationTag = '<span class="badge badge-gray" style="margin-left:6px;">'+escHtml(so.pickup_location||'Cafe Pickup')+'</span>';
+    var rendered = standingLinesHtml(d.lines, cycle);
+    var action = d.alreadyAdded
+      ? '<span style="font-size:11px;color:var(--green2);font-weight:600;">On Fulfillment ✓</span>'
+      : '<button class="btn btn-primary btn-sm" style="flex-shrink:0;" onclick="showAddStandingOneModal(\''+so.id+'\')">Add this cycle</button>';
+    return '<div class="checklist-row'+(d.alreadyAdded?' checked':'')+'">' +
+      '<span class="cl-name">'+escHtml(so.name)+typeTag+locationTag+
+        '<span class="cl-need" style="color:var(--ink3);">'+escHtml(CADENCE_LABELS[so.cadence]||so.cadence)+' · '+rendered.html+'</span></span>' +
+      action +
+      '<button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="showStandingScheduleModal(\''+so.id+'\')">Schedule</button>' +
+      '</div>';
+  }).join('') + '</div>';
+}
+
+function standingModalShell(inner) {
+  var old = document.getElementById('standing-mini-modal'); if (old) old.remove();
+  var modal = document.createElement('div');
+  modal.id = 'standing-mini-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = '<div style="background:white;border-radius:12px;padding:28px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">'+inner+'</div>';
+  document.body.appendChild(modal);
+}
+function closeStandingMiniModal() { var m = document.getElementById('standing-mini-modal'); if (m) m.remove(); }
+
+// Add one person (not due this cycle) to this cycle's Fulfillment, optionally shifting their A/B schedule
+function showAddStandingOneModal(soId) {
+  var so = standingOrders.find(function(s){return s.id===soId;});
+  if (!so) return;
+  var other = so.cadence==='A' ? 'B' : (so.cadence==='B' ? 'A' : null);
+  var inner =
+    '<div style="font-family:\'Libre Baskerville\',serif;font-size:19px;font-weight:700;color:var(--ink);margin-bottom:6px;">Add '+escHtml(so.name)+' this cycle</div>' +
+    '<div class="section-sub" style="margin-bottom:18px;">They\'re not due this week ('+escHtml(CADENCE_LABELS[so.cadence]||so.cadence)+'). This puts their order on this cycle\'s Fulfillment.</div>' +
+    '<div style="display:flex;flex-direction:column;gap:10px;">' +
+      '<button class="btn btn-primary" onclick="addStandingOne(\''+so.id+'\',null)">Add this week only</button>' +
+      (other ? '<button class="btn btn-ghost" onclick="addStandingOne(\''+so.id+'\',\''+other+'\')">Add &amp; switch to '+other+' weeks going forward</button>' +
+        '<div class="section-sub" style="font-size:11px;">Switching moves them to the other alternating week, so they aren\'t due again right after this pickup.</div>' : '') +
+      '<button class="btn btn-ghost" onclick="closeStandingMiniModal()">Cancel</button>' +
+    '</div>';
+  standingModalShell(inner);
+}
+
+async function addStandingOne(soId, switchTo) {
+  var so = standingOrders.find(function(s){return s.id===soId;});
+  var d = standingNotDueState.find(function(x){return x.so.id===soId;});
+  if (!so || !d) { closeStandingMiniModal(); return; }
+  var cycle = cycles.find(function(c){return c.id===currentCycleId;});
+  var built = buildStandingInserts(so, d.lines, cycle);
+  if (!built.rows.length) {
+    toast(built.skipped ? "Set this cycle's Roaster's Choice first (Orders tab)" : 'Already on Fulfillment', 'warn');
+    return;
+  }
+  try {
+    await dbFetch('orders', {method:'POST', body: built.rows.length===1 ? built.rows[0] : built.rows, prefer:'return=minimal'});
+    var msg = so.name+' added to Fulfillment';
+    if (switchTo) {
+      await dbFetch('standing_orders?id=eq.'+so.id, {method:'PATCH', body:{cadence:switchTo}, prefer:'return=minimal'});
+      msg += ' · switched to '+switchTo+' weeks';
+    }
+    closeStandingMiniModal();
+    toast(msg,'success');
+    await loadOrders();
+    await loadStandingOrders();
+  } catch(e) { toast('Error: '+e.message,'error'); }
+}
+
+// ── SCHEDULE EDITOR (quick cadence change without opening the full edit form) ──
+function standingUpcomingWeeks(so, count) {
+  var cycle = cycles.find(function(c){return c.id===currentCycleId;});
+  var start = getCycleMonday(cycle);
+  var out = [];
+  for (var k=0; k<12 && out.length<count; k++) {
+    var d = new Date(start.getFullYear(), start.getMonth(), start.getDate()+7*k);
+    if (isStandingDueThisCycle(so, d)) out.push(d.toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+  }
+  return out;
+}
+
+function showStandingScheduleModal(soId) {
+  var so = standingOrders.find(function(s){return s.id===soId;});
+  if (!so) return;
+  var showWeek = so.type !== 'gift';
+  var curWeek = weekOfMonth(so.signup_date ? new Date(so.signup_date+'T00:00:00') : new Date());
+  var inner =
+    '<div style="font-family:\'Libre Baskerville\',serif;font-size:19px;font-weight:700;color:var(--ink);margin-bottom:16px;">'+escHtml(so.name)+' — schedule</div>' +
+    '<div class="form-row"><div class="form-group"><label>Cadence</label><select id="sched-cadence" onchange="refreshSchedulePreview(\''+so.id+'\')">' +
+      Object.keys(CADENCE_LABELS).map(function(k){return '<option value="'+k+'" '+(so.cadence===k?'selected':'')+'>'+CADENCE_LABELS[k]+'</option>';}).join('') +
+    '</select></div></div>' +
+    (showWeek ? '<div class="form-row" id="sched-week-group" style="display:'+(so.cadence==='M'?'block':'none')+';"><div class="form-group"><label>Monthly pickup week</label><select id="sched-week" onchange="refreshSchedulePreview(\''+so.id+'\')">' +
+      [1,2,3,4,5].map(function(w){return '<option value="'+w+'" '+(curWeek===w?'selected':'')+'>'+['1st','2nd','3rd','4th','5th'][w-1]+' week of the month</option>';}).join('') +
+    '</select></div></div>' : '') +
+    '<div class="section-sub" id="sched-preview" style="margin-bottom:18px;"></div>' +
+    '<div style="display:flex;gap:10px;"><button class="btn btn-primary" style="flex:1;" onclick="saveStandingSchedule(\''+so.id+'\')">Save</button>' +
+    '<button class="btn btn-ghost" onclick="closeStandingMiniModal()">Cancel</button></div>';
+  standingModalShell(inner);
+  refreshSchedulePreview(so.id);
+}
+
+function scheduleDraft(so) {
+  var cadence = document.getElementById('sched-cadence').value;
+  var draft = Object.assign({}, so, {cadence: cadence});
+  var weekEl = document.getElementById('sched-week');
+  if (cadence==='M' && so.type!=='gift' && weekEl) {
+    var cycle = cycles.find(function(c){return c.id===currentCycleId;});
+    var base = getCycleMonday(cycle);
+    var day = (parseInt(weekEl.value)-1)*7+1;
+    var dt = new Date(base.getFullYear(), base.getMonth(), day);
+    draft.signup_date = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+  }
+  return draft;
+}
+
+function refreshSchedulePreview(soId) {
+  var so = standingOrders.find(function(s){return s.id===soId;});
+  if (!so) return;
+  var wg = document.getElementById('sched-week-group');
+  if (wg) wg.style.display = document.getElementById('sched-cadence').value==='M' ? 'block' : 'none';
+  var weeks = standingUpcomingWeeks(scheduleDraft(so), 4);
+  document.getElementById('sched-preview').textContent = weeks.length ? 'Next due: week of '+weeks.join(', ') : 'Not due in the next 12 weeks.';
+}
+
+async function saveStandingSchedule(soId) {
+  var so = standingOrders.find(function(s){return s.id===soId;});
+  if (!so) return;
+  var draft = scheduleDraft(so);
+  var body = {cadence: draft.cadence};
+  if (draft.cadence==='M' && so.type!=='gift') body.signup_date = draft.signup_date;
+  try {
+    await dbFetch('standing_orders?id=eq.'+soId, {method:'PATCH', body:body, prefer:'return=minimal'});
+    closeStandingMiniModal();
+    toast('Schedule updated','success');
+    await loadStandingOrders();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
 }
 
 async function addCheckedStandingOrders() {
@@ -3946,21 +4248,9 @@ async function addCheckedStandingOrders() {
     if (d.alreadyAdded) return;
     var cb = document.getElementById('standing-check-'+i);
     if (!cb || !cb.checked) return;
-    var so = d.so;
-    var noteBase = so.name + ' — ' + (so.pickup_location||'Cafe Pickup') + (so.type==='gift' ? ' — Gift subscription'+(so.gifter_name?' from '+so.gifter_name:'') : '');
-    d.lines.forEach(function(l) {
-      if (l.alreadyAdded) return;
-      var resolved = resolveStandingCoffee(l, cycle);
-      if (resolved.unresolved) { skippedUnresolved++; return; }
-      toInsert.push({
-        cycle_id: currentCycleId, profile_id: currentUser.id,
-        customer_name: 'Subscriptions', order_type: 'subscription', region: 'pickup',
-        coffee_sku: resolved.sku, coffee_name: resolved.coffee ? resolved.coffee.name : resolved.sku,
-        qty: l.qty, size: l.size, grind: l.grind,
-        notes: noteBase,
-        source_order_id: l.sourceId
-      });
-    });
+    var built = buildStandingInserts(d.so, d.lines, cycle);
+    skippedUnresolved += built.skipped;
+    built.rows.forEach(function(r){ toInsert.push(r); });
   });
   if (!toInsert.length) {
     toast(skippedUnresolved ? "Set this cycle's Roaster's Choice first (on the Orders tab) — that's blocking "+skippedUnresolved+" entr"+(skippedUnresolved===1?'y':'ies') : 'Nothing checked to add', 'warn');
