@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-11-05e — FIXED the page jumping back to the home tab: Supabase re-announces the signed-in session every time the browser tab regains focus (and on hourly token refresh), and the app treated each as a fresh login and rebuilt itself. Now it only rebuilds when the signed-in user actually changes. Also remembers the last tab per browser tab, so even a real page reload returns you to e.g. Supplies.
   2026-11-05d — Orders (desktop): the order note now lives in the Notes column of the customer's header row (placeholder just "Notes"), and the redundant "Current Cycle Orders" title above the table is gone (bulk-delete bar kept).
   2026-11-05c — (1) NOTES: orders now have ONE order-level note (new orders.order_note column) shown once per customer — editable under the customer name on Orders (desktop + mobile), and as a highlighted banner on the Fulfillment sheet/print — plus optional per-line notes that are never copied to other lines. Standing account checklist no longer auto-fills "Standing account order". (2) PORTAL: customer's order wins — if they've already ordered this cycle their order loads for editing and saving REPLACES it (lines staff added by hand are untouched); wholesale accounts with no order yet get a "Reorder last order" button that prefills the form (never auto-submits). REQUIRES SQL: orders.order_note column + customer select/delete policies on own portal orders.
   2026-11-05b — Standing: Manage Roster now has an "Add this cycle" button on every row (for someone who's up next week but needs their coffee this week — pick "Add & switch" for A/B people so their schedule moves with them); Manage Roster also stacks into cards on phones.
@@ -1038,7 +1039,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-11-05d — order notes in Notes column');
+console.log('Conduit Ops build: 2026-11-05e — stop auto-jump to home tab');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -1181,6 +1182,14 @@ function showAuthErr(msg) {
 }
 
 // ── INIT ──
+// Open the tab you were last on (this browser tab only); fall back to the role's home tab.
+function startTab(def) {
+  var last = null;
+  try { last = sessionStorage.getItem('conduit_last_tab'); } catch(e) {}
+  var el = last ? document.querySelector('[data-tab="'+last+'"]:not(.hidden)') : null;
+  (el || document.querySelector('[data-tab="'+def+'"]')).click();
+}
+
 async function initApp(user) {
   currentUser = user;
   document.getElementById('auth-screen').style.display = 'none';
@@ -1223,14 +1232,14 @@ async function initApp(user) {
     try { await loadCoffees(); buildChildOf(); } catch(e) { console.log('coffees load error:', e); }
     try { await loadCycles(); } catch(e) { console.log('cycles load error:', e); }
     try { await loadOrders(); } catch(e) { console.log('orders load error:', e); }
-    document.querySelector('[data-tab="orders"]').click();
+    startTab('orders');
   } else if (isInternal) {
-    document.querySelector('[data-tab="supplies"]').click();
+    startTab('supplies');
   } else {
     try { await loadCoffees(); buildChildOf(); } catch(e) { console.log('coffees load error:', e); }
     try { await loadCycles(); } catch(e) { console.log('cycles load error:', e); }
     document.getElementById('portal-sub').textContent = 'Welcome back, ' + fullName;
-    document.querySelector('[data-tab="portal"]').click();
+    startTab('portal');
     if (profileRow && (profileRow.pending_approval || profileRow.approved === false)) {
       document.getElementById('portal-pending').style.display = 'block';
       document.getElementById('portal-form-wrap').style.display = 'none';
@@ -4843,6 +4852,7 @@ function showTab(name, el) {
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
   document.getElementById('panel-'+name).classList.add('active');
   if (el) el.classList.add('active');
+  try { sessionStorage.setItem('conduit_last_tab', name); } catch(e) {}
   if (name==='roast'||name==='output') generateSchedule();
   if (name==='admin') loadAdminUsers();
   if (name==='catalog') loadCatalog();
@@ -4863,13 +4873,22 @@ function toast(msg, type) {
 }
 
 // ── BOOT ──
+let _initedUserId = null; // who the app is currently built for
 let _signingUp = false; // flag to prevent initApp during signup flow
 
 setLogos();
 sb.auth.onAuthStateChange(async function(event, session) {
   if (_signingUp) return; // don't interfere with signup pending screen
-  if (session && session.user) await initApp(session.user);
-  else {
+  if (session && session.user) {
+    // Supabase re-fires SIGNED_IN whenever the browser tab regains focus and TOKEN_REFRESHED about hourly.
+    // Those are the same signed-in person — re-running initApp for them is what kept bouncing you back to the
+    // home tab. Only (re)build the app when the user actually changed.
+    if (_initedUserId === session.user.id) return;
+    _initedUserId = session.user.id;
+    await initApp(session.user);
+  } else {
+    _initedUserId = null;
+    try { sessionStorage.removeItem('conduit_last_tab'); } catch(e) {}
     document.getElementById('auth-screen').style.display='flex';
     document.getElementById('main-app').style.display='none';
   }
