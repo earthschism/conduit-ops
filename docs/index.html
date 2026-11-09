@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-11-09 — Standing Manage Roster: added a "Find someone on the roster" search box (filters by name) above the table; the Add this cycle dialog for monthly customers now says their schedule stays as it is.
   2026-11-05e — FIXED the page jumping back to the home tab: Supabase re-announces the signed-in session every time the browser tab regains focus (and on hourly token refresh), and the app treated each as a fresh login and rebuilt itself. Now it only rebuilds when the signed-in user actually changes. Also remembers the last tab per browser tab, so even a real page reload returns you to e.g. Supplies.
   2026-11-05d — Orders (desktop): the order note now lives in the Notes column of the customer's header row (placeholder just "Notes"), and the redundant "Current Cycle Orders" title above the table is gone (bulk-delete bar kept).
   2026-11-05c — (1) NOTES: orders now have ONE order-level note (new orders.order_note column) shown once per customer — editable under the customer name on Orders (desktop + mobile), and as a highlighted banner on the Fulfillment sheet/print — plus optional per-line notes that are never copied to other lines. Standing account checklist no longer auto-fills "Standing account order". (2) PORTAL: customer's order wins — if they've already ordered this cycle their order loads for editing and saving REPLACES it (lines staff added by hand are untouched); wholesale accounts with no order yet get a "Reorder last order" button that prefills the form (never auto-submits). REQUIRES SQL: orders.order_note column + customer select/delete policies on own portal orders.
@@ -46,7 +47,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-11-05T23:42:15.701Z">
+<meta name="app-version" content="2026-11-09T22:07:58.631Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -907,6 +908,8 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       </div>
     </div>
 
+    <div style="margin-bottom:12px;"><input type="search" id="roster-search" placeholder="Find someone on the roster…" oninput="renderStandingRoster()" style="max-width:320px;"></div>
+
     <div class="card" id="standing-upload-card" style="display:none;">
       <div class="card-title">Master List Sync</div>
       <div class="section-sub" style="margin-bottom:14px;">
@@ -1039,7 +1042,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-11-05e — stop auto-jump to home tab');
+console.log('Conduit Ops build: 2026-11-09 — roster search');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -4277,7 +4280,7 @@ function showAddStandingOneModal(soId) {
   var other = (!isDue && so.cadence==='A') ? 'B' : ((!isDue && so.cadence==='B') ? 'A' : null);
   var intro = isDue
     ? 'They\'re already due this week. This puts their order on this cycle\'s Fulfillment right now.'
-    : 'They\'re not due this week ('+escHtml(CADENCE_LABELS[so.cadence]||so.cadence)+'). This puts their order on this cycle\'s Fulfillment.';
+    : 'They\'re not due this week ('+escHtml(CADENCE_LABELS[so.cadence]||so.cadence)+'). This puts their order on this cycle\'s Fulfillment'+(so.cadence==='M'||so.cadence==='W'?' — their schedule stays exactly as it is.':'.');
   var inner =
     '<div style="font-family:\'Libre Baskerville\',serif;font-size:19px;font-weight:700;color:var(--ink);margin-bottom:6px;">Add '+escHtml(so.name)+' this cycle</div>' +
     '<div class="section-sub" style="margin-bottom:18px;">'+intro+'</div>' +
@@ -4511,7 +4514,10 @@ async function deactivateAccountTemplate(id) {
 function renderStandingRoster() {
   var tbody = document.getElementById('standing-roster-tbody');
   if (!standingOrders.length) { tbody.innerHTML = '<tr><td colspan="12" class="empty">No standing entries yet.</td></tr>'; return; }
-  tbody.innerHTML = standingOrders.map(function(so) {
+  var q = ((document.getElementById('roster-search')||{}).value||'').trim().toLowerCase();
+  var shown = q ? standingOrders.filter(function(so){ return (so.name||'').toLowerCase().indexOf(q) > -1; }) : standingOrders;
+  if (!shown.length) { tbody.innerHTML = '<tr><td colspan="12" class="empty">No one on the roster matches "'+escHtml(q)+'".</td></tr>'; return; }
+  tbody.innerHTML = shown.map(function(so) {
     var coffee = getCoffee(so.coffee_sku);
     var coffeeCell = so.coffee_sku === '__roasters_choice__' ? "☕ Roaster's Choice" : (coffee?escHtml(coffee.name):escHtml(so.coffee_sku));
     var extras = standingOrderItems[so.id] || [];
