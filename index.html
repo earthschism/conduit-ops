@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-11-22 — SUPPLIES: new "⬆ Upload Costs" button in Manage Catalog — edit the Export All spreadsheet's Price / Pack Qty / Pack Unit columns and upload it back. Matches items by Name, shows a preview (new, changed, unchanged, unmatched, bad rows) before saving, skips rows left blank, and touches nothing but costs.
   2026-11-21 — NEW COSTS TAB (owner/manager): Ingredients (supplies, green and roasted coffees with their costs), Prepared Items (recipes with a batch yield → cost per unit, usable inside other recipes), Menu Items (recipes of ingredients, prepared items and labor with menu price → margin and food cost %), and Labor (adjustable named hourly rates, charged by the minute). Fluids fl oz, solids g, countables each; coffee priced per lb converts to g. Recipes can't contain themselves. REQUIRES SQL: labor_rates, cost_items, cost_item_lines tables.
   2026-11-20 — SUPPLIES: Manage Catalog now has a Unit cost column (owner/manager only). Click "＋ Set cost" on an item: price you pay for one order unit (case, gal, bag…), how many it holds, and what they're counted in (oz, each, lb…) → shows cost per oz/each/etc. Stored in a new owner/manager-only supply_costs table so staff can't see it. Export All now includes Price, Pack Qty, Pack Unit, Unit Cost, and its Code column (was blank — read the wrong field) is fixed. REQUIRES SQL: supply_costs table.
   2026-11-19b — Green Coffees view: removed the "add them to the list" prompt; Cost per Roasted Pound rows now have an "Edit blend" button, blends that still use a green name not in your list are flagged ⚠, and the blend editor labels such names "(old name — not in list)".
@@ -851,6 +852,8 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <div><div class="section-title" style="font-size:16px;">Manage Catalog</div><div class="section-sub">Par levels, vendor codes, bulk import</div></div>
       <div id="supply-manager-actions" style="display:flex;gap:10px;">
         <button class="btn btn-ghost btn-sm" onclick="downloadSupplyCatalogCSV()">⬇ Export All</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('supply-cost-csv-input').click()">⬆ Upload Costs</button>
+        <input type="file" id="supply-cost-csv-input" accept=".csv" style="display:none" onchange="handleSupplyCostCSV(this.files[0]);this.value='';">
         <button class="btn btn-primary btn-sm" onclick="showAddSupplyItemsModal()">+ Add Catalog Items</button>
       </div>
     </div>
@@ -1089,7 +1092,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-11-21 — Costs tab');
+console.log('Conduit Ops build: 2026-11-22 — upload supply costs');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -4525,6 +4528,85 @@ async function removeCostItem(id) {
   if (!confirm('Remove this item?')) return;
   try { await dbFetch('cost_items?id=eq.'+id, {method:'PATCH', body:{active:false}, prefer:'return=minimal'}); closeStandingMiniModal(); toast('Removed','success'); await loadCostsTab(); }
   catch(e) { toast('Error: '+e.message,'error'); }
+}
+
+// ── UPLOAD COSTS (CSV with Name, Price, Pack Qty, Pack Unit → supply_costs) ──
+var costUploadPlan = null;
+function handleSupplyCostCSV(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var text = String(e.target.result||'').replace(/^﻿/, '');
+    var lines = text.split(/\r?\n/).filter(function(l){ return l.trim(); });
+    if (lines.length < 2) { toast('That file has no data rows','warn'); return; }
+    var headers = parseCSVLine(lines[0]);
+    function col(n) { return headers.findIndex(function(h){ return h.trim().toLowerCase()===n.toLowerCase(); }); }
+    var C = {name:col('Name'), price:col('Price'), qty:col('Pack Qty'), unit:col('Pack Unit')};
+    if (C.name<0 || C.price<0 || C.qty<0) { toast('Needs columns: Name, Price, Pack Qty (and Pack Unit)','error'); return; }
+    var byName = {}; supplyItems.forEach(function(it){ var k = it.name.trim().toLowerCase(); if (!byName[k]) byName[k] = it; });
+    var plan = {add:[], change:[], same:0, blank:0, unmatched:[], invalid:[], oddUnits:{}};
+    var seen = {};
+    for (var i=1; i<lines.length; i++) {
+      var row = parseCSVLine(lines[i]);
+      var name = (row[C.name]||'').trim(); if (!name) continue;
+      var rawPrice = (row[C.price]||'').replace(/[$,\s]/g,''), rawQty = (row[C.qty]||'').replace(/[,\s]/g,'');
+      if (rawPrice==='' && rawQty==='') { plan.blank++; continue; }        // nothing entered for this one — leave it alone
+      var it = byName[name.toLowerCase()];
+      if (!it) { plan.unmatched.push(name); continue; }
+      if (seen[it.id]) continue; seen[it.id] = true;
+      var price = parseFloat(rawPrice), qty = parseFloat(rawQty);
+      var unit = ((C.unit>-1 ? row[C.unit] : '')||'').trim() || 'each';
+      if (isNaN(price) || price<0 || !(qty>0)) { plan.invalid.push(name+' (price "'+(row[C.price]||'')+'", pack qty "'+(row[C.qty]||'')+'")'); continue; }
+      var cur = supplyCosts[it.id];
+      var fam = unitFamily(unit); if (fam.indexOf('count:')===0 && unit.toLowerCase()!=='each') plan.oddUnits[unit] = true;
+      var rec = {item_id:it.id, name:it.name, price:price, pack_qty:qty, pack_unit:unit};
+      if (!cur) plan.add.push(rec);
+      else if (parseFloat(cur.price)===price && parseFloat(cur.pack_qty)===qty && (cur.pack_unit||'each')===unit) plan.same++;
+      else plan.change.push(rec);
+    }
+    costUploadPlan = plan;
+    showCostUploadPreview();
+  };
+  reader.readAsText(file);
+}
+function showCostUploadPreview() {
+  var p = costUploadPlan; if (!p) return;
+  var n = p.add.length + p.change.length;
+  function lst(arr, f) { return arr.length ? '<div style="font-size:12px;color:var(--ink3);margin:2px 0 8px;max-height:90px;overflow-y:auto;">'+arr.map(f||escHtml).join(', ')+'</div>' : ''; }
+  var odd = Object.keys(p.oddUnits);
+  standingModalShell(
+    '<div style="font-family:\'Libre Baskerville\',serif;font-size:19px;font-weight:700;color:var(--ink);margin-bottom:10px;">Upload costs — preview</div>' +
+    '<div style="font-size:14px;line-height:1.7;">' +
+      '<div><strong>'+p.add.length+'</strong> new cost'+(p.add.length!==1?'s':'')+' to add</div>' +
+      '<div><strong>'+p.change.length+'</strong> existing cost'+(p.change.length!==1?'s':'')+' to change</div>' +
+      lst(p.change, function(r){ var c = supplyCosts[r.item_id]; return escHtml(r.name)+' ($'+parseFloat(c.price).toFixed(2)+' → $'+r.price.toFixed(2)+')'; }) +
+      '<div style="color:var(--ink3);">'+p.same+' unchanged · '+p.blank+' left blank (skipped)</div>' +
+      (p.unmatched.length ? '<div style="color:#c49a2a;margin-top:6px;">⚠ '+p.unmatched.length+' name'+(p.unmatched.length!==1?'s':'')+' not found in the catalog (skipped):</div>'+lst(p.unmatched) : '') +
+      (p.invalid.length ? '<div style="color:#c49a2a;margin-top:6px;">⚠ '+p.invalid.length+' row'+(p.invalid.length!==1?'s':'')+' with a bad price or pack qty (skipped):</div>'+lst(p.invalid) : '') +
+      (odd.length ? '<div style="color:#c49a2a;margin-top:6px;">⚠ Unusual pack unit'+(odd.length>1?'s':'')+': <strong>'+odd.map(escHtml).join(', ')+'</strong> — fine to save, but recipes can only use these as "each-style" counts. Fluids should be <em>fl oz</em>, solids <em>g</em>.</div>' : '') +
+    '</div>' +
+    '<div style="display:flex;gap:10px;margin-top:16px;"><button class="btn btn-primary" style="flex:1;" '+(n?'':'disabled ')+'onclick="commitSupplyCostUpload()">Save '+n+' cost'+(n!==1?'s':'')+'</button>' +
+    '<button class="btn btn-ghost" onclick="closeStandingMiniModal();costUploadPlan=null;">Cancel</button></div>', 520);
+}
+async function commitSupplyCostUpload() {
+  var p = costUploadPlan; if (!p) return;
+  var now = new Date().toISOString();
+  try {
+    if (p.add.length) {
+      var rows = p.add.map(function(r){ return {item_id:r.item_id, price:r.price, pack_qty:r.pack_qty, pack_unit:r.pack_unit, updated_at:now}; });
+      await dbFetch('supply_costs', {method:'POST', body: rows.length===1?rows[0]:rows, prefer:'return=minimal'});
+      rows.forEach(function(r){ supplyCosts[r.item_id] = r; });
+    }
+    for (var i=0; i<p.change.length; i++) {
+      var r = p.change[i], body = {price:r.price, pack_qty:r.pack_qty, pack_unit:r.pack_unit, updated_at:now};
+      await dbFetch('supply_costs?item_id=eq.'+r.item_id, {method:'PATCH', body:body, prefer:'return=minimal'});
+      supplyCosts[r.item_id] = Object.assign({item_id:r.item_id}, body);
+    }
+    var total = p.add.length + p.change.length;
+    costUploadPlan = null; closeStandingMiniModal();
+    toast(total+' cost'+(total!==1?'s':'')+' saved','success');
+    renderSupplyCatalog();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
 }
 
 // ── SUPPLY COSTS (price → unit cost; owner/manager only, stored in supply_costs) ──
