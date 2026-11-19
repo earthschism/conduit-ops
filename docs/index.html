@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-11-20 — SUPPLIES: Manage Catalog now has a Unit cost column (owner/manager only). Click "＋ Set cost" on an item: price you pay for one order unit (case, gal, bag…), how many it holds, and what they're counted in (oz, each, lb…) → shows cost per oz/each/etc. Stored in a new owner/manager-only supply_costs table so staff can't see it. Export All now includes Price, Pack Qty, Pack Unit, Unit Cost, and its Code column (was blank — read the wrong field) is fixed. REQUIRES SQL: supply_costs table.
   2026-11-19b — Green Coffees view: removed the "add them to the list" prompt; Cost per Roasted Pound rows now have an "Edit blend" button, blends that still use a green name not in your list are flagged ⚠, and the blend editor labels such names "(old name — not in list)".
   2026-11-19 — COFFEES: new "Green Coffees" view in the Coffees tab (green name, origin, $/lb, lbs on hand; shows what this cycle's roast schedule needs vs on hand, flags shortfalls) and a Cost / lb column on every coffee. The coffee editor now has a Roast loss % field and a Blend recipe editor (pick greens, set % — must total 100%) with a live green + roasted $/lb preview. FIXED: saving a coffee used to silently reset its roast loss to 15%. Cost per roasted lb = blend green cost ÷ (1 − roast loss); bags/labor come later. REQUIRES SQL: green_coffees table.
   2026-11-18 — (1) STANDING: saved account orders (Standing Accounts view) can now be edited — name, type, region and lines (add/remove/change coffees) — and every This Cycle / Not Due row now has an Edit button for the roster entry. (2) PRINT: new "🖨 Print…" button on Print & Export opens a picker — tick which sheets, choose portrait/landscape for each — and prints them as one job, each on its own page with the right orientation. (3) Menu tab "Catalog" renamed "Coffees".
@@ -50,7 +51,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-11-19T21:04:24.630Z">
+<meta name="app-version" content="2026-11-19T21:46:06.201Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -851,8 +852,8 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       </div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>Name</th><th>Code</th><th>Category</th><th>Vendor</th><th>Unit</th><th class="num">Par</th><th class="num">On Hand</th><th class="num">Need</th><th>Sticky</th><th></th></tr></thead>
-          <tbody id="supply-catalog-tbody"><tr><td colspan="10" class="loading"><div class="spinner"></div></td></tr></tbody>
+          <thead><tr><th>Name</th><th>Code</th><th>Category</th><th>Vendor</th><th>Unit</th><th class="num cost-col">Unit cost</th><th class="num">Par</th><th class="num">On Hand</th><th class="num">Need</th><th>Sticky</th><th></th></tr></thead>
+          <tbody id="supply-catalog-tbody"><tr><td colspan="11" class="loading"><div class="spinner"></div></td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1071,12 +1072,12 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-11-19b — edit blend from cost table');
+console.log('Conduit Ops build: 2026-11-20 — supply unit costs');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
 let orders=[], coffees=[], roastSchedule=[];
-var lastOriginTotals = {}, greenCoffees = [], catalogRows = [];
+var lastOriginTotals = {}, greenCoffees = [], catalogRows = [], supplyCosts = {};
 let lineItemCount=0, portalLineId=0;
 let roastOverrides={}; // {sku: {onHand: 0, waterLoss: 0.15}} — editable per session
 
@@ -3535,6 +3536,11 @@ async function loadSupplies() {
   if (!isOwner) { document.getElementById('master-update-card').style.display = 'none'; masterUpdatePlan = null; }
   if (!isSuppliesManager) { document.getElementById('supply-csv-card').style.display = 'none'; if (document.getElementById('supplies-view-manage').style.display !== 'none') switchSuppliesView('build'); }
   try { supplyItems = await dbFetch('supply_items?select=*&active=eq.true&order=name'); } catch(e) { supplyItems = []; console.log('loadSupplies items error:', e); }
+  supplyCosts = {};
+  if (isSuppliesManager) {
+    try { (await dbFetch('supply_costs?select=*')).forEach(function(c){ supplyCosts[c.item_id] = c; }); }
+    catch(e) { console.log('supply_costs load error (has the SQL been run?):', e); }
+  }
   try { weeklyList = await dbFetch('supply_list_items?select=*&list_status=eq.open&order=created_at'); } catch(e) { weeklyList = []; console.log('loadSupplies list error:', e); }
   refreshCategoryDatalist();
   refreshVendorDatalist();
@@ -3926,7 +3932,8 @@ function renderSupplyCatalog() {
     return true;
   });
   var tbody = document.getElementById('supply-catalog-tbody');
-  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="10" class="empty">No matching items.</td></tr>'; return; }
+  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">No matching items.</td></tr>'; return; }
+  document.querySelectorAll('#panel-supplies .cost-col').forEach(function(el){ el.style.display = isSuppliesManager ? '' : 'none'; });
   tbody.innerHTML = filtered.map(function(it) {
     var stickyToggle = isSuppliesManager
       ? '<input type="checkbox" '+(it.sticky?'checked':'')+' onchange="toggleSticky(\''+it.id+'\',this.checked)" style="width:auto;accent-color:var(--blue);">'
@@ -3952,6 +3959,7 @@ function renderSupplyCatalog() {
       '<td>'+categoryCell+'</td>' +
       '<td style="color:var(--ink3);">'+vendorCell+'</td>' +
       '<td style="color:var(--ink3);">'+escHtml(it.unit||'-')+'</td>' +
+      (isSuppliesManager ? '<td class="num cost-col">'+supplyCostCell(it)+'</td>' : '') +
       '<td class="num">'+parCell+'</td>' +
       '<td class="num">'+onHandCell+'</td>' +
       '<td class="num">'+needCell+'</td>' +
@@ -4159,10 +4167,65 @@ function downloadSupplyCSVTemplate() {
   a.click();
 }
 
+// ── SUPPLY COSTS (price → unit cost; owner/manager only, stored in supply_costs) ──
+// "You pay <price> for one <order unit> (case, gal, bag…). One of those holds <pack_qty> <pack_unit> (oz, each, lb…)."
+function unitCostOf(c) {
+  if (!c || !(parseFloat(c.price) >= 0) || !(parseFloat(c.pack_qty) > 0)) return null;
+  return parseFloat(c.price) / parseFloat(c.pack_qty);
+}
+function fmtUnitCost(v) { return v < 1 ? '$' + v.toFixed(3) : '$' + v.toFixed(2); }
+function supplyCostCell(it) {
+  var c = supplyCosts[it.id], uc = unitCostOf(c);
+  if (uc == null) return '<button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="showSupplyCostModal(\''+it.id+'\')">＋ Set cost</button>';
+  return '<a href="#" onclick="showSupplyCostModal(\''+it.id+'\');return false;" title="'+escHtml('$'+parseFloat(c.price).toFixed(2)+' per '+(it.unit||'unit')+', '+c.pack_qty+' '+(c.pack_unit||'each')+' each — click to edit')+'" ' +
+    'style="font-family:\'DM Mono\',monospace;font-size:12px;color:var(--ink);text-decoration:none;border-bottom:1px dashed var(--ink3);">'+fmtUnitCost(uc)+' / '+escHtml(c.pack_unit||'each')+'</a>';
+}
+function showSupplyCostModal(id) {
+  var it = supplyItems.find(function(x){ return x.id===id; }); if (!it) return;
+  var c = supplyCosts[id] || {};
+  standingModalShell(
+    '<div style="font-family:\'Libre Baskerville\',serif;font-size:19px;font-weight:700;color:var(--ink);margin-bottom:4px;">'+escHtml(it.name)+'</div>' +
+    '<div class="section-sub" style="margin-bottom:14px;">What it costs you, so the calculators can work out a cost per ounce, per each, and so on.</div>' +
+    '<div class="form-row c2"><div class="form-group"><label>Price you pay ($)</label><input type="number" id="sc-price" min="0" step="0.01" value="'+(c.price!=null?c.price:'')+'" oninput="refreshSupplyCostPreview()"></div>' +
+    '<div class="form-group"><label>…for one</label><input type="text" id="sc-per" value="'+escHtml(it.unit||'')+'" readonly style="background:var(--paper2);" title="Change this in the catalog\'s Unit column"></div></div>' +
+    '<div class="form-row c2"><div class="form-group"><label>One holds how many</label><input type="number" id="sc-qty" min="0" step="0.01" value="'+(c.pack_qty!=null?c.pack_qty:'')+'" oninput="refreshSupplyCostPreview()"></div>' +
+    '<div class="form-group"><label>…counted in</label><input type="text" id="sc-pu" list="sc-pu-list" value="'+escHtml(c.pack_unit||'')+'" placeholder="oz, each, lb, bag…" oninput="refreshSupplyCostPreview()">' +
+    '<datalist id="sc-pu-list"><option>each</option><option>oz</option><option>lb</option><option>fl oz</option><option>gal</option><option>cup</option><option>bag</option><option>pump</option></datalist></div></div>' +
+    '<div id="sc-preview" style="font-family:\'DM Mono\',monospace;font-size:14px;margin:6px 0 16px;min-height:20px;"></div>' +
+    '<div style="display:flex;gap:10px;"><button class="btn btn-primary" style="flex:1;" onclick="saveSupplyCost(\''+id+'\')">Save</button>' +
+    (supplyCosts[id] ? '<button class="btn btn-ghost" style="color:#c0392b;" onclick="clearSupplyCost(\''+id+'\')">Clear</button>' : '') +
+    '<button class="btn btn-ghost" onclick="closeStandingMiniModal()">Cancel</button></div>'
+  );
+  refreshSupplyCostPreview();
+}
+function refreshSupplyCostPreview() {
+  var uc = unitCostOf({price:document.getElementById('sc-price').value, pack_qty:document.getElementById('sc-qty').value});
+  var pu = document.getElementById('sc-pu').value.trim() || 'each';
+  document.getElementById('sc-preview').innerHTML = uc == null ? '<span style="color:var(--ink3);">Enter a price and how many it holds.</span>' : 'Costs <strong>'+fmtUnitCost(uc)+'</strong> per '+escHtml(pu);
+}
+async function saveSupplyCost(id) {
+  var price = parseFloat(document.getElementById('sc-price').value), qty = parseFloat(document.getElementById('sc-qty').value);
+  if (isNaN(price) || price < 0) { toast('Enter the price','warn'); return; }
+  if (!(qty > 0)) { toast('Enter how many one holds (more than 0)','warn'); return; }
+  var body = {item_id:id, price:price, pack_qty:qty, pack_unit:document.getElementById('sc-pu').value.trim()||'each', updated_at:new Date().toISOString()};
+  try {
+    if (supplyCosts[id]) await dbFetch('supply_costs?item_id=eq.'+id, {method:'PATCH', body:body, prefer:'return=minimal'});
+    else await dbFetch('supply_costs', {method:'POST', body:body, prefer:'return=minimal'});
+    supplyCosts[id] = body;
+    closeStandingMiniModal(); toast('Cost saved','success'); renderSupplyCatalog();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
+}
+async function clearSupplyCost(id) {
+  try { await dbFetch('supply_costs?item_id=eq.'+id, {method:'DELETE', prefer:'return=minimal'}); delete supplyCosts[id]; closeStandingMiniModal(); toast('Cost cleared','success'); renderSupplyCatalog(); }
+  catch(e) { toast('Error: '+e.message,'error'); }
+}
+
 function downloadSupplyCatalogCSV() {
-  var header = 'Name,Code,Category,Vendor,Unit,Sticky,Par,On Hand\n';
+  var header = 'Name,Code,Category,Vendor,Unit,Sticky,Par,On Hand,Price,Pack Qty,Pack Unit,Unit Cost\n';
   var rows = supplyItems.map(function(i) {
-    return [i.name, i.code, i.category, i.vendor, i.unit, (i.sticky?'yes':'no'), (i.par_level!=null?i.par_level:''), (i.on_hand!=null?i.on_hand:'')]
+    var c = supplyCosts[i.id] || {}, uc = unitCostOf(c);
+    return [i.name, i.product_code, i.category, i.vendor, i.unit, (i.sticky?'yes':'no'), (i.par_level!=null?i.par_level:''), (i.on_hand!=null?i.on_hand:''),
+            (c.price!=null?c.price:''), (c.pack_qty!=null?c.pack_qty:''), (c.pack_unit||''), (uc!=null?uc.toFixed(4):'')]
       .map(function(v){ v = (v==null?'':String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; })
       .join(',');
   });
