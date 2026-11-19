@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-11-18 — (1) STANDING: saved account orders (Standing Accounts view) can now be edited — name, type, region and lines (add/remove/change coffees) — and every This Cycle / Not Due row now has an Edit button for the roster entry. (2) PRINT: new "🖨 Print…" button on Print & Export opens a picker — tick which sheets, choose portrait/landscape for each — and prints them as one job, each on its own page with the right orientation. (3) Menu tab "Catalog" renamed "Coffees".
   2026-11-09 — Standing Manage Roster: added a "Find someone on the roster" search box (filters by name) above the table; the Add this cycle dialog for monthly customers now says their schedule stays as it is.
   2026-11-05e — FIXED the page jumping back to the home tab: Supabase re-announces the signed-in session every time the browser tab regains focus (and on hourly token refresh), and the app treated each as a fresh login and rebuilt itself. Now it only rebuilds when the signed-in user actually changes. Also remembers the last tab per browser tab, so even a real page reload returns you to e.g. Supplies.
   2026-11-05d — Orders (desktop): the order note now lives in the Notes column of the customer's header row (placeholder just "Notes"), and the redundant "Current Cycle Orders" title above the table is gone (bulk-delete bar kept).
@@ -47,7 +48,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-11-09T22:07:58.631Z">
+<meta name="app-version" content="2026-11-19T20:16:09.660Z">
 <title>Conduit Coffee - Orders</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -402,7 +403,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div class="tab" data-tab="output" onclick="showTab('output',this)">Print &amp; Export</div>
   <div class="tab hidden" data-tab="supplies" onclick="showTab('supplies',this)">Supplies</div>
   <div class="tab hidden" data-tab="portal" onclick="showTab('portal',this)">Place Order</div>
-  <div class="tab hidden" data-tab="catalog" onclick="showTab('catalog',this)">Catalog</div>
+  <div class="tab hidden" data-tab="catalog" onclick="showTab('catalog',this)">Coffees</div>
   <div class="tab hidden" data-tab="admin" onclick="showTab('admin',this)">Admin</div>
 </div>
 
@@ -558,7 +559,10 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 <div class="panel" id="panel-output">
   <div class="section-header">
     <div><div class="section-title">Print &amp; Export</div><div class="section-sub">All sheets formatted for the floor</div></div>
-    <button class="btn btn-ghost btn-sm" onclick="generateSchedule()">↻ Recalculate</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-ghost btn-sm" onclick="generateSchedule()">↻ Recalculate</button>
+      <button class="btn btn-primary btn-sm" onclick="showPrintPicker()">🖨 Print…</button>
+    </div>
   </div>
 
   <!-- ROASTING SHEET -->
@@ -721,7 +725,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 <!-- ── CATALOG PANEL ── -->
 <div class="panel" id="panel-catalog">
   <div class="section-header">
-    <div><div class="section-title">Coffee Catalog</div><div class="section-sub">Edit offerings · visibility · descriptions · sort order</div></div>
+    <div><div class="section-title">Coffees</div><div class="section-sub">Edit offerings · visibility · descriptions · sort order</div></div>
     <button class="btn btn-primary btn-sm" onclick="showAddCoffeeModal()">+ Add Coffee</button>
   </div>
   <div class="card">
@@ -1042,7 +1046,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-11-09 — roster search');
+console.log('Conduit Ops build: 2026-11-18 — edit standing, print picker, Coffees tab');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -2541,6 +2545,68 @@ function buildPrintSheets(rows, originTotals) {
     return '<tr><td>'+b.type+'</td><td class="num mono">'+c+'</td><td class="num mono">$'+b.rate+'</td><td class="num mono" style="font-weight:700;">$'+sub.toFixed(2)+'</td></tr>';
   }).join('') + '<tr style="border-top:2px solid var(--rule2);"><td colspan="3" style="font-weight:700;text-align:right;padding-right:10px;">Total Postage Est.</td><td class="num mono" style="font-weight:700;color:var(--blue);">$'+shipTotal.toFixed(2)+'</td></tr>';
   applyStackLabels();
+}
+
+// ── PRINT PICKER: choose sheets + orientation, one print job ──
+var PRINT_SHEETS = [
+  {key:'roast',       id:'roast-sheet',        label:'① Roasting Sheet',          orient:'portrait'},
+  {key:'green',       id:'green-sheet',        label:'② Green Coffee Pull List',  orient:'portrait'},
+  {key:'bags',        id:'bag-sheet',          label:'③ Bagging Grid',            orient:'landscape'},
+  {key:'fulfillment', id:'fulfillment-sheet',  label:'④ Account Fulfillment',     orient:'portrait'},
+  {key:'shipping',    id:'shipping-sheet',     label:'⑤ Shipping Summary',        orient:'portrait'}
+];
+function showPrintPicker() {
+  var rows = PRINT_SHEETS.map(function(sh) {
+    return '<label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--rule);cursor:pointer;">' +
+      '<input type="checkbox" class="pp-check" data-key="'+sh.key+'" checked style="width:auto;accent-color:var(--blue);">' +
+      '<span style="flex:1;font-weight:600;">'+sh.label+'</span>' +
+      '<select class="pp-orient" data-key="'+sh.key+'" style="width:auto;font-size:12px;" onclick="event.stopPropagation()">' +
+        '<option value="portrait"'+(sh.orient==='portrait'?' selected':'')+'>Portrait</option>' +
+        '<option value="landscape"'+(sh.orient==='landscape'?' selected':'')+'>Landscape</option></select></label>';
+  }).join('');
+  standingModalShell(
+    '<div style="font-family:\'Libre Baskerville\',serif;font-size:19px;font-weight:700;color:var(--ink);margin-bottom:4px;">Print</div>' +
+    '<div class="section-sub" style="margin-bottom:10px;">Pick the pages you want. Each starts on its own page with the orientation shown.</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:4px;"><button class="btn btn-ghost btn-sm" onclick="document.querySelectorAll(\'.pp-check\').forEach(function(c){c.checked=true;})">Select all</button>' +
+    '<button class="btn btn-ghost btn-sm" onclick="document.querySelectorAll(\'.pp-check\').forEach(function(c){c.checked=false;})">Select none</button></div>' +
+    rows +
+    '<div style="display:flex;gap:10px;margin-top:16px;"><button class="btn btn-primary" style="flex:1;" onclick="printSelectedSheets()">🖨 Print selected</button>' +
+    '<button class="btn btn-ghost" onclick="closeStandingMiniModal()">Cancel</button></div>'
+  );
+}
+function printSelectedSheets() {
+  var picks = [];
+  PRINT_SHEETS.forEach(function(sh) {
+    var c = document.querySelector('.pp-check[data-key="'+sh.key+'"]');
+    var o = document.querySelector('.pp-orient[data-key="'+sh.key+'"]');
+    if (c && c.checked) picks.push({id:sh.id, orient:o ? o.value : sh.orient});
+  });
+  if (!picks.length) { toast('Tick at least one page to print','warn'); return; }
+  closeStandingMiniModal();
+  PRINT_SHEETS.forEach(function(sh){ var el=document.getElementById(sh.id); if (el) el.style.display = 'none'; });
+  document.querySelectorAll('.sheet-actions').forEach(function(el){ el.style.display='none'; });
+  var css = '@media print { @page conduit-portrait { size: portrait; margin: 0.6cm; } @page conduit-landscape { size: landscape; margin: 0.5cm; } ';
+  picks.forEach(function(pk, i) {
+    var el = document.getElementById(pk.id);
+    if (!el) return;
+    el.style.display = 'block';
+    el.setAttribute('data-pp-orient', pk.orient);
+    if (i < picks.length-1) el.setAttribute('data-pp-break','1');
+  });
+  css += '[data-pp-orient="portrait"]{page:conduit-portrait;} [data-pp-orient="landscape"]{page:conduit-landscape;} [data-pp-break]{break-after:page;} ' +
+         '[data-pp-orient="landscape"] #bag-grid-table{font-size:12px!important;} }';
+  var style = document.createElement('style'); style.id = 'print-picker-style'; style.textContent = css; document.head.appendChild(style);
+  var done = false;
+  function cleanup() {
+    if (done) return; done = true;
+    window.removeEventListener('afterprint', cleanup);
+    PRINT_SHEETS.forEach(function(sh){ var el=document.getElementById(sh.id); if (el) { el.style.display=''; el.removeAttribute('data-pp-orient'); el.removeAttribute('data-pp-break'); } });
+    document.querySelectorAll('.sheet-actions').forEach(function(el){ el.style.display=''; });
+    var st = document.getElementById('print-picker-style'); if (st) st.remove();
+  }
+  window.addEventListener('afterprint', cleanup);
+  window.print();
+  setTimeout(cleanup, 1500);   // browsers that don't fire afterprint
 }
 
 function printSheet(type) {
@@ -4174,7 +4240,8 @@ async function renderStandingChecklist() {
     var locationTag = '<span class="badge badge-gray" style="margin-left:6px;">'+escHtml(so.pickup_location||'Cafe Pickup')+'</span>';
     var typeTag = so.type === 'gift' ? '<span class="badge badge-gold" style="margin-left:6px;">Gift</span>' : '';
     var rendered = standingLinesHtml(d.lines, cycle);
-    var schedBtn = '<button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="showStandingScheduleModal(\''+so.id+'\')">Schedule</button>';
+    var schedBtn = '<button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="showStandingScheduleModal(\''+so.id+'\')">Schedule</button>' +
+      '<button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="showAddStandingOrderModal(\''+so.id+'\')">Edit</button>';
     if (d.alreadyAdded) {
       return '<div class="checklist-row checked">' +
         '<input type="checkbox" checked disabled style="opacity:0.5;">' +
@@ -4257,6 +4324,7 @@ function renderStandingNotDue(notDue, cycle) {
         '<span class="cl-need" style="color:var(--ink3);">'+escHtml(CADENCE_LABELS[so.cadence]||so.cadence)+' · '+rendered.html+'</span></span>' +
       action +
       '<button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="showStandingScheduleModal(\''+so.id+'\')">Schedule</button>' +
+      '<button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="showAddStandingOrderModal(\''+so.id+'\')">Edit</button>' +
       '</div>';
   }).join('') + '</div>';
 }
@@ -4464,11 +4532,13 @@ async function renderAccountTemplatesChecklist() {
         '<input type="checkbox" checked disabled style="opacity:0.5;">' +
         '<span class="cl-name">'+escHtml(t.customer_name)+'<span class="cl-need">'+escHtml(summary)+'</span></span>' +
         '<span style="font-size:11px;color:var(--green2);font-weight:600;">On Fulfillment ✓</span>' +
+        '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="showAccountTemplateModal(\''+t.id+'\')">Edit</button>' +
         '</div>';
     }
     return '<div class="checklist-row">' +
       '<input type="checkbox" id="acct-check-'+i+'">' +
       '<span class="cl-name">'+escHtml(t.customer_name)+'<span class="cl-need">'+escHtml(summary)+'</span></span>' +
+      '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="showAccountTemplateModal(\''+t.id+'\')">Edit</button>' +
       '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="deactivateAccountTemplate(\''+t.id+'\')">Remove</button>' +
       '</div>';
   }).join('') + '</div>';
@@ -4501,6 +4571,69 @@ async function addCheckedAccountTemplates() {
     await loadOrders();
     await renderAccountTemplatesChecklist();
   } catch(e) { toast('Error adding to fulfillment: '+e.message,'error'); }
+}
+
+// Edit a saved account order: name, type, region and the saved lines.
+var acctEditN = 0;
+function acctEditLineHtml(n, it) {
+  var SIZE_LABELS = {'4oz':'4oz Sample','12oz':'12 oz','1lb':'1 lb','2lb':'2 lb','5lb':'5 lb','20lb':'Bulk'};
+  var sizeOpts = Object.keys(SIZE_LABELS).map(function(k){ return '<option value="'+k+'"'+(it.size===k?' selected':'')+'>'+SIZE_LABELS[k]+'</option>'; }).join('');
+  var grindOpts = [['wb','Whole Bean'],['drip','Drip'],['coarse','Coarse'],['fine','Fine']].map(function(g){ return '<option value="'+g[0]+'"'+(it.grind===g[0]?' selected':'')+'>'+g[1]+'</option>'; }).join('');
+  return '<div class="ae-line" id="ae-'+n+'" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 0;border-bottom:1px solid var(--rule);">' +
+    '<select id="ae-coffee-'+n+'" style="grid-column:1/-1;">'+coffeeOpts()+'</select>' +
+    '<select id="ae-size-'+n+'">'+sizeOpts+'</select>' +
+    '<select id="ae-grind-'+n+'">'+grindOpts+'</select>' +
+    '<input type="number" id="ae-qty-'+n+'" min="1" value="'+(it.qty||1)+'">' +
+    '<button class="btn btn-danger btn-sm" onclick="document.getElementById(\'ae-'+n+'\').remove()">Remove line</button>' +
+  '</div>';
+}
+function addAcctEditLine(it) {
+  it = it || {size:'2lb', grind:'wb', qty:1};
+  var n = acctEditN++;
+  var wrap = document.getElementById('ae-lines');
+  var d = document.createElement('div'); d.innerHTML = acctEditLineHtml(n, it);
+  wrap.appendChild(d.firstChild);
+  if (it.coffee_sku) document.getElementById('ae-coffee-'+n).value = it.coffee_sku;
+}
+function showAccountTemplateModal(tid) {
+  var st = accountTemplateCycleState.find(function(x){ return x.template.id===tid; });
+  if (!st) return;
+  var t = st.template;
+  var typeHtml = document.getElementById('f-type').innerHTML, regionHtml = document.getElementById('f-region').innerHTML;
+  standingModalShell(
+    '<div style="font-family:\'Libre Baskerville\',serif;font-size:19px;font-weight:700;color:var(--ink);margin-bottom:4px;">Edit saved order</div>' +
+    '<div class="section-sub" style="margin-bottom:14px;">Changes apply to future cycles. Anything already on this cycle\'s Fulfillment is edited from the Orders tab.</div>' +
+    '<div class="form-row"><div class="form-group"><label>Account name</label><input type="text" id="ae-name" value="'+escHtml(t.customer_name)+'"></div></div>' +
+    '<div class="form-row c2"><div class="form-group"><label>Type</label><select id="ae-type">'+typeHtml+'</select></div>' +
+    '<div class="form-group"><label>Region</label><select id="ae-region">'+regionHtml+'</select></div></div>' +
+    '<div id="ae-lines"></div>' +
+    '<div style="margin:10px 0 16px;"><button class="btn btn-ghost btn-sm" onclick="addAcctEditLine()">+ Add coffee</button></div>' +
+    '<div style="display:flex;gap:10px;"><button class="btn btn-primary" style="flex:1;" onclick="saveAccountTemplateEdit(\''+t.id+'\')">Save</button>' +
+    '<button class="btn btn-ghost" onclick="closeStandingMiniModal()">Cancel</button></div>'
+  );
+  document.getElementById('ae-type').value = t.order_type;
+  document.getElementById('ae-region').value = t.region;
+  acctEditN = 0;
+  (st.items.length ? st.items : [null]).forEach(function(it){ addAcctEditLine(it || undefined); });
+}
+async function saveAccountTemplateEdit(tid) {
+  var name = document.getElementById('ae-name').value.trim();
+  if (!name) { toast('Account name is required','warn'); return; }
+  var items = [];
+  document.querySelectorAll('#ae-lines .ae-line').forEach(function(row) {
+    var n = row.id.replace('ae-','');
+    items.push({template_id:tid, coffee_sku:document.getElementById('ae-coffee-'+n).value, size:document.getElementById('ae-size-'+n).value,
+                grind:document.getElementById('ae-grind-'+n).value, qty:parseInt(document.getElementById('ae-qty-'+n).value)||1});
+  });
+  if (!items.length) { toast('Keep at least one coffee (or use Remove to delete this saved order)','warn'); return; }
+  try {
+    await dbFetch('account_templates?id=eq.'+tid, {method:'PATCH', body:{customer_name:name, order_type:document.getElementById('ae-type').value, region:document.getElementById('ae-region').value, updated_at:new Date().toISOString()}, prefer:'return=minimal'});
+    await dbFetch('account_template_items?template_id=eq.'+tid, {method:'DELETE', prefer:'return=minimal'});
+    await dbFetch('account_template_items', {method:'POST', body: items.length===1?items[0]:items, prefer:'return=minimal'});
+    closeStandingMiniModal();
+    toast('Saved order updated','success');
+    await renderAccountTemplatesChecklist();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
 }
 
 async function deactivateAccountTemplate(id) {
