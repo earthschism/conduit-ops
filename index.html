@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-11-21 — NEW COSTS TAB (owner/manager): Ingredients (supplies, green and roasted coffees with their costs), Prepared Items (recipes with a batch yield → cost per unit, usable inside other recipes), Menu Items (recipes of ingredients, prepared items and labor with menu price → margin and food cost %), and Labor (adjustable named hourly rates, charged by the minute). Fluids fl oz, solids g, countables each; coffee priced per lb converts to g. Recipes can't contain themselves. REQUIRES SQL: labor_rates, cost_items, cost_item_lines tables.
   2026-11-20 — SUPPLIES: Manage Catalog now has a Unit cost column (owner/manager only). Click "＋ Set cost" on an item: price you pay for one order unit (case, gal, bag…), how many it holds, and what they're counted in (oz, each, lb…) → shows cost per oz/each/etc. Stored in a new owner/manager-only supply_costs table so staff can't see it. Export All now includes Price, Pack Qty, Pack Unit, Unit Cost, and its Code column (was blank — read the wrong field) is fixed. REQUIRES SQL: supply_costs table.
   2026-11-19b — Green Coffees view: removed the "add them to the list" prompt; Cost per Roasted Pound rows now have an "Edit blend" button, blends that still use a green name not in your list are flagged ⚠, and the blend editor labels such names "(old name — not in list)".
   2026-11-19 — COFFEES: new "Green Coffees" view in the Coffees tab (green name, origin, $/lb, lbs on hand; shows what this cycle's roast schedule needs vs on hand, flags shortfalls) and a Cost / lb column on every coffee. The coffee editor now has a Roast loss % field and a Blend recipe editor (pick greens, set % — must total 100%) with a live green + roasted $/lb preview. FIXED: saving a coffee used to silently reset its roast loss to 15%. Cost per roasted lb = blend green cost ÷ (1 − roast loss); bags/labor come later. REQUIRES SQL: green_coffees table.
@@ -341,7 +342,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   table{font-size:11px;}
   th,td{padding:5px 7px;}
   .panel{display:block!important;}
-  #panel-orders,#panel-roast,#panel-portal,#panel-admin,#panel-catalog,#panel-supplies,#panel-standing{display:none!important;}
+  #panel-orders,#panel-roast,#panel-portal,#panel-admin,#panel-catalog,#panel-supplies,#panel-standing,#panel-costs{display:none!important;}
   #panel-output{display:block!important;}
   .section-header{display:none!important;}
   /* Keep bagging grid on one page */
@@ -407,6 +408,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
   <div class="tab hidden" data-tab="supplies" onclick="showTab('supplies',this)">Supplies</div>
   <div class="tab hidden" data-tab="portal" onclick="showTab('portal',this)">Place Order</div>
   <div class="tab hidden" data-tab="catalog" onclick="showTab('catalog',this)">Coffees</div>
+  <div class="tab hidden" data-tab="costs" onclick="showTab('costs',this)">Costs</div>
   <div class="tab hidden" data-tab="admin" onclick="showTab('admin',this)">Admin</div>
 </div>
 
@@ -765,6 +767,21 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
 </div>
 
 <!-- ── SUPPLIES PANEL ── -->
+<!-- ── COSTS PANEL ── -->
+<div class="panel" id="panel-costs">
+  <div class="section-header">
+    <div><div class="section-title">Costs</div><div class="section-sub" id="costs-sub">What things cost you — ingredients, prepared items, menu items</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm supplies-view-btn active" id="btn-costs-ingredients" onclick="switchCostsView('ingredients')">Ingredients</button>
+      <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-costs-prepared" onclick="switchCostsView('prepared')">Prepared Items</button>
+      <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-costs-menu" onclick="switchCostsView('menu')">Menu Items</button>
+      <button class="btn btn-ghost btn-sm supplies-view-btn" id="btn-costs-labor" onclick="switchCostsView('labor')">Labor</button>
+      <button class="btn btn-primary btn-sm" id="btn-costs-add" style="display:none;" onclick="showCostItemModal()">+ Add</button>
+    </div>
+  </div>
+  <div id="costs-body"><div class="loading"><div class="spinner"></div></div></div>
+</div>
+
 <div class="panel" id="panel-supplies">
   <div class="section-header">
     <div><div class="section-title">Café Supplies</div><div class="section-sub" id="supplies-view-sub">Check off what's needed · quantity is optional</div></div>
@@ -1072,7 +1089,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-11-20 — supply unit costs');
+console.log('Conduit Ops build: 2026-11-21 — Costs tab');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -1258,6 +1275,7 @@ async function initApp(user) {
   document.querySelector('[data-tab="portal"]').classList.toggle('hidden',isInternal);
   document.querySelector('[data-tab="admin"]').classList.toggle('hidden',!isRoastingStaff);
   document.querySelector('[data-tab="catalog"]').classList.toggle('hidden',!isRoastingStaff);
+  document.querySelector('[data-tab="costs"]').classList.toggle('hidden',!isRoastingStaff);
   document.querySelector('[data-tab="standing"]').classList.toggle('hidden',!isRoastingStaff);
   document.getElementById('btn-new-cycle').style.display = isRoastingStaff ? 'block' : 'none';
   document.getElementById('btn-add-order').style.display = isRoastingStaff ? 'inline-block' : 'none';
@@ -4167,6 +4185,348 @@ function downloadSupplyCSVTemplate() {
   a.click();
 }
 
+// ══════════════════ COSTS TAB ══════════════════
+// Ingredients (supplies, greens, roasted coffees) → Prepared items → Menu items, plus labor rates.
+// Fluids are fl oz, solids are g, countables are each. Roasted/green coffee is priced per lb and converts to g.
+var WEIGHT_U = {g:1, kg:1000, lb:453.592};
+var VOLUME_U = {'fl oz':1, oz:1, cup:8, tbsp:0.5, tsp:1/6, pt:16, qt:32, gal:128, ml:0.033814, l:33.814};
+function unitFamily(u) { u = (u||'each').toLowerCase().trim(); return WEIGHT_U[u]!=null ? 'weight' : (VOLUME_U[u]!=null ? 'volume' : 'count:'+u); }
+function unitFactor(u) { u = (u||'each').toLowerCase().trim(); return WEIGHT_U[u]!=null ? WEIGHT_U[u] : (VOLUME_U[u]!=null ? VOLUME_U[u] : 1); }
+function unitsForFamily(fam, base) {
+  if (fam==='weight') return ['g','kg','lb'];
+  if (fam==='volume') return ['fl oz','cup','tbsp','tsp','pt','qt','gal','ml','l'];
+  return [base || 'each'];
+}
+function defaultUnitFor(fam, base) { return fam==='weight' ? 'g' : (fam==='volume' ? 'fl oz' : (base||'each')); }
+
+var costState = {items:[], lines:[], labor:[], loaded:false, view:'ingredients'};
+
+async function loadCostsTab() {
+  var body = document.getElementById('costs-body');
+  body.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  var fail = [];
+  async function get(path, dflt) { try { return await dbFetch(path); } catch(e) { fail.push(path.split('?')[0]); return dflt; } }
+  costState.items = await get('cost_items?select=*&active=eq.true&order=name', []);
+  costState.lines = await get('cost_item_lines?select=*&order=sort_order', []);
+  costState.labor = await get('labor_rates?select=*&active=eq.true&order=name', []);
+  supplyItems = await get('supply_items?select=*&active=eq.true&order=name', supplyItems||[]);
+  supplyCosts = {}; (await get('supply_costs?select=*', [])).forEach(function(c){ supplyCosts[c.item_id] = c; });
+  greenCoffees = await get('green_coffees?select=*&order=name', []);
+  catalogRows = await get('coffees?select=*&order=sort_order', []);
+  costState.loaded = true;
+  if (fail.length) toast('Some cost data did not load ('+fail.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ')+') — has the SQL been run?','warn');
+  switchCostsView(costState.view);
+}
+
+function switchCostsView(view) {
+  costState.view = view;
+  ['ingredients','prepared','menu','labor'].forEach(function(v){ document.getElementById('btn-costs-'+v).classList.toggle('active', v===view); });
+  var add = document.getElementById('btn-costs-add');
+  add.style.display = (view==='ingredients') ? 'none' : 'inline-block';
+  add.textContent = view==='labor' ? '+ Add Rate' : (view==='prepared' ? '+ Add Prepared Item' : '+ Add Menu Item');
+  add.onclick = view==='labor' ? function(){ showLaborModal(); } : function(){ showCostItemModal(null, view); };
+  if (view==='ingredients') renderIngredientsView();
+  else if (view==='labor') renderLaborView();
+  else renderCostItemsView(view);
+}
+
+// ── ingredient registry ──
+// returns {key,label,group,base,cost(per base unit),family} or null. cost may be null when no price yet.
+function ingredientFor(key, stack) {
+  var type = key.split(':')[0], ref = key.slice(type.length+1);
+  if (type==='supply') {
+    var it = supplyItems.find(function(x){ return x.id===ref; }); if (!it) return null;
+    var c = supplyCosts[ref]; var uc = unitCostOf(c);
+    var base = (c && c.pack_unit) || 'each';
+    return {key:key, label:it.name, group:'Supplies', base:base, cost:uc, family:unitFamily(base)};
+  }
+  if (type==='green') {
+    var g = greenCoffees.find(function(x){ return x.id===ref; }); if (!g) return null;
+    var gc = parseFloat(g.cost_per_lb);
+    return {key:key, label:g.name+' (green)', group:'Green coffees', base:'lb', cost: gc>0 ? gc : null, family:'weight'};
+  }
+  if (type==='coffee') {
+    var cf = catalogRows.find(function(x){ return x.sku===ref; }); if (!cf) return null;
+    var r = roastedCostFor(cf);
+    return {key:key, label:cf.name+' (roasted)', group:'Roasted coffees', base:'lb', cost:r.roasted, family:'weight'};
+  }
+  if (type==='labor') {
+    var lr = costState.labor.find(function(x){ return x.id===ref; }); if (!lr) return null;
+    return {key:key, label:lr.name+' labor', group:'Labor', base:'min', cost:(parseFloat(lr.rate_per_hour)||0)/60, family:'time'};
+  }
+  if (type==='item') {
+    var item = costState.items.find(function(x){ return x.id===ref; }); if (!item) return null;
+    var t = itemTotal(item, stack);
+    var yq = parseFloat(item.yield_qty), yu = item.yield_unit || 'each';
+    return {key:key, label:item.name, group:'Prepared items', base:yu, cost:(t.cost!=null && yq>0) ? t.cost/yq : null, family:unitFamily(yu), err:t.err};
+  }
+  return null;
+}
+function allIngredientOptions(excludeItemId) {
+  var out = [];
+  supplyItems.forEach(function(it){ if (unitCostOf(supplyCosts[it.id])!=null) out.push(ingredientFor('supply:'+it.id)); });
+  greenCoffees.filter(function(g){ return g.active!==false && parseFloat(g.cost_per_lb)>0; }).forEach(function(g){ out.push(ingredientFor('green:'+g.id)); });
+  catalogRows.filter(function(c){ return c.active!==false; }).forEach(function(c){ out.push(ingredientFor('coffee:'+c.sku)); });
+  costState.items.filter(function(i){ return i.kind==='prepared' && i.id!==excludeItemId; }).forEach(function(i){ out.push(ingredientFor('item:'+i.id)); });
+  costState.labor.forEach(function(l){ out.push(ingredientFor('labor:'+l.id)); });
+  return out.filter(Boolean);
+}
+
+// cost of one line → {cost, err}
+function lineCost(line, stack) {
+  var ing = ingredientFor(line.line_type+':'+line.ref_id, stack);
+  if (!ing) return {cost:null, err:'missing ingredient'};
+  if (ing.err) return {cost:null, err:ing.err};
+  if (ing.cost == null) return {cost:null, err:'no price yet for '+ing.label};
+  var q = parseFloat(line.qty); if (!(q>=0)) return {cost:null, err:'enter an amount'};
+  if (ing.family==='time') return {cost: q*ing.cost, err:null};
+  var u = line.unit || ing.base;
+  if (unitFamily(u) !== ing.family) return {cost:null, err:'unit "'+u+'" doesn\'t fit '+ing.label};
+  return {cost: q * unitFactor(u) / unitFactor(ing.base) * ing.cost, err:null};
+}
+function itemTotal(item, stack) {
+  stack = stack || [];
+  if (stack.indexOf(item.id) > -1) return {cost:null, err:'circular recipe'};
+  var next = stack.concat([item.id]);
+  var total = 0, err = null;
+  costState.lines.filter(function(l){ return l.item_id===item.id; }).forEach(function(l) {
+    var lc = lineCost(l, next);
+    if (lc.cost==null) { err = err || lc.err; } else total += lc.cost;
+  });
+  return {cost: err ? null : total, err: err, partial: total};
+}
+function fmtMoney(v) { return v==null ? '—' : (v<1 ? '$'+v.toFixed(3) : '$'+v.toFixed(2)); }
+
+// ── Ingredients view ──
+function renderIngredientsView() {
+  var body = document.getElementById('costs-body');
+  body.innerHTML = '<div class="card"><div class="card-title">Ingredients</div>' +
+    '<div class="section-sub" style="margin-bottom:12px;">Everything you can build recipes from. Prices come from where they\'re kept — Supplies (per item), Coffees → Green Coffees, and each coffee\'s blend. Fluids are in fl oz, solids in g.</div>' +
+    '<div class="form-group" style="max-width:320px;margin-bottom:12px;"><input type="search" id="ing-search" placeholder="Search ingredients…" oninput="renderIngredientRows()"></div>' +
+    '<div class="tbl-wrap"><table class="stack-m"><thead><tr><th>Ingredient</th><th>Type</th><th style="text-align:right;">Cost</th><th>Per</th></tr></thead><tbody id="ing-tbody"></tbody></table></div></div>';
+  renderIngredientRows();
+}
+function renderIngredientRows() {
+  var q = ((document.getElementById('ing-search')||{}).value||'').toLowerCase().trim();
+  var rows = [];
+  supplyItems.forEach(function(it){ rows.push(ingredientFor('supply:'+it.id)); });
+  greenCoffees.filter(function(g){ return g.active!==false; }).forEach(function(g){ rows.push(ingredientFor('green:'+g.id)); });
+  catalogRows.filter(function(c){ return c.active!==false; }).forEach(function(c){ rows.push(ingredientFor('coffee:'+c.sku)); });
+  rows = rows.filter(function(r){ return r && (!q || r.label.toLowerCase().indexOf(q) > -1); });
+  var noCost = 0;
+  var html = rows.map(function(r) {
+    if (r.cost==null) noCost++;
+    return '<tr><td style="font-weight:600;">'+escHtml(r.label)+'</td><td style="font-size:12px;color:var(--ink3);">'+escHtml(r.group)+'</td>' +
+      '<td class="num" style="font-family:\'DM Mono\',monospace;">'+(r.cost==null?'<span style="color:var(--ink3);">no price yet</span>':fmtMoney(r.cost))+'</td>' +
+      '<td style="color:var(--ink3);">'+(r.cost==null?'':'per '+escHtml(r.base)+(r.family==='weight'&&r.base==='lb'?' <span style="font-size:11px;">('+fmtMoney(r.cost/453.592)+'/g)</span>':''))+'</td></tr>';
+  }).join('');
+  document.getElementById('ing-tbody').innerHTML = html || '<tr><td colspan="4" class="empty">Nothing matches.</td></tr>';
+  applyStackLabels();
+}
+
+// ── Labor view ──
+function renderLaborView() {
+  var body = document.getElementById('costs-body');
+  body.innerHTML = '<div class="card"><div class="card-title">Labor Rates</div>' +
+    '<div class="section-sub" style="margin-bottom:12px;">An hourly cost for each kind of work (roasting, prep, counter…). Recipes charge by the minute.</div>' +
+    '<div class="tbl-wrap"><table class="stack-m"><thead><tr><th>Name</th><th style="text-align:right;">$ per hour</th><th style="text-align:right;">$ per minute</th><th></th></tr></thead><tbody>' +
+    (costState.labor.length ? costState.labor.map(function(l) {
+      return '<tr><td style="font-weight:600;">'+escHtml(l.name)+'</td>' +
+        '<td class="num"><input type="number" min="0" step="0.25" value="'+(parseFloat(l.rate_per_hour)||0)+'" style="width:90px;text-align:right;" onchange="updateLaborRate(\''+l.id+'\',this.value)"></td>' +
+        '<td class="num" style="font-family:\'DM Mono\',monospace;">'+fmtMoney((parseFloat(l.rate_per_hour)||0)/60)+'</td>' +
+        '<td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="showLaborModal(\''+l.id+'\')">Edit</button></td></tr>';
+    }).join('') : '<tr><td colspan="4" class="empty">No labor rates yet — add one (e.g. Roasting, Prep).</td></tr>') +
+    '</tbody></table></div></div>';
+  applyStackLabels();
+}
+function showLaborModal(id) {
+  var l = id ? costState.labor.find(function(x){ return x.id===id; }) : null; l = l || {};
+  standingModalShell(
+    '<div style="font-family:\'Libre Baskerville\',serif;font-size:19px;font-weight:700;color:var(--ink);margin-bottom:14px;">'+(l.id?'Edit labor rate':'Add labor rate')+'</div>' +
+    '<div class="form-row"><div class="form-group"><label>Name</label><input type="text" id="lr-name" value="'+escHtml(l.name||'')+'" placeholder="e.g. Roasting, Kitchen prep, Counter"></div></div>' +
+    '<div class="form-row"><div class="form-group"><label>$ per hour (what this work costs you, including taxes/benefits if you want them counted)</label><input type="number" id="lr-rate" min="0" step="0.25" value="'+(parseFloat(l.rate_per_hour)||'')+'"></div></div>' +
+    '<div style="display:flex;gap:10px;margin-top:8px;"><button class="btn btn-primary" style="flex:1;" onclick="saveLaborRate(\''+(l.id||'')+'\')">Save</button>' +
+    (l.id ? '<button class="btn btn-ghost" style="color:#c0392b;" onclick="removeLaborRate(\''+l.id+'\')">Remove</button>' : '') +
+    '<button class="btn btn-ghost" onclick="closeStandingMiniModal()">Cancel</button></div>');
+}
+async function saveLaborRate(id) {
+  var name = document.getElementById('lr-name').value.trim(), rate = parseFloat(document.getElementById('lr-rate').value);
+  if (!name) { toast('Give it a name','warn'); return; }
+  if (isNaN(rate) || rate < 0) { toast('Enter an hourly rate','warn'); return; }
+  try {
+    if (id) await dbFetch('labor_rates?id=eq.'+id, {method:'PATCH', body:{name:name, rate_per_hour:rate}, prefer:'return=minimal'});
+    else await dbFetch('labor_rates', {method:'POST', body:{name:name, rate_per_hour:rate}, prefer:'return=minimal'});
+    closeStandingMiniModal(); toast('Labor rate saved','success'); await loadCostsTab();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
+}
+async function updateLaborRate(id, v) {
+  var rate = parseFloat(v)||0;
+  try { await dbFetch('labor_rates?id=eq.'+id, {method:'PATCH', body:{rate_per_hour:rate}, prefer:'return=minimal'}); var l = costState.labor.find(function(x){return x.id===id;}); if (l) l.rate_per_hour = rate; toast('Saved','success'); renderLaborView(); }
+  catch(e) { toast('Error saving: '+e.message,'error'); }
+}
+async function removeLaborRate(id) {
+  var used = costState.lines.filter(function(l){ return l.line_type==='labor' && l.ref_id===id; }).length;
+  if (used) { toast('This rate is used in '+used+' recipe line'+(used>1?'s':'')+' — change those first','warn'); return; }
+  if (!confirm('Remove this labor rate?')) return;
+  try { await dbFetch('labor_rates?id=eq.'+id, {method:'PATCH', body:{active:false}, prefer:'return=minimal'}); closeStandingMiniModal(); toast('Removed','success'); await loadCostsTab(); }
+  catch(e) { toast('Error: '+e.message,'error'); }
+}
+
+// ── Prepared / Menu list ──
+function renderCostItemsView(kind) {
+  var body = document.getElementById('costs-body');
+  var items = costState.items.filter(function(i){ return i.kind===kind; });
+  var isMenu = kind==='menu';
+  body.innerHTML = '<div class="card"><div class="card-title">'+(isMenu?'Menu Items':'Prepared Items')+'</div>' +
+    '<div class="section-sub" style="margin-bottom:12px;">'+(isMenu ? 'What you sell. Each is built from ingredients, prepared items and labor — add the price to see your margin.' : 'Things you make ahead and use in other recipes (a batch of scallion cream cheese). Say how much a batch makes and it works out a cost per unit.')+'</div>' +
+    '<div class="tbl-wrap"><table class="stack-m"><thead><tr><th>Name</th><th>Category</th>'+(isMenu?'<th style="text-align:right;">Price</th>':'<th style="text-align:right;">Batch makes</th>')+'<th style="text-align:right;">Cost</th>'+(isMenu?'<th style="text-align:right;">Margin</th><th style="text-align:right;">Food cost %</th>':'<th style="text-align:right;">Cost per unit</th>')+'<th></th></tr></thead><tbody>' +
+    (items.length ? items.map(function(i) {
+      var t = itemTotal(i), cost = t.cost;
+      var warn = t.err ? ' <span title="'+escHtml(t.err)+'" style="color:#c49a2a;">⚠</span>' : '';
+      var price = parseFloat(i.sell_price);
+      var tail = isMenu
+        ? '<td class="num" style="font-family:\'DM Mono\',monospace;">'+(cost!=null&&price>0?fmtMoney(price-cost):'—')+'</td><td class="num" style="font-family:\'DM Mono\',monospace;">'+(cost!=null&&price>0?Math.round(cost/price*1000)/10+'%':'—')+'</td>'
+        : '<td class="num" style="font-family:\'DM Mono\',monospace;">'+(cost!=null&&parseFloat(i.yield_qty)>0?fmtMoney(cost/parseFloat(i.yield_qty))+' / '+escHtml(i.yield_unit||'each'):'—')+'</td>';
+      return '<tr><td style="font-weight:600;">'+escHtml(i.name)+'</td><td style="font-size:12px;color:var(--ink3);">'+escHtml(i.category||'-')+'</td>' +
+        (isMenu ? '<td class="num" style="font-family:\'DM Mono\',monospace;">'+(price>0?fmtMoney(price):'—')+'</td>' : '<td class="num" style="font-family:\'DM Mono\',monospace;">'+(i.yield_qty!=null?escHtml(String(i.yield_qty))+' '+escHtml(i.yield_unit||''):'—')+'</td>') +
+        '<td class="num" style="font-family:\'DM Mono\',monospace;font-weight:700;">'+fmtMoney(cost)+warn+'</td>' + tail +
+        '<td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="showCostItemModal(\''+i.id+'\')">Edit</button></td></tr>';
+    }).join('') : '<tr><td colspan="7" class="empty">Nothing here yet — use the button above.</td></tr>') +
+    '</tbody></table></div></div>';
+  applyStackLabels();
+}
+
+// ── Item editor (modal) ──
+var costEdit = {id:null, kind:'menu', n:0};
+function showCostItemModal(id, kind) {
+  var item = id ? costState.items.find(function(x){ return x.id===id; }) : null;
+  costEdit = {id: item ? item.id : null, kind: item ? item.kind : (kind || costState.view), n:0};
+  var isMenu = costEdit.kind === 'menu';
+  item = item || {};
+  standingModalShell(
+    '<div style="font-family:\'Libre Baskerville\',serif;font-size:19px;font-weight:700;color:var(--ink);margin-bottom:14px;">'+(item.id?'Edit ':'New ')+(isMenu?'menu item':'prepared item')+'</div>' +
+    '<div class="form-row c2"><div class="form-group"><label>Name</label><input type="text" id="ci-name" value="'+escHtml(item.name||'')+'" placeholder="'+(isMenu?'Bagel with scallion cream cheese':'Scallion cream cheese')+'"></div>' +
+    '<div class="form-group"><label>Category</label><input type="text" id="ci-cat" list="ci-cat-list" value="'+escHtml(item.category||'')+'" placeholder="Food, Drinks, Retail…"><datalist id="ci-cat-list">'+
+      costState.items.map(function(i){return i.category;}).filter(function(v,i,a){return v && a.indexOf(v)===i;}).map(function(v){return '<option>'+escHtml(v)+'</option>';}).join('')+'</datalist></div></div>' +
+    (isMenu
+      ? '<div class="form-row"><div class="form-group"><label>Menu price ($)</label><input type="number" id="ci-price" min="0" step="0.01" value="'+(item.sell_price!=null?item.sell_price:'')+'" oninput="refreshCostTotals()"></div></div>'
+      : '<div class="form-row c2"><div class="form-group"><label>One batch makes</label><input type="number" id="ci-yq" min="0" step="0.01" value="'+(item.yield_qty!=null?item.yield_qty:'')+'" oninput="refreshCostTotals()"></div>' +
+        '<div class="form-group"><label>…counted in</label><input type="text" id="ci-yu" list="ci-yu-list" value="'+escHtml(item.yield_unit||'')+'" placeholder="g, fl oz or each" oninput="refreshCostTotals()"><datalist id="ci-yu-list"><option>g</option><option>fl oz</option><option>each</option></datalist></div></div>') +
+    '<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink3);margin:10px 0 4px;">Ingredients & labor</div>' +
+    '<div id="ci-lines"></div>' +
+    '<div style="margin:8px 0 12px;"><button class="btn btn-ghost btn-sm" onclick="addCostLine()">+ Add line</button></div>' +
+    '<div id="ci-totals" style="font-family:\'DM Mono\',monospace;font-size:14px;padding:10px 12px;background:var(--paper2);border-radius:8px;margin-bottom:14px;"></div>' +
+    '<div style="display:flex;gap:10px;"><button class="btn btn-primary" style="flex:1;" onclick="saveCostItem()">Save</button>' +
+    (item.id ? '<button class="btn btn-ghost" style="color:#c0392b;" onclick="removeCostItem(\''+item.id+'\')">Remove</button>' : '') +
+    '<button class="btn btn-ghost" onclick="closeStandingMiniModal()">Cancel</button></div>', 760);
+  var lines = item.id ? costState.lines.filter(function(l){ return l.item_id===item.id; }) : [];
+  if (lines.length) lines.forEach(function(l){ addCostLine(l); }); else addCostLine();
+  refreshCostTotals();
+}
+function ingredientSelectHtml(selectedKey) {
+  var opts = allIngredientOptions(costEdit.id);
+  if (selectedKey && !opts.some(function(o){ return o.key===selectedKey; })) { var cur = ingredientFor(selectedKey); if (cur) opts.push(cur); }
+  var groups = {}; opts.forEach(function(o){ (groups[o.group] = groups[o.group]||[]).push(o); });
+  var html = '<option value="">— choose —</option>';
+  ['Supplies','Green coffees','Roasted coffees','Prepared items','Labor'].forEach(function(g) {
+    if (!groups[g]) return;
+    html += '<optgroup label="'+g+'">' + groups[g].sort(function(a,b){ return a.label.localeCompare(b.label); }).map(function(o){
+      return '<option value="'+escHtml(o.key)+'"'+(o.key===selectedKey?' selected':'')+'>'+escHtml(o.label)+'</option>'; }).join('') + '</optgroup>';
+  });
+  return html;
+}
+function addCostLine(l) {
+  var n = costEdit.n++;
+  var d = document.createElement('div'); d.className = 'ci-line'; d.id = 'cl-'+n;
+  d.style.cssText = 'display:grid;grid-template-columns:minmax(0,2fr) 80px 90px 76px 28px;gap:6px;align-items:center;margin-bottom:6px;';
+  var key = l ? l.line_type+':'+l.ref_id : '';
+  d.innerHTML = '<select id="cl-ing-'+n+'" onchange="onCostIngredientChange('+n+')">'+ingredientSelectHtml(key)+'</select>' +
+    '<input type="number" id="cl-qty-'+n+'" min="0" step="0.01" placeholder="amt" value="'+(l?l.qty:'')+'" oninput="refreshCostTotals()">' +
+    '<select id="cl-unit-'+n+'" onchange="refreshCostTotals()"></select>' +
+    '<div id="cl-cost-'+n+'" style="font-family:\'DM Mono\',monospace;font-size:12px;text-align:right;"></div>' +
+    '<button class="remove-btn" type="button" onclick="document.getElementById(\'cl-'+n+'\').remove();refreshCostTotals()">×</button>';
+  document.getElementById('ci-lines').appendChild(d);
+  setCostUnits(n, l && l.unit);
+}
+function setCostUnits(n, preferred) {
+  var key = document.getElementById('cl-ing-'+n).value, sel = document.getElementById('cl-unit-'+n);
+  var ing = key ? ingredientFor(key) : null;
+  if (!ing) { sel.innerHTML = '<option></option>'; return; }
+  var units = ing.family==='time' ? ['min'] : unitsForFamily(ing.family, ing.base);
+  sel.innerHTML = units.map(function(u){ return '<option value="'+escHtml(u)+'">'+escHtml(u)+'</option>'; }).join('');
+  sel.value = (preferred && units.indexOf(preferred) > -1) ? preferred : (ing.family==='time' ? 'min' : defaultUnitFor(ing.family, ing.base));
+}
+function onCostIngredientChange(n) { setCostUnits(n); refreshCostTotals(); }
+function currentCostLines() {
+  var out = [];
+  document.querySelectorAll('#ci-lines .ci-line').forEach(function(row) {
+    var n = row.id.replace('cl-','');
+    var key = document.getElementById('cl-ing-'+n).value; if (!key) return;
+    var type = key.split(':')[0];
+    out.push({n:n, line_type:type, ref_id:key.slice(type.length+1), qty:document.getElementById('cl-qty-'+n).value, unit:document.getElementById('cl-unit-'+n).value});
+  });
+  return out;
+}
+function refreshCostTotals() {
+  var el = document.getElementById('ci-totals'); if (!el) return;
+  var total = 0, problems = 0;
+  currentCostLines().forEach(function(l) {
+    var lc = lineCost(l, costEdit.id ? [costEdit.id] : []);
+    var c = document.getElementById('cl-cost-'+l.n);
+    if (lc.cost==null) { problems++; c.innerHTML = '<span title="'+escHtml(lc.err||'')+'" style="color:#c49a2a;">⚠</span>'; } else { total += lc.cost; c.textContent = fmtMoney(lc.cost); }
+  });
+  document.querySelectorAll('#ci-lines .ci-line').forEach(function(row){ var n=row.id.replace('cl-',''); if (!document.getElementById('cl-ing-'+n).value) document.getElementById('cl-cost-'+n).textContent=''; });
+  var html = 'Total cost: <strong>'+fmtMoney(total)+'</strong>' + (problems ? ' <span style="color:#c49a2a;font-size:12px;">('+problems+' line'+(problems>1?'s':'')+' not counted — hover ⚠)</span>' : '');
+  if (costEdit.kind==='menu') {
+    var price = parseFloat((document.getElementById('ci-price')||{}).value);
+    if (price > 0) html += '<br>Margin <strong>'+fmtMoney(price-total)+'</strong> · food cost <strong>'+(Math.round(total/price*1000)/10)+'%</strong>';
+  } else {
+    var yq = parseFloat((document.getElementById('ci-yq')||{}).value), yu = ((document.getElementById('ci-yu')||{}).value||'').trim();
+    if (yq > 0) html += '<br>Per '+escHtml(yu||'unit')+': <strong>'+fmtMoney(total/yq)+'</strong>';
+  }
+  el.innerHTML = html;
+}
+function itemRefsTarget(itemId, targetId, seen) {
+  seen = seen || {};
+  if (seen[itemId]) return false; seen[itemId] = true;
+  return costState.lines.some(function(l){ return l.item_id===itemId && l.line_type==='item' && (l.ref_id===targetId || itemRefsTarget(l.ref_id, targetId, seen)); });
+}
+async function saveCostItem() {
+  var name = document.getElementById('ci-name').value.trim();
+  if (!name) { toast('Give it a name','warn'); return; }
+  var isMenu = costEdit.kind==='menu';
+  var body = {kind:costEdit.kind, name:name, category:document.getElementById('ci-cat').value.trim()||null, updated_at:new Date().toISOString()};
+  if (isMenu) { var pr = parseFloat(document.getElementById('ci-price').value); body.sell_price = isNaN(pr) ? null : pr; }
+  else {
+    var yq = parseFloat(document.getElementById('ci-yq').value), yu = document.getElementById('ci-yu').value.trim();
+    if (!(yq > 0) || !yu) { toast('Say how much one batch makes and what it\'s counted in','warn'); return; }
+    body.yield_qty = yq; body.yield_unit = yu;
+  }
+  var lines = currentCostLines().filter(function(l){ return parseFloat(l.qty) >= 0 && l.qty !== ''; });
+  if (!lines.length) { toast('Add at least one ingredient with an amount','warn'); return; }
+  if (costEdit.id) {
+    var loop = lines.some(function(l){ return l.line_type==='item' && (l.ref_id===costEdit.id || itemRefsTarget(l.ref_id, costEdit.id)); });
+    if (loop) { toast('That would make a recipe that contains itself','warn'); return; }
+  }
+  var rows = lines.map(function(l, i){ return {line_type:l.line_type, ref_id:l.ref_id, qty:parseFloat(l.qty), unit:l.unit||null, sort_order:i}; });
+  try {
+    var id = costEdit.id;
+    if (id) await dbFetch('cost_items?id=eq.'+id, {method:'PATCH', body:body, prefer:'return=minimal'});
+    else { var created = await dbFetch('cost_items', {method:'POST', body:body, prefer:'return=representation'}); id = (Array.isArray(created)?created[0]:created).id; }
+    await dbFetch('cost_item_lines?item_id=eq.'+id, {method:'DELETE', prefer:'return=minimal'});
+    rows.forEach(function(r){ r.item_id = id; });
+    await dbFetch('cost_item_lines', {method:'POST', body: rows.length===1?rows[0]:rows, prefer:'return=minimal'});
+    closeStandingMiniModal(); toast('Saved','success'); await loadCostsTab();
+  } catch(e) { toast('Error saving: '+e.message,'error'); }
+}
+async function removeCostItem(id) {
+  var users = costState.lines.filter(function(l){ return l.line_type==='item' && l.ref_id===id; }).map(function(l){ var p = costState.items.find(function(i){return i.id===l.item_id;}); return p && p.name; }).filter(Boolean);
+  if (users.length) { toast('Used in: '+users.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ')+' — remove it from those first','warn'); return; }
+  if (!confirm('Remove this item?')) return;
+  try { await dbFetch('cost_items?id=eq.'+id, {method:'PATCH', body:{active:false}, prefer:'return=minimal'}); closeStandingMiniModal(); toast('Removed','success'); await loadCostsTab(); }
+  catch(e) { toast('Error: '+e.message,'error'); }
+}
+
 // ── SUPPLY COSTS (price → unit cost; owner/manager only, stored in supply_costs) ──
 // "You pay <price> for one <order unit> (case, gal, bag…). One of those holds <pack_qty> <pack_unit> (oz, each, lb…)."
 function unitCostOf(c) {
@@ -4189,8 +4549,8 @@ function showSupplyCostModal(id) {
     '<div class="form-row c2"><div class="form-group"><label>Price you pay ($)</label><input type="number" id="sc-price" min="0" step="0.01" value="'+(c.price!=null?c.price:'')+'" oninput="refreshSupplyCostPreview()"></div>' +
     '<div class="form-group"><label>…for one</label><input type="text" id="sc-per" value="'+escHtml(it.unit||'')+'" readonly style="background:var(--paper2);" title="Change this in the catalog\'s Unit column"></div></div>' +
     '<div class="form-row c2"><div class="form-group"><label>One holds how many</label><input type="number" id="sc-qty" min="0" step="0.01" value="'+(c.pack_qty!=null?c.pack_qty:'')+'" oninput="refreshSupplyCostPreview()"></div>' +
-    '<div class="form-group"><label>…counted in</label><input type="text" id="sc-pu" list="sc-pu-list" value="'+escHtml(c.pack_unit||'')+'" placeholder="oz, each, lb, bag…" oninput="refreshSupplyCostPreview()">' +
-    '<datalist id="sc-pu-list"><option>each</option><option>oz</option><option>lb</option><option>fl oz</option><option>gal</option><option>cup</option><option>bag</option><option>pump</option></datalist></div></div>' +
+    '<div class="form-group"><label>…counted in</label><input type="text" id="sc-pu" list="sc-pu-list" value="'+escHtml(c.pack_unit||'')+'" placeholder="g, fl oz or each" oninput="refreshSupplyCostPreview()">' +
+    '<datalist id="sc-pu-list"><option>g</option><option>fl oz</option><option>each</option><option>lb</option><option>kg</option><option>gal</option></datalist></div></div>' +
     '<div id="sc-preview" style="font-family:\'DM Mono\',monospace;font-size:14px;margin:6px 0 16px;min-height:20px;"></div>' +
     '<div style="display:flex;gap:10px;"><button class="btn btn-primary" style="flex:1;" onclick="saveSupplyCost(\''+id+'\')">Save</button>' +
     (supplyCosts[id] ? '<button class="btn btn-ghost" style="color:#c0392b;" onclick="clearSupplyCost(\''+id+'\')">Clear</button>' : '') +
@@ -4648,12 +5008,12 @@ function renderStandingNotDue(notDue, cycle) {
   }).join('') + '</div>';
 }
 
-function standingModalShell(inner) {
+function standingModalShell(inner, maxW) {
   var old = document.getElementById('standing-mini-modal'); if (old) old.remove();
   var modal = document.createElement('div');
   modal.id = 'standing-mini-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,23,20,0.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
-  modal.innerHTML = '<div style="background:white;border-radius:12px;padding:28px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">'+inner+'</div>';
+  modal.innerHTML = '<div style="background:white;border-radius:12px;padding:28px;max-width:'+(maxW||440)+'px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(28,23,20,0.3);">'+inner+'</div>';
   document.body.appendChild(modal);
 }
 function closeStandingMiniModal() { var m = document.getElementById('standing-mini-modal'); if (m) m.remove(); }
@@ -5314,6 +5674,7 @@ function showTab(name, el) {
   if (name==='roast'||name==='output') generateSchedule();
   if (name==='admin') loadAdminUsers();
   if (name==='catalog') loadCatalog();
+  if (name==='costs') loadCostsTab();
   if (name==='portal') { loadPortalCoffees(); loadPortalHistory(); }
   if (name==='supplies') loadSupplies();
   if (name==='standing') loadStandingOrders();
