@@ -1,5 +1,6 @@
 <!--
   CONDUIT-OPS BUILD LOG (newest on top — update this whenever the file changes)
+  2026-11-19b — Green Coffees view: removed the "add them to the list" prompt; Cost per Roasted Pound rows now have an "Edit blend" button, blends that still use a green name not in your list are flagged ⚠, and the blend editor labels such names "(old name — not in list)".
   2026-11-19 — COFFEES: new "Green Coffees" view in the Coffees tab (green name, origin, $/lb, lbs on hand; shows what this cycle's roast schedule needs vs on hand, flags shortfalls) and a Cost / lb column on every coffee. The coffee editor now has a Roast loss % field and a Blend recipe editor (pick greens, set % — must total 100%) with a live green + roasted $/lb preview. FIXED: saving a coffee used to silently reset its roast loss to 15%. Cost per roasted lb = blend green cost ÷ (1 − roast loss); bags/labor come later. REQUIRES SQL: green_coffees table.
   2026-11-18 — (1) STANDING: saved account orders (Standing Accounts view) can now be edited — name, type, region and lines (add/remove/change coffees) — and every This Cycle / Not Due row now has an Edit button for the roster entry. (2) PRINT: new "🖨 Print…" button on Print & Export opens a picker — tick which sheets, choose portrait/landscape for each — and prints them as one job, each on its own page with the right orientation. (3) Menu tab "Catalog" renamed "Coffees".
   2026-11-09 — Standing Manage Roster: added a "Find someone on the roster" search box (filters by name) above the table; the Add this cycle dialog for monthly customers now says their schedule stays as it is.
@@ -747,7 +748,7 @@ label{font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bott
       <div class="card-title">Cost per Roasted Pound</div>
       <div class="section-sub" style="margin-bottom:12px;">Blend's green cost ÷ (1 − roast loss). Bags and roasting labor will be added later.</div>
       <div class="tbl-wrap"><table class="stack-m">
-        <thead><tr><th>Coffee</th><th>Blend</th><th style="text-align:right;">Green $/lb</th><th style="text-align:right;">Roast loss</th><th style="text-align:right;">Roasted $/lb</th></tr></thead>
+        <thead><tr><th>Coffee</th><th>Blend</th><th style="text-align:right;">Green $/lb</th><th style="text-align:right;">Roast loss</th><th style="text-align:right;">Roasted $/lb</th><th></th></tr></thead>
         <tbody id="cost-tbody"></tbody>
       </table></div>
     </div>
@@ -1070,7 +1071,7 @@ function getNextMondayDate() {
 }
 
 // ── STATE ──
-console.log('Conduit Ops build: 2026-11-19 — green coffees, blends, cost per lb');
+console.log('Conduit Ops build: 2026-11-19b — edit blend from cost table');
 let currentUser=null, currentProfile=null;
 let portalAvailableCoffees=[]; // set by loadPortalCoffees — the exact, correctly-whitelisted set for this account
 let currentCycleId=null, cycles=[];
@@ -3315,9 +3316,7 @@ async function renderGreenView() {
   var warn = document.getElementById('green-warn');
   // greens named in blends but not yet in the inventory list
   var unlisted = Object.keys(usedIn).filter(function(n){ return !greenByName(n); });
-  warn.innerHTML = unlisted.length
-    ? '<div class="pending-notice" style="margin-bottom:12px;">'+unlisted.length+' green coffee'+(unlisted.length>1?'s are':' is')+' used in blends but not listed yet: <strong>'+escHtml(unlisted.join(', '))+'</strong> ' +
-      '<button class="btn btn-primary btn-sm" style="margin-left:8px;" onclick="importGreensFromBlends()">Add them to the list</button></div>' : '';
+  warn.innerHTML = '';
   if (!greenCoffees.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">No green coffees yet — use "+ Add Green"'+(unlisted.length?' or the button above':'')+'.</td></tr>'; renderCostTable(); return; }
   tbody.innerHTML = greenCoffees.map(function(g) {
     var need = (lastOriginTotals[g.name] && lastOriginTotals[g.name].total) || 0;
@@ -3342,13 +3341,14 @@ function renderCostTable() {
   tbody.innerHTML = catalogRows.filter(function(c){ return c.active !== false; }).map(function(c) {
     var r = roastedCostFor(c);
     var recipe = r.base.blend_recipe || {};
-    var blendTxt = Object.keys(recipe).map(function(n){ return n+' '+pct(recipe[n]*100); }).join(' · ') || '<span style="color:var(--ink3);">no recipe yet</span>';
+    var blendTxt = Object.keys(recipe).map(function(n){ var t = escHtml(n)+' '+pct(recipe[n]*100); return greenByName(n) ? t : '<span style="color:#c49a2a;" title="Not in your green coffee list — open Edit and pick the green">'+t+' ⚠</span>'; }).join(' · ') || '<span style="color:var(--ink3);">no recipe yet</span>';
     if (c.roasts_as) blendTxt = '<span style="color:var(--ink3);">roasts as '+escHtml(r.base.name)+'</span> ' + blendTxt;
     return '<tr><td style="font-weight:600;">'+escHtml(c.name)+'</td><td style="font-size:12px;">'+blendTxt+'</td>' +
       '<td class="num" style="font-family:\'DM Mono\',monospace;">'+(r.any?money(r.green,3):'-')+'</td>' +
       '<td class="num" style="font-family:\'DM Mono\',monospace;">'+pct(r.loss*100)+'</td>' +
-      '<td class="num" style="font-family:\'DM Mono\',monospace;font-weight:700;">'+roastedCostLabel(c)+'</td></tr>';
-  }).join('') || '<tr><td colspan="5" class="empty">No coffees.</td></tr>';
+      '<td class="num" style="font-family:\'DM Mono\',monospace;font-weight:700;">'+roastedCostLabel(c)+'</td>' +
+      '<td style="white-space:nowrap;"><button class="btn btn-ghost btn-sm" onclick="showEditCoffeeModal(\''+escHtml(c.sku)+'\')">Edit blend</button></td></tr>';
+  }).join('') || '<tr><td colspan="6" class="empty">No coffees.</td></tr>';
 }
 
 async function updateGreenField(id, field, value) {
@@ -3415,8 +3415,9 @@ function initBlendEditor(c) {
 }
 function blendGreenOptions(selected) {
   var names = greenCoffees.filter(function(g){ return g.active!==false; }).map(function(g){ return g.name; });
-  if (selected && names.indexOf(selected) < 0) names.push(selected);   // keep a recipe's existing green even if unlisted
-  return '<option value="">— choose green —</option>' + names.map(function(n){ return '<option value="'+escHtml(n)+'"'+(n===selected?' selected':'')+'>'+escHtml(n)+'</option>'; }).join('');
+  var orphan = selected && names.indexOf(selected) < 0;
+  if (orphan) names.push(selected);   // keep a recipe's existing green so nothing is lost until you re-pick it
+  return '<option value="">— choose green —</option>' + names.map(function(n){ return '<option value="'+escHtml(n)+'"'+(n===selected?' selected':'')+'>'+escHtml(n)+(orphan && n===selected?' (old name — not in list)':'')+'</option>'; }).join('');
 }
 function addBlendRow(name, pctVal) {
   var n = blendRowN++;
